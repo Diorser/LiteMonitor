@@ -10,7 +10,7 @@ namespace LiteMonitor
     public static class UpdateChecker
     {
         // 版本号文件建议放在 GitHub 仓库根目录
-        private const string VersionUrl = "https://raw.githubusercontent.com/Diorser/LiteMonitor/master/version.json";
+        private const string VersionUrl = "https://raw.githubusercontent.com/Diorser/LiteMonitor/master/resources/version.json";
         private const string ReleasePage = "https://github.com/Diorser/LiteMonitor/releases";
 
         public static async Task CheckForUpdatesAsync(bool showWhenUpToDate = true)
