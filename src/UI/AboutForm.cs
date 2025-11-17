@@ -37,7 +37,7 @@ namespace LiteMonitor
             // === 简洁版本号 ===
             string version = Assembly.GetExecutingAssembly()
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-                .InformationalVersion ?? "1.0.0";
+                .InformationalVersion ?? "1.0.2";
             // ✅ 自动清理 Git 哈希后缀（如 1.0+abc123 → 1.0）
 
             int plus = version.IndexOf('+');
