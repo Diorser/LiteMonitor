@@ -123,10 +123,22 @@ namespace LiteMonitor
         // ========== 构造函数 ==========
         public MainForm()
         {
-            // === 自动检测系统语言 ===
+            // === 自动检测系统语言（仅在首次启动或配置缺失时使用） ===
             string sysLang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLower();
-            string langPath = Path.Combine(AppContext.BaseDirectory, "resources/lang", $"{sysLang}.json");
-            _cfg.Language = File.Exists(langPath) ? sysLang : "en";
+            string langDir = Path.Combine(AppContext.BaseDirectory, "resources/lang");
+            bool sysLangAvailable = File.Exists(Path.Combine(langDir, $"{sysLang}.json"));
+
+            // 如果已有设置文件且语言有效，则尊重用户选择；否则按系统语言/英语兜底
+            string settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
+            bool hasSettingsFile = File.Exists(settingsPath);
+            bool savedLangAvailable = !string.IsNullOrWhiteSpace(_cfg.Language)
+                                      && File.Exists(Path.Combine(langDir, $"{_cfg.Language}.json"));
+
+            if (!hasSettingsFile || !savedLangAvailable)
+            {
+                _cfg.Language = sysLangAvailable ? sysLang : "en";
+                _cfg.Save();
+            }
 
             // 语言与主题的加载交给 UIController.ApplyTheme 统一处理
 
