@@ -11,7 +11,7 @@ namespace LiteMonitor
         public string Skin { get; set; } = "DarkFlat_Classic";
         public bool TopMost { get; set; } = true;
         public bool AutoStart { get; set; } = false;
-        public int RefreshMs { get; set; } = 300; //刷新时间
+        public int RefreshMs { get; set; } = 700; //刷新时间
         // ★ 新增字段
         public double AnimationSpeed { get; set; } = 0.35; // 平滑速度：0~1，0.3~0.5推荐
 
@@ -29,6 +29,9 @@ namespace LiteMonitor
 
         public string PreferredNetwork { get; set; } = "";  // 手动指定网卡，""=自动
         public string PreferredDisk { get; set; } = "";     // 手动指定磁盘，""=自动
+
+        public bool ShowTaskbar { get; set; } = false; //开启任务栏显示
+        public bool HideMainForm { get; set; } = false; //是否隐藏主窗口
 
 
 

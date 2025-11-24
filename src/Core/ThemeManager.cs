@@ -37,6 +37,8 @@ namespace LiteMonitor.src.Core
         public int ItemGap { get; set; } = 6;
         public int GroupTitleOffset { get; set; } = 6;
 
+        
+
         public void Scale(float s)
         {
             if (s <= 0f || Math.Abs(s - 1f) < 0.01f)
@@ -146,7 +148,10 @@ namespace LiteMonitor.src.Core
         [JsonIgnore] public Font FontGroup = SystemFonts.CaptionFont;
         [JsonIgnore] public Font FontItem = SystemFonts.CaptionFont;
         [JsonIgnore] public Font FontValue = SystemFonts.CaptionFont;
+        [JsonIgnore] public Font FontTaskbar = SystemFonts.CaptionFont;
 
+        // ===== 任务栏字体(写死硬编码，用来被调用) =====
+        
         /// <summary>
         /// 构建 4 类字体。bold 对四类统一生效；scale 做软限制（0.5~3.0）。
         /// </summary>
@@ -160,6 +165,7 @@ namespace LiteMonitor.src.Core
                 FontTitle = new Font(Font.Family, (float)Font.Title, style);
                 FontGroup = new Font(Font.Family, (float)Font.Group, style);
                 FontItem = new Font(Font.Family, (float)Font.Item, style);
+                FontTaskbar = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold);
 
                 var valueFamily = string.IsNullOrWhiteSpace(Font.ValueFamily)
                     ? Font.Family

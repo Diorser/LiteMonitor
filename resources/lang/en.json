@@ -36,6 +36,8 @@
     "DisplayMode": "Display Mode",
     "Vertical": "Vertical Panel",
     "Horizontal": "Horizontal Bar",
+    "TaskbarShow": "Show on Taskbar",
+    "HideMainForm": "Hide Panel",
     "Opacity": "Opacity",
     "ShowItems": "Show Items",
     "Theme": "Theme",

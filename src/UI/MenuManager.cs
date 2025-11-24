@@ -61,7 +61,62 @@ namespace LiteMonitor
 
             modeRoot.DropDownItems.Add(vertical);
             modeRoot.DropDownItems.Add(horizontal);
+
+            modeRoot.DropDownItems.Add(new ToolStripSeparator());
+
+            // === 任务栏显示 ===
+            var taskbarMode = new ToolStripMenuItem(LanguageManager.T("Menu.TaskbarShow"))
+            {
+                Checked = cfg.ShowTaskbar
+            };
+
+            taskbarMode.Click += (_, __) =>
+            {
+                cfg.ShowTaskbar = !cfg.ShowTaskbar;
+                cfg.Save();
+
+                // 控制任务栏窗口显示/关闭
+                form.ToggleTaskbar(cfg.ShowTaskbar);
+
+                // 更新菜单勾选状态
+                taskbarMode.Checked = cfg.ShowTaskbar;
+            };
+
+            // 将任务栏模式加入显示模式分组
+            modeRoot.DropDownItems.Add(taskbarMode);
+
             menu.Items.Add(modeRoot);
+
+
+            // === 隐藏主窗口（===
+            var hideMainForm = new ToolStripMenuItem(LanguageManager.T("Menu.HideMainForm"))
+            {
+                Checked = cfg.HideMainForm,
+                CheckOnClick = true
+            };
+
+            hideMainForm.CheckedChanged += (_, __) =>
+            {
+                cfg.HideMainForm = hideMainForm.Checked;
+                cfg.Save();
+
+                // 立即生效的行为（当前这次运行要不要立刻隐藏）
+                if (cfg.HideMainForm)
+                {
+                    // 只隐藏主窗口，不影响任务栏
+                    form.Hide();; // 下面会加这个方法
+                }
+                else
+                {
+                    // 如果用户取消，立刻把主窗口叫出来
+                    form.Show();
+                }
+            };
+
+            modeRoot.DropDownItems.Add(new ToolStripSeparator());
+            modeRoot.DropDownItems.Add(hideMainForm);
+
+            
             menu.Items.Add(new ToolStripSeparator());
 
 
@@ -214,7 +269,7 @@ namespace LiteMonitor
 
             // === 刷新频率 ===
             var refreshRoot = new ToolStripMenuItem(LanguageManager.T("Menu.Refresh"));
-            int[] presetRefresh = { 100, 200, 300, 500, 800, 1000, 1500, 2000 };
+            int[] presetRefresh = { 100, 200, 300, 500,600,700, 800, 1000, 1500, 2000,3000 };
 
             foreach (var ms in presetRefresh)
             {

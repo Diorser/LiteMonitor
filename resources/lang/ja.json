@@ -36,6 +36,8 @@
     "DisplayMode": "表示モード",
     "Vertical": "縦パネル",
     "Horizontal": "横バー",
+    "TaskbarShow": "タスクバー表示",
+    "HideMainForm": "パネル非表示",
     "Opacity": "透明度",
     "ShowItems": "項目表示",
     "Theme": "テーマ",

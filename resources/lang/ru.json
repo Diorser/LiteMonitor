@@ -36,6 +36,8 @@
     "DisplayMode": "Режим отображения",
     "Vertical": "Вертик панель",
     "Horizontal": "Горизонт бар",
+    "TaskbarShow": "Показать в панели",
+    "HideMainForm": "Скрыть панель",
     "Opacity": "Прозрачность",
     "ShowItems": "Показать элементы",
     "Theme": "Тема",

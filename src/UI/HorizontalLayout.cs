@@ -1,4 +1,5 @@
 using LiteMonitor.src.Core;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -6,153 +7,204 @@ using System.Windows.Forms;
 namespace LiteMonitor
 {
     /// <summary>
-    /// 横屏布局（每列独立宽度模式）
-    /// 目的：让每个列根据自己的“标签宽 + 最大数值宽”来计算不同宽度
+    /// 布局模式
+    /// Horizontal  → 主面板横版（使用 Theme 字体）
+    /// Taskbar     → 任务栏显示（使用硬编码字体）
+    /// </summary>
+    public enum LayoutMode
+    {
+        Horizontal,
+        Taskbar
+    }
+
+    /// <summary>
+    /// Horizontal + Taskbar 共用布局器
+    ///
+    /// 说明：
+    /// - 主界面横版布局用 Theme 字体驱动宽度
+    /// - 任务栏布局完全独立，使用硬编码字体进行测量（不依赖主题）
+    ///
+    /// 输出：
+    /// - Column.ColumnWidth   → 计算后的列宽
+    /// - Column.Bounds        → 每列在最终区域内的坐标、宽度、两行高度
     /// </summary>
     public class HorizontalLayout
     {
-        private readonly Theme _t;      // 当前主题对象，用来拿字体与布局参数
-        private readonly int _padding;  // 左右上下 padding
-        private readonly int _rowH;     // 单行高度（取 itemFont 与 valueFont 的最大值）
+        private readonly Theme _t;            // 横版模式下需要用到 Theme 字体
+        private readonly LayoutMode _mode;    // 当前布局模式（核心分支点）
 
-        public int PanelWidth { get; private set; } // 横屏整体宽度（计算后赋值）
+        private readonly int _padding;        // 左右 / 上下 padding
+        private readonly int _rowH;           // 单行高度
+        public int PanelWidth { get; private set; }
 
-        // 固定最大数值模板（重要！这个决定了该列“数值部分”的理论最大宽度）
-        // 普通列最大值（CPU/GPU/MEM/VRAM/TEMP/LOAD）
+        // ---------- 横版模式的最大值模板（保持你原有逻辑） ----------
         private const string MAX_VALUE_NORMAL = "100°C";
-        // IO 列最大值（磁盘+网络）
-        private const string MAX_VALUE_IO = "99.9KB";
+        private const string MAX_VALUE_IO = "999KB";
+        
 
-        // 列间距（所有列之间额外加入的空隙）
-        private const int COLUMN_GAP = 12;
 
-        public HorizontalLayout(Theme t, int initialWidth)
+        public HorizontalLayout(Theme t, int initialWidth, LayoutMode mode)
         {
             _t = t;
+            _mode = mode;
+
+            // ★ 横版：使用主题字体大小决定行高
             _padding = t.Layout.Padding;
+            _rowH = Math.Max(t.FontItem.Height, t.FontValue.Height);
 
-            // 行高 = max(字体大小), 让上下两行高度一致
-            _rowH = System.Math.Max(t.FontItem.Height, t.FontValue.Height);
+            if (mode == LayoutMode.Taskbar){
+                // ★ 任务栏：硬编码布局参数（不使用主题 Layout）
+                _rowH = 12;        // 单行高度更小（总高度 28）
 
-            // 初始 panelWidth，只是占位，后面 Build() 会真正计算
+            }
+    
+
             PanelWidth = initialWidth;
         }
 
+
         /// <summary>
-        /// 核心：每列独立宽度 = 标签宽(labelWidth) + 数值宽(valueWidth) + padding
-        /// 注意：只计算一次（横屏切换或者初始化时）
+        /// 核心函数：计算每列的宽度和 Bounds
         /// </summary>
         public int Build(List<Column> cols)
         {
-            int pad = _padding;
-            int padV = pad / 2; // 上下视觉补偿，左右仍是 pad
+            if (cols == null || cols.Count == 0)
+                return 0;
 
-            // panel 总宽度初始 = 左右 padding * 2
-            int totalWidth = pad * 2;
+            int pad = _padding;     // 左右 padding
+            int padV = _padding / 2; // 垂直 padding 减半
 
-            // 使用 GDI 测量文本宽度
+            if (_mode == LayoutMode.Taskbar){
+                padV = 0;//_padding; // 垂直 padding 减半
+            }
+
+        // 宽度初始值 = 左右 padding
+        int totalWidth = pad * 2;
+
             using (var g = Graphics.FromHwnd(IntPtr.Zero))
             {
                 foreach (var col in cols)
                 {
-                    //
-                    // ========== 1. 计算标签宽度 wLabel ==========
-                    //
-                    // col.Top != null → 取语言包中的对应 Short.xxx 文本
-                    // （横屏标签只看 top 的 Key）
+                    // --------------------------
+                    // ① 计算 label 宽度
+                    // --------------------------
                     string label =
                         col.Top != null ? LanguageManager.T($"Short.{col.Top.Key}") : "";
 
-                    // 用 TextRenderer 测量标签宽度（最精确的 WinForms 文本测量方式）
+                    // ★ Taskbar 模式使用硬编码字体
+                    Font fontLabel, fontValue;
+
+                    if (_mode == LayoutMode.Taskbar)
+                    {
+                        fontLabel = _t.FontTaskbar;
+                        fontValue = _t.FontTaskbar;
+                    }
+                    else
+                    {
+                        fontLabel = _t.FontItem;
+                        fontValue = _t.FontValue;
+                    }
+
                     int wLabel = TextRenderer.MeasureText(
-                        g, label, _t.FontItem,
+                        g, label, fontLabel,
                         new Size(int.MaxValue, int.MaxValue),
                         TextFormatFlags.NoPadding
                     ).Width;
 
-                    //
-                    // ========== 2. 计算最大数值宽度 wValue ==========
-                    //
-                    // 不是实时值，而是“理论最大可出现的文本”
-                    // 普通列 → "100°C"
-                    // IO 列   → "999KB/s"
-                    string maxValue = GetMaxValueSample(col);
+                    // ★ 任务栏限制 label 宽度（更窄）
+                    if (_mode == LayoutMode.Taskbar)
+                        wLabel = Math.Min(wLabel, 60);
+
+
+                    // --------------------------
+                    // ② 计算 value “最大可能宽度”
+                    // --------------------------
+                    string sample = GetMaxValueSample(col);
 
                     int wValue = TextRenderer.MeasureText(
-                        g, maxValue, _t.FontValue,
+                        g, sample, fontValue,
                         new Size(int.MaxValue, int.MaxValue),
                         TextFormatFlags.NoPadding
                     ).Width;
 
-                    //
-                    // ========== 3. 计算列宽 colW ==========
-                    //
-                    // wLabel + wValue + _rowH(作为左右 padding)
-                    // 注意：此处不等宽，每列 colW 不同
-                    //
-                    int colW = wLabel + wValue + _rowH;
 
-                    // 保存列宽
+                    // --------------------------
+                    // ③ 计算最终列宽
+                    // --------------------------
+                    int colW = wLabel + wValue + (_rowH);
+
+                    // ★ 任务栏列宽下限
+                    if (_mode == LayoutMode.Taskbar)
+                        colW = Math.Max(48, colW);
+
                     col.ColumnWidth = colW;
-
-                    // panel 宽度累加
                     totalWidth += colW;
+
+
+                    // --------------------------
+                    // ④ 任务栏字体对象由我们自己创建 → 需释放
+                    // --------------------------
+                    if (_mode == LayoutMode.Taskbar)
+                    {
+                        fontLabel.Dispose();
+                        fontValue.Dispose();
+                    }
                 }
             }
 
-            //
-            // ========== 4. 增加每列之间的列间距 COLUMN_GAP ==========
-            //
-            // n 列 → (n-1) 个间距
-            //
-            totalWidth += (cols.Count - 1) * COLUMN_GAP;
+            // --------------------------
+            // ⑤ 列间距
+            // --------------------------
+            int gap = (_mode == LayoutMode.Taskbar) ? 6 : 12;
+            totalWidth += (cols.Count - 1) * gap;
 
-            // 最终横屏宽度
+
+            // --------------------------
+            // ⑥ 设置 Bounds 坐标
+            // --------------------------
             PanelWidth = totalWidth;
-
-            //
-            // ========== 5. 设置每列的 Bounds（坐标与宽度） ==========
-            //
             int x = pad;
 
             foreach (var col in cols)
             {
-                // col.ColumnWidth 是我们上面算好的宽度
                 col.Bounds = new Rectangle(x, padV, col.ColumnWidth, _rowH * 2);
-
-                // 下一个列的 x 坐标：当前列宽 + gap
-                x += col.ColumnWidth + COLUMN_GAP;
+                x += col.ColumnWidth + gap;
             }
 
-            //
-            // ========== 6. 返回整体高度（固定 = 两行高度 + padding*2） ==========
-            //
+            // --------------------------
+            // ⑦ 返回高度（上下 padding + 两行）
+            // --------------------------
             return padV * 2 + _rowH * 2;
         }
 
+
         /// <summary>
-        /// 根据列类型返回固定最大值模板（决定列宽的重要因素）
+        /// 获取最大值模板：横版 / 任务栏各用不同模板
         /// </summary>
         private string GetMaxValueSample(Column col)
         {
             string key = col.Top?.Key?.ToUpperInvariant() ?? "";
 
-            // 如果是磁盘 or 网络 → 使用 IO 模板
-            if (key.Contains("READ") || key.Contains("WRITE") ||
-                key.Contains("UP") || key.Contains("DOWN"))
-                return MAX_VALUE_IO;
-
-            // 其他列（CPU/GPU/MEM/etc）使用普通模板
-            return MAX_VALUE_NORMAL;
+            bool isIO =
+                key.Contains("READ") || key.Contains("WRITE") ||
+                key.Contains("UP") || key.Contains("DOWN");
+            return isIO ? MAX_VALUE_IO : MAX_VALUE_NORMAL;
         }
+
+
     }
 
+
+    /// <summary>
+    /// 每一列对应 Top + Bottom 两行项目
+    /// 宽度与 Bounds 坐标由 HorizontalLayout 计算
+    /// </summary>
     public class Column
     {
         public MetricItem? Top;
         public MetricItem? Bottom;
 
-        public int ColumnWidth;              // 该列独有的宽度（核心）
-        public Rectangle Bounds = Rectangle.Empty; // 绘制区域
+        public int ColumnWidth;
+        public Rectangle Bounds = Rectangle.Empty;
     }
 }

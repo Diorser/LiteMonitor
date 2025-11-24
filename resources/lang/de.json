@@ -36,6 +36,8 @@
     "DisplayMode": "Anzeigemodus",
     "Vertical": "Vertikales Panel",
     "Horizontal": "Horizontaler Balken",
+    "TaskbarShow": "In Taskleiste",
+    "HideMainForm": "Panel ausblenden",
     "Opacity": "Transparenz",
     "ShowItems": "Elemente anzeigen",
     "Theme": "Design",

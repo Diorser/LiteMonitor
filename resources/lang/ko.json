@@ -36,6 +36,8 @@
     "DisplayMode": "표시 모드",
     "Vertical": "세로 패널",
     "Horizontal": "가로 바",
+    "TaskbarShow": "작업표시줄 표시",
+    "HideMainForm": "패널 숨기기",
     "Opacity": "투명도",
     "ShowItems": "표시 항목",
     "Theme": "테마",

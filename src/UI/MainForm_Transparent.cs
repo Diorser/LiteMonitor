@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace LiteMonitor
 {
@@ -60,7 +61,7 @@ namespace LiteMonitor
         private bool _isHidden = false;
         private int _hideWidth = 4;
         private int _hideThreshold = 10;
-        private enum DockEdge { None, Left, Right }
+        private enum DockEdge { None, Left, Right, Top, Bottom }
         private DockEdge _dock = DockEdge.None;
         private bool _uiDragging = false;
 
@@ -81,54 +82,148 @@ namespace LiteMonitor
             if (_uiDragging || ContextMenuStrip?.Visible == true) return;
 
             // ==== 关键修改：基于“当前窗体所在屏幕”计算区域 ====
-            // 取窗口中心点，找到离它最近的那块屏幕
             var center = new Point(Left + Width / 2, Top + Height / 2);
             var screen = Screen.FromPoint(center);
             var area = screen.WorkingArea;
 
             var cursor = Cursor.Position;
 
-            bool nearLeft = Left <= area.Left + _hideThreshold;
-            bool nearRight = area.Right - Right <= _hideThreshold;
+            // ===== 模式判断 =====
+            bool isHorizontal = _cfg.HorizontalMode;
 
-            // ==== 靠边 → 自动隐藏 ====
-            if (!_isHidden && (nearLeft || nearRight) && !Bounds.Contains(cursor))
+            // ===== 竖屏：左右贴边隐藏 =====
+            bool nearLeft = false, nearRight = false;
+
+            // ===== 横屏：上下贴边隐藏 =====
+            bool nearTop = false, nearBottom = false;
+
+            if (!isHorizontal)
             {
-                if (nearRight)
+                // 竖屏 → 左右隐藏
+                nearLeft = Left <= area.Left + _hideThreshold;
+                nearRight = area.Right - Right <= _hideThreshold;
+            }
+            else
+            {
+                // 横屏 → 上下隐藏
+                nearTop = Top <= area.Top + _hideThreshold;
+                nearBottom = area.Bottom - Bottom <= _hideThreshold;
+            }
+
+            // ===== 是否应该隐藏 =====
+            bool shouldHide =
+                (!isHorizontal && (nearLeft || nearRight)) ||
+                (isHorizontal && (nearTop || nearBottom));
+
+            // ===== 靠边 → 自动隐藏 =====
+            if (!_isHidden && shouldHide && !Bounds.Contains(cursor))
+            {
+                if (!isHorizontal)
                 {
-                    // 贴在当前屏幕右侧，只露出 _hideWidth
-                    Left = area.Right - _hideWidth;
-                    _dock = DockEdge.Right;
+                    // ========= 竖屏：左右隐藏 =========
+                    if (nearRight)
+                    {
+                        Left = area.Right - _hideWidth;
+                        _dock = DockEdge.Right;
+                    }
+                    else
+                    {
+                        Left = area.Left - (Width - _hideWidth);
+                        _dock = DockEdge.Left;
+                    }
                 }
                 else
                 {
-                    // 贴在当前屏幕左侧，只露出 _hideWidth
-                    Left = area.Left - (Width - _hideWidth);
-                    _dock = DockEdge.Left;
+                    // ========= 横屏：上下隐藏 =========
+                    if (nearBottom)
+                    {
+                        Top = area.Bottom - _hideWidth;
+                        _dock = DockEdge.Bottom;
+                    }
+                    else
+                    {
+                        Top = area.Top - (Height - _hideWidth);
+                        _dock = DockEdge.Top;
+                    }
                 }
+
                 _isHidden = true;
                 return;
             }
 
-            // ==== 已隐藏 → 鼠标靠边时弹出 ====
+            // ===== 已隐藏 → 鼠标靠边 → 弹出 =====
             if (_isHidden)
             {
                 const int hoverBand = 30;
 
-                if (_dock == DockEdge.Right && cursor.X >= area.Right - hoverBand)
+                if (!isHorizontal)
                 {
-                    Left = area.Right - Width;
-                    _isHidden = false;
-                    _dock = DockEdge.None;
+                    // ======== 竖屏：左右弹出 ========
+                    if (_dock == DockEdge.Right && cursor.X >= area.Right - hoverBand)
+                    {
+                        Left = area.Right - Width;
+                        _isHidden = false;
+                        _dock = DockEdge.None;
+                    }
+                    else if (_dock == DockEdge.Left && cursor.X <= area.Left + hoverBand)
+                    {
+                        Left = area.Left;
+                        _isHidden = false;
+                        _dock = DockEdge.None;
+                    }
                 }
-                else if (_dock == DockEdge.Left && cursor.X <= area.Left + hoverBand)
+                else
                 {
-                    Left = area.Left;
-                    _isHidden = false;
-                    _dock = DockEdge.None;
+                    // ======== 横屏：上下弹出 ========
+                    if (_dock == DockEdge.Bottom && cursor.Y >= area.Bottom - hoverBand)
+                    {
+                        Top = area.Bottom - Height;
+                        _isHidden = false;
+                        _dock = DockEdge.None;
+                    }
+                    else if (_dock == DockEdge.Top && cursor.Y <= area.Top + hoverBand)
+                    {
+                        Top = area.Top;
+                        _isHidden = false;
+                        _dock = DockEdge.None;
+                    }
                 }
             }
         }
+
+
+        // ==== 任务栏显示 ====
+        private TaskbarForm? _taskbar;
+
+        public void ToggleTaskbar(bool show)
+        {
+            if (show)
+            {
+                if (_taskbar == null || _taskbar.IsDisposed)
+                {
+                    _taskbar = new TaskbarForm(_cfg, _ui!);
+                    _taskbar.Show();                  // ★ 必须真正 Show 出来
+                }
+                else
+                {
+                    if (!_taskbar.Visible)
+                        _taskbar.Show();
+                }
+            }
+            else
+            {
+                if (_taskbar != null)
+                {
+                    _taskbar.Close();
+                    _taskbar.Dispose();
+                    _taskbar = null;
+                }
+            }
+        }
+
+
+
+
 
         // ========== 构造函数 ==========
         public MainForm()
@@ -167,6 +262,15 @@ namespace LiteMonitor
 
             _tray.ContextMenuStrip = MenuManager.Build(this, _cfg, _ui);
             ContextMenuStrip = _tray.ContextMenuStrip;
+            
+            // 托盘图标双击 → 显示主窗口
+            _tray.MouseDoubleClick += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ShowMainWindow();
+                }
+            };
 
 
 
@@ -221,6 +325,30 @@ namespace LiteMonitor
             // === 状态恢复 ===
             if (_cfg.ClickThrough) SetClickThrough(true);
             if (_cfg.AutoHide) InitAutoHideTimer();
+
+            
+
+
+        }
+        public void ShowMainWindow()
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            this.Activate();
+            _cfg.HideMainForm = false;
+            _cfg.Save();
+            // 关键补充：每次显示主窗口时同步刷新菜单状态
+            RebuildMenus();
+        }
+
+        public void HideMainWindow()
+        {
+            // 只隐藏窗口，不退出程序，不动任务栏
+            this.Hide();
+            _cfg.HideMainForm = true;
+            _cfg.Save();
+            // 关键补充：每次显示主窗口时同步刷新菜单状态
+            RebuildMenus();
         }
 
 
@@ -277,6 +405,12 @@ namespace LiteMonitor
         {
             base.OnShown(e);
 
+             //是否隐藏主窗口
+            if (_cfg.HideMainForm)
+            {
+                this.Hide();
+            }
+
             // 确保窗体尺寸已初始化
             this.Update();
 
@@ -293,7 +427,18 @@ namespace LiteMonitor
                 int y = area.Top + (area.Height - Height) / 2; // 垂直居中
                 Location = new Point(x, y);
             }
-
+            // ★★ 新增：如果是横屏，先强制主窗体完成第一次布局（避免高度跳变）
+            if (_cfg.HorizontalMode)
+            {
+                _ui.Render(CreateGraphics());   // 强制执行一次横屏布局 & _form.Height 正确化
+                this.Update();                     // 刷新位置
+            }
+            // === 根据配置启动任务栏模式 ===
+            if (_cfg.ShowTaskbar)
+            {
+                ToggleTaskbar(true);
+            }
+                
             // ✅ 启动时静默检查更新（不打扰用户）
             _ = UpdateChecker.CheckAsync();
 

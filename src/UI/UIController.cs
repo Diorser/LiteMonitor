@@ -21,6 +21,13 @@ namespace LiteMonitor
         private List<GroupLayoutInfo> _groups = new();
         private List<Column> _hxCols = new();
         private HorizontalLayout? _hxLayout;
+        public MainForm MainForm => (MainForm)_form;
+
+
+        // 任务栏模式：公开横版列数据（只读引用）
+        public List<Column> GetHorizontalColumns() => _hxCols;
+        
+
 
 
         public UIController(Settings cfg, Form form)
@@ -84,6 +91,9 @@ namespace LiteMonitor
             BuildMetrics();
             _layoutDirty = true;
 
+            // ★★ 新增：初始化横版列数据（任务栏也要用）
+            BuildHorizontalColumns();
+
             // 刷新 Timer 的刷新间隔（关键）
             _timer.Interval = Math.Max(80, _cfg.RefreshMs);
 
@@ -91,12 +101,20 @@ namespace LiteMonitor
             _form.Invalidate();
             _form.Update();
 
-            // ========== 横屏模式布局器（必须在 form.Width 设置后创建）==========
-            if (_cfg.HorizontalMode)
-            {
-                // 横屏必须使用窗口真实宽度，而不是主题的 Layout.Width
-                _hxLayout = new HorizontalLayout(t, _form.Width);
-            }
+            //// ========== 横屏模式布局器（必须在 form.Width 设置后创建）==========
+            //if (_cfg.HorizontalMode)
+            //{
+            //    // 横屏必须使用窗口真实宽度，而不是主题的 Layout.Width
+            //    _hxLayout = new HorizontalLayout(
+            //        t,
+            //        _form.Width,
+            //        LayoutMode.Horizontal   // ★ 新增：横版模式
+            //    );
+
+            //}
+
+            // 横版布局器必须在切换 DPI/主题后重建
+            _hxLayout = null;
         }
 
 
@@ -111,6 +129,7 @@ namespace LiteMonitor
 
             _form.Invalidate();
             _form.Update();
+            //BuildHorizontalColumns();// 无论竖屏还是横屏，都构建横版列数据
         }
 
         /// <summary>
@@ -130,9 +149,12 @@ namespace LiteMonitor
             if (_cfg.HorizontalMode)
             {
                 // 确保横屏布局已初始化
-                _hxLayout ??= new HorizontalLayout(t, _form.Width);
+                _hxLayout ??= new HorizontalLayout(
+                    t,
+                    _form.Width,
+                    LayoutMode.Horizontal   // ★ 新增：横版模式
+                );
                 
-                BuildHorizontalColumns();
 
                 // layout.Build 计算面板高度 & 面板宽度
                 int h = _hxLayout.Build(_hxCols);
@@ -173,6 +195,7 @@ namespace LiteMonitor
             {
                 await System.Threading.Tasks.Task.Run(() => _mon.UpdateAll());
 
+                // ① 更新竖屏用的 items
                 foreach (var g in _groups)
                     foreach (var it in g.Items)
                     {
@@ -180,13 +203,29 @@ namespace LiteMonitor
                         it.TickSmooth(_cfg.AnimationSpeed);
                     }
 
-                _form.Invalidate();
+                // ② ★ 新增：同步更新横版 / 任务栏用的列数据
+                foreach (var col in _hxCols)
+                {
+                    if (col.Top != null)
+                    {
+                        col.Top.Value = _mon.Get(col.Top.Key);
+                        col.Top.TickSmooth(_cfg.AnimationSpeed);
+                    }
+                    if (col.Bottom != null)
+                    {
+                        col.Bottom.Value = _mon.Get(col.Bottom.Key);
+                        col.Bottom.TickSmooth(_cfg.AnimationSpeed);
+                    }
+                }
+
+                _form.Invalidate();   // 主窗体刷新（竖屏 / 横屏）
             }
             finally
             {
                 _busy = false;
             }
         }
+
 
         /// <summary>
         /// 生成各分组与项目
