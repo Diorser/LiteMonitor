@@ -133,11 +133,11 @@ namespace LiteMonitor
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-                if (key != null)
-                {
-                    object val = key.GetValue("SystemUsesLightTheme");
-                    if (val is int i) return i == 1;
-                }
+            if (key != null)
+            {
+                object? val = key.GetValue("SystemUsesLightTheme");
+                if (val is int i) return i == 1;
+            }
             }
             catch { }
             return false;
@@ -241,7 +241,10 @@ namespace LiteMonitor
             else
             {
                 var s = Screen.PrimaryScreen;
-                _taskbarRect = new Rectangle(s.WorkingArea.Left, s.WorkingArea.Bottom, s.WorkingArea.Width, s.Bounds.Bottom - s.WorkingArea.Bottom);
+                if (s != null)
+                {
+                    _taskbarRect = new Rectangle(s.WorkingArea.Left, s.WorkingArea.Bottom, s.WorkingArea.Width, s.Bounds.Bottom - s.WorkingArea.Bottom);
+                }
             }
             _taskbarHeight = Math.Max(24, _taskbarRect.Height);
         }
@@ -353,6 +356,7 @@ namespace LiteMonitor
             if (_hTaskbar == IntPtr.Zero) return;
 
             var scr = Screen.PrimaryScreen;
+            if (scr == null) return;
             bool bottom = _taskbarRect.Bottom >= scr.Bounds.Bottom - 2;
             bool centered = IsCenterAligned();
             int widgetsWidth = GetWidgetsWidth();
@@ -434,11 +438,14 @@ namespace LiteMonitor
             // 只响应左键双击
             if (e.Button == MouseButtons.Left)
             {
-                // 调用主窗口的显示方法
-                // 该方法在 MainForm.cs 中已定义，会处理 Show(), Activate() 和配置保存
-                _mainForm.ShowMainWindow();
+                // ★ 改为：显示 / 隐藏 主窗口自动切换
+                if (_mainForm.Visible)
+                    _mainForm.HideMainWindow();
+                else
+                    _mainForm.ShowMainWindow();
             }
         }
+
         protected override CreateParams CreateParams
         {
             get

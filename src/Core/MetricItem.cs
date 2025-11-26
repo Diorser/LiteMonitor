@@ -3,51 +3,59 @@ using System.Drawing;
 
 namespace LiteMonitor
 {
+    /// <summary>
+    /// 定义该指标项的渲染风格
+    /// </summary>
+    public enum MetricRenderStyle
+    {
+        StandardBar, // 标准：左标签 + 右数值 + 底部进度条 (CPU/MEM/GPU)
+        TwoColumn    // 双列：居中标签 + 居中数值 (NET/DISK)
+    }
+
     public class MetricItem
     {
         public string Key { get; set; } = "";
         public string Label { get; set; } = "";
-        public Rectangle Bounds { get; set; } = Rectangle.Empty;
-
+        
+        // 原始数值与显示数值
         public float? Value { get; set; } = null;
         public float DisplayValue { get; set; } = 0f;
 
+        // =============================
+        // 布局数据 (由 UILayout 计算填充)
+        // =============================
+        
         /// <summary>
-        /// 平滑更新显示值，防止数值突变造成跳动。
+        /// 渲染风格
         /// </summary>
-        /// <param name="speed">
-        /// 平滑速度系数（0~1）:
-        /// - 1.0 表示瞬时更新（无动画）
-        /// - 0.3~0.5 为推荐平滑范围
-        ///   值越小 → 越平滑但响应稍慢。
-        /// </param>
+        public MetricRenderStyle Style { get; set; } = MetricRenderStyle.StandardBar;
+
+        /// <summary>
+        /// 整个项目的边界（用于鼠标交互或调试）
+        /// </summary>
+        public Rectangle Bounds { get; set; } = Rectangle.Empty;
+
+        // --- 内部组件区域 ---
+        public Rectangle LabelRect;   // 标签文本区域
+        public Rectangle ValueRect;   // 数值文本区域
+        public Rectangle BarRect;     // 进度条区域 (仅 StandardBar 有效)
+        public Rectangle BackRect;    // 背景区域 (用于圆角矩形等)
+
+        /// <summary>
+        /// 平滑更新显示值
+        /// </summary>
         public void TickSmooth(double speed)
         {
-            // 若当前无有效数值，直接返回
             if (!Value.HasValue) return;
-
             float target = Value.Value;
             float diff = Math.Abs(target - DisplayValue);
 
-            // 忽略非常微小的变化，防止数值抖动闪烁
             if (diff < 0.05f) return;
 
-            // 若差距过大或速度系数接近 1，直接跳至目标值
-            // 例如首次加载、切换硬件时
             if (diff > 15f || speed >= 0.9)
-            {
                 DisplayValue = target;
-            }
             else
-            {
-                // 核心平滑逻辑：
-                // 每帧按 speed 比例逼近目标，使数值逐步过渡
-                // 示例：speed = 0.35 → 每次更新向目标推进 35%
                 DisplayValue += (float)((target - DisplayValue) * speed);
-            }
         }
-
-
-
     }
 }

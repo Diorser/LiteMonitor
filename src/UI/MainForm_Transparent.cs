@@ -195,8 +195,11 @@ namespace LiteMonitor
                 if (_taskbar == null || _taskbar.IsDisposed)
                 {
                     // ★ 修改这里：传入 'this' (MainForm 实例)
-                    _taskbar = new TaskbarForm(_cfg, _ui!, this);
-                    _taskbar.Show();  // ★ 必须真正 Show 出来
+                    if (_ui != null)
+                    {
+                        _taskbar = new TaskbarForm(_cfg, _ui, this);
+                        _taskbar.Show();  // ★ 必须真正 Show 出来
+                    }
                 }
                 else
                 {
@@ -260,7 +263,7 @@ namespace LiteMonitor
                 }
             };
 
-
+        
 
             // === 拖拽移动 ===
             MouseDown += (_, e) =>
@@ -290,6 +293,15 @@ namespace LiteMonitor
                     SavePos();
                 }
             };
+            // === 双击切换横竖屏 ===
+            this.DoubleClick += (_, __) =>
+            {
+                _cfg.HorizontalMode = !_cfg.HorizontalMode;  // 1) 切换横竖屏状态
+                _cfg.Save();                                  // 2) 保存配置
+                _ui.ApplyTheme(_cfg.Skin);                    // 3) 重建布局 + 重绘
+                RebuildMenus();                               // 4) 更新菜单勾选状态
+            };
+
 
             // === 渐入透明度 ===
             Opacity = 0;
@@ -455,7 +467,7 @@ namespace LiteMonitor
             // ========================================================
             // ★★ 若是横屏：必须强制先渲染一次确保 Height 正确
             // ========================================================
-            if (_cfg.HorizontalMode)
+            if (_cfg.HorizontalMode && _ui != null)
             {
                 _ui.Render(CreateGraphics());   // 完成布局
                 this.Update();                  // 刷新位置

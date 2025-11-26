@@ -16,21 +16,21 @@ namespace LiteMonitor.ThemeEditor
     public class ThemeEditorForm : Form
     {
         // 左栏：主题管理
-        private ListBox lstThemes;
-        private Button btnNew;
-        private Button btnRename;
-        private Button btnCopy;
-        private Button btnDelete;
+        private ListBox? lstThemes;
+        private Button? btnNew;
+        private Button? btnRename;
+        private Button? btnCopy;
+        private Button? btnDelete;
 
         // 中间：TabControl + 编辑页
-        private TabControl tab;
-        private Panel pageLayout;
-        private Panel pageFont;
-        private Panel pageColors;
-        private Panel pageThreshold;
+        private TabControl? tab;
+        private Panel? pageLayout;
+        private Panel? pageFont;
+        private Panel? pageColors;
+        private Panel? pageThreshold;
 
         // 右栏：预览
-        private ThemePreviewControl preview;
+        private ThemePreviewControl? preview;
 
         private Theme? _theme;
         private string _currentThemeName = "";

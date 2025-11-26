@@ -24,6 +24,7 @@ namespace LiteMonitor.src.Core
     public class LayoutConfig
     {
         public int Width { get; set; } = 240;//不会被实际使用，运行时由 Settings.PanelWidth 覆盖
+        public float LayoutScale { get; set; } = 1.0f;//不会被实际使用，运行时由 Settings.PanelWidth 覆盖
         public int RowHeight { get; set; } = 40;
         public int Padding { get; set; } = 12;
 
@@ -181,8 +182,8 @@ namespace LiteMonitor.src.Core
         public void Scale(float dpiScale, float userScale)
         {
             // 布局用 dpi × user
-            float layoutScale = dpiScale * userScale;
-            Layout.Scale(layoutScale);
+            Layout.LayoutScale = dpiScale * userScale;
+            Layout.Scale(Layout.LayoutScale);
 
             // 字体只用 userScale：“补”用户缩放，不再自己乘 DPI
             var style = Font.Bold ? FontStyle.Bold : FontStyle.Regular;
@@ -229,6 +230,7 @@ namespace LiteMonitor.src.Core
             {
                 return Directory.EnumerateFiles(ThemeDir, "*.json")
                                 .Select(Path.GetFileNameWithoutExtension)
+                                .Where(n => n != null)
                                 .OrderBy(n => n)
                                 .ToArray();
             }

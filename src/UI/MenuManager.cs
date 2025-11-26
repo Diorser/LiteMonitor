@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -12,7 +12,7 @@ namespace LiteMonitor
         /// <summary>
         /// 构建 LiteMonitor 主菜单（右键菜单 + 托盘菜单）
         /// </summary>
-        public static ContextMenuStrip Build(MainForm form, Settings cfg, UIController ui)
+        public static ContextMenuStrip Build(MainForm form, Settings cfg, UIController? ui)
         {
             var menu = new ContextMenuStrip();
 
@@ -47,7 +47,7 @@ namespace LiteMonitor
             {
                 cfg.HorizontalMode = false;
                 cfg.Save();
-                ui.ApplyTheme(cfg.Skin);
+                ui?.ApplyTheme(cfg.Skin);
                 form.RebuildMenus();
             };
 
@@ -55,7 +55,7 @@ namespace LiteMonitor
             {
                 cfg.HorizontalMode = true;
                 cfg.Save();
-                ui.ApplyTheme(cfg.Skin);
+                ui?.ApplyTheme(cfg.Skin);
                 form.RebuildMenus();
             };
 
@@ -120,6 +120,41 @@ namespace LiteMonitor
             menu.Items.Add(new ToolStripSeparator());
 
 
+              // === 显示项 ===
+            var grpShow = new ToolStripMenuItem(LanguageManager.T("Menu.ShowItems"));
+            menu.Items.Add(grpShow);
+
+            void AddToggle(string key, Func<bool> get, Action<bool> set)
+            {
+                var item = new ToolStripMenuItem(LanguageManager.T(key))
+                {
+                    Checked = get(),
+                    CheckOnClick = true
+                };
+                item.CheckedChanged += (_, __) =>
+                {
+                    set(item.Checked);
+                    cfg.Save();
+                    ui?.ApplyTheme(cfg.Skin);
+                };
+                grpShow.DropDownItems.Add(item);
+            }
+
+            AddToggle("Items.CPU.Load", () => cfg.Enabled.CpuLoad, v => cfg.Enabled.CpuLoad = v);
+            AddToggle("Items.CPU.Temp", () => cfg.Enabled.CpuTemp, v => cfg.Enabled.CpuTemp = v);
+            AddToggle("Items.GPU.Load", () => cfg.Enabled.GpuLoad, v => cfg.Enabled.GpuLoad = v);
+            AddToggle("Items.GPU.Temp", () => cfg.Enabled.GpuTemp, v => cfg.Enabled.GpuTemp = v);
+            AddToggle("Items.GPU.VRAM", () => cfg.Enabled.GpuVram, v => cfg.Enabled.GpuVram = v);
+            AddToggle("Items.MEM.Load", () => cfg.Enabled.MemLoad, v => cfg.Enabled.MemLoad = v);
+
+            AddToggle("Groups.DISK",
+                () => cfg.Enabled.DiskRead || cfg.Enabled.DiskWrite,
+                v => { cfg.Enabled.DiskRead = v; cfg.Enabled.DiskWrite = v; });
+
+            AddToggle("Groups.NET",
+                () => cfg.Enabled.NetUp || cfg.Enabled.NetDown,
+                v => { cfg.Enabled.NetUp = v; cfg.Enabled.NetDown = v; });
+
 
             // === 透明度 ===
             var opacityRoot = new ToolStripMenuItem(LanguageManager.T("Menu.Opacity"));
@@ -147,40 +182,7 @@ namespace LiteMonitor
             menu.Items.Add(opacityRoot);
 
 
-            // === 显示项 ===
-            var grpShow = new ToolStripMenuItem(LanguageManager.T("Menu.ShowItems"));
-            menu.Items.Add(grpShow);
-
-            void AddToggle(string key, Func<bool> get, Action<bool> set)
-            {
-                var item = new ToolStripMenuItem(LanguageManager.T(key))
-                {
-                    Checked = get(),
-                    CheckOnClick = true
-                };
-                item.CheckedChanged += (_, __) =>
-                {
-                    set(item.Checked);
-                    cfg.Save();
-                    ui.ApplyTheme(cfg.Skin);
-                };
-                grpShow.DropDownItems.Add(item);
-            }
-
-            AddToggle("Items.CPU.Load", () => cfg.Enabled.CpuLoad, v => cfg.Enabled.CpuLoad = v);
-            AddToggle("Items.CPU.Temp", () => cfg.Enabled.CpuTemp, v => cfg.Enabled.CpuTemp = v);
-            AddToggle("Items.GPU.Load", () => cfg.Enabled.GpuLoad, v => cfg.Enabled.GpuLoad = v);
-            AddToggle("Items.GPU.Temp", () => cfg.Enabled.GpuTemp, v => cfg.Enabled.GpuTemp = v);
-            AddToggle("Items.GPU.VRAM", () => cfg.Enabled.GpuVram, v => cfg.Enabled.GpuVram = v);
-            AddToggle("Items.MEM.Load", () => cfg.Enabled.MemLoad, v => cfg.Enabled.MemLoad = v);
-
-            AddToggle("Groups.DISK",
-                () => cfg.Enabled.DiskRead || cfg.Enabled.DiskWrite,
-                v => { cfg.Enabled.DiskRead = v; cfg.Enabled.DiskWrite = v; });
-
-            AddToggle("Groups.NET",
-                () => cfg.Enabled.NetUp || cfg.Enabled.NetDown,
-                v => { cfg.Enabled.NetUp = v; cfg.Enabled.NetDown = v; });
+          
 
 
             // === 主题 ===
@@ -202,7 +204,7 @@ namespace LiteMonitor
 
                     item.Checked = true;
 
-                    ui.ApplyTheme(name);
+                    ui?.ApplyTheme(name);
                 };
 
                 themeRoot.DropDownItems.Add(item);
@@ -314,7 +316,7 @@ namespace LiteMonitor
                 {
                     cfg.PanelWidth = w;
                     cfg.Save();
-                    ui.ApplyTheme(cfg.Skin);
+                    ui?.ApplyTheme(cfg.Skin);
 
                     foreach (ToolStripMenuItem other in widthRoot.DropDownItems)
                         other.Checked = false;
@@ -357,7 +359,7 @@ namespace LiteMonitor
                     cfg.UIScale = scale;
                     cfg.Save();
 
-                    ui.ApplyTheme(cfg.Skin);
+                    ui?.ApplyTheme(cfg.Skin);
 
                     foreach (ToolStripMenuItem other in scaleRoot.DropDownItems)
                         other.Checked = false;
@@ -389,7 +391,7 @@ namespace LiteMonitor
             {
                 cfg.PreferredDisk = "";
                 cfg.Save();
-                ui.RebuildLayout();
+                ui?.RebuildLayout();
             };
 
             diskRoot.DropDownItems.Add(autoDisk);
@@ -414,7 +416,7 @@ namespace LiteMonitor
                     {
                         cfg.PreferredDisk = name;
                         cfg.Save();
-                        ui.RebuildLayout();
+                        ui?.RebuildLayout();
                     };
 
                     diskRoot.DropDownItems.Add(item);
@@ -439,7 +441,7 @@ namespace LiteMonitor
             {
                 cfg.PreferredNetwork = "";
                 cfg.Save();
-                ui.RebuildLayout();
+                ui?.RebuildLayout();
             };
 
             netRoot.DropDownItems.Add(autoNet);
@@ -465,7 +467,7 @@ namespace LiteMonitor
                     {
                         cfg.PreferredNetwork = name;
                         cfg.Save();
-                        ui.RebuildLayout();
+                        ui?.RebuildLayout();
                     };
 
                     netRoot.DropDownItems.Add(item);
@@ -500,7 +502,7 @@ namespace LiteMonitor
                         cfg.Language = code;
                         cfg.Save();
 
-                        ui.ApplyTheme(cfg.Skin);
+                        ui?.ApplyTheme(cfg.Skin);
 
                         // 让 MainForm 来重建菜单（最优雅）
                         form.RebuildMenus();

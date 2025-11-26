@@ -19,7 +19,6 @@ namespace LiteMonitor
         private bool _dragging = false;
 
         private List<GroupLayoutInfo> _groups = new();
-        private List<Column> _hxCols = new();
         private List<Column> _hxColsHorizontal = new();
         private List<Column> _hxColsTaskbar = new();
         private HorizontalLayout? _hxLayout;
@@ -38,8 +37,8 @@ namespace LiteMonitor
             _mon = new HardwareMonitor(cfg);
             _mon.OnValuesUpdated += () => _form.Invalidate();
 
-
-            
+            // 初始化_layout字段，避免null引用警告
+            _layout = new UILayout(ThemeManager.Current);
 
             _timer = new System.Windows.Forms.Timer { Interval = Math.Max(80, _cfg.RefreshMs) };
             _timer.Tick += (_, __) => Tick();
@@ -70,11 +69,6 @@ namespace LiteMonitor
 
             // 让 Theme 根据两个缩放因子分别缩放界面和字体
             t.Scale(dpiScale, userScale);
-
-            // ========== 面板宽度也要缩放 ==========
-            // 注意：横屏和竖屏都需要同步设置窗口宽度
-            int scaledWidth = (int)(_cfg.PanelWidth * finalScale);
-
             // 竖屏模式：使用 PanelWidth
             if (!_cfg.HorizontalMode)
             {
@@ -101,7 +95,6 @@ namespace LiteMonitor
             // 刷新渲染
             _form.Invalidate();
             _form.Update();
-            //BuildHorizontalColumns();// 无论竖屏还是横屏，都构建横版列数据
         }
 
 
