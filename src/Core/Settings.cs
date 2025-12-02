@@ -49,11 +49,13 @@ namespace LiteMonitor
 
         // [新增] 记录历史最高值，用于自适应颜色判断
         // 给一些保守的默认值，防止初次运行分母为0
-        public float RecordedMaxCpuPower { get; set; } = 65.0f;   // 改为 65W (覆盖轻薄本)
-        public float RecordedMaxCpuClock { get; set; } = 2500.0f; // 改为 2500MHz (覆盖低频U)
-        public float RecordedMaxGpuPower { get; set; } = 80.0f;   // 改为 80W (覆盖入门/中级卡)
-        public float RecordedMaxGpuClock { get; set; } = 2300.0f;  // 改为 2300MHz (覆盖入门独显)
-        public bool MaxLimitTipShown { get; set; } = false;  // 最大值弹窗提示已显示
+       
+        public float RecordedMaxCpuPower { get; set; } = 65.0f;   // CPU 功耗：65W (覆盖台式机 i5/R5 非K版，以及主流游戏本)
+        public float RecordedMaxCpuClock { get; set; } = 4200.0f; // CPU 频率：4.2GHz (现代主流 CPU 的基础睿频线)
+        public float RecordedMaxGpuPower { get; set; } = 100.0f;    // GPU 功耗：100W (精准卡位 RTX 4060/3060 移动版及桌面节能卡)
+        public float RecordedMaxGpuClock { get; set; } = 1800.0f;   // GPU 频率：1800MHz (兼容绝大多数独显的 Boost 起跳频率)
+
+        public bool MaxLimitTipShown { get; set; } = false;  // 新增：是否已经弹窗提示过用户 (防止重复打扰)
 
         // [新增] 高温报警配置
         public bool AlertTempEnabled { get; set; } = true; // 总开关

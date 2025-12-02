@@ -89,10 +89,8 @@ namespace LiteMonitor
             // 2. 添加功能卡片 (Cards)
              // ★★★ [新增] 卡片: 频率与功耗最大值 ★★★
             // 为了数据准确性，单位使用 MHz (对应 Settings 中的存储单位)，如果用 GHz 需要小数位支持
-            mainScroll.Controls.Add(CreateCard("最大频率与功耗 (Max Limits)", p => {
+            mainScroll.Controls.Add(CreateCard("最大频率与功耗 (Max Limits) -- 仅在开启频率/功耗显示时设置", p => {
                 AddHardwareHeaderRow(p); // 添加 CPU/GPU 表头
-                
-              
                 
                 // 最大频率行
                 AddMaxLimitRow(p, "最大频率 / Max Clock (MHz)", 
