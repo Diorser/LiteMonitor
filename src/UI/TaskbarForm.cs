@@ -37,7 +37,7 @@ namespace LiteMonitor
         public void ReloadLayout()
         {
             // 重新创建一个布局器，它内部会自动读取最新的 Settings 文件
-            _layout = new HorizontalLayout(ThemeManager.Current, 300, LayoutMode.Taskbar);
+            _layout = new HorizontalLayout(ThemeManager.Current, 300, LayoutMode.Taskbar, _cfg);
         }
 
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)

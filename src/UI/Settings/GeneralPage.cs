@@ -25,6 +25,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         private LiteCheck _chkClamp;
         private LiteCheck _chkHideTray;
         private LiteCheck _chkHideMain;
+        private LiteCheck _chkShowTaskbar;
 
         private LiteComboBox _cmbNet;
         private LiteComboBox _cmbDisk;
@@ -97,23 +98,28 @@ namespace LiteMonitor.src.UI.SettingsPage
             _chkTopMost = new LiteCheck(Config.TopMost, "Enable");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TopMost"), _chkTopMost));
 
+             _chkClickThrough = new LiteCheck(Config.ClickThrough, "Enable");
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClickThrough"), _chkClickThrough));
+
              _chkClamp = new LiteCheck(Config.ClampToScreen, "Enable");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClampToScreen"), _chkClamp));
 
             _chkAutoHide = new LiteCheck(Config.AutoHide, "Enable");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AutoHide"), _chkAutoHide));
 
-            _chkClickThrough = new LiteCheck(Config.ClickThrough, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClickThrough"), _chkClickThrough));
-
             _chkHideTray = new LiteCheck(Config.HideTrayIcon, "Enable");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideTrayIcon"), _chkHideTray));
 
-            _chkHideMain = new LiteCheck(Config.HideMainForm, "Enable");
+            _chkHideMain = new LiteCheck(Config.HideMainForm, "开启");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideMainForm"), _chkHideMain));
+
+            // 2. 新增任务栏显示开关
+            _chkShowTaskbar = new LiteCheck(Config.ShowTaskbar, "Enable");
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarShow"), _chkShowTaskbar));
 
             _chkHideTray.CheckedChanged += (s, e) => CheckVisibilitySafe();
             _chkHideMain.CheckedChanged += (s, e) => CheckVisibilitySafe();
+            _chkShowTaskbar.CheckedChanged += (s, e) => CheckVisibilitySafe();
 
             AddGroupToPage(group);
         }
@@ -140,7 +146,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             foreach (var r in rates) _cmbRefresh.Items.Add(r + " ms");
             SetComboVal(_cmbRefresh, Config.RefreshMs + " ms");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.Refresh"), _cmbRefresh));
-            
+
             AddGroupToPage(group);
         }
 
@@ -160,7 +166,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         
         private void CheckVisibilitySafe()
         {
-            if (!Config.ShowTaskbar && _chkHideMain.Checked && _chkHideTray.Checked)
+            if (!_chkShowTaskbar.Checked && _chkHideMain.Checked && _chkHideTray.Checked)
             {
                 if (_chkHideMain.Focused) _chkHideMain.Checked = false;
                 else _chkHideTray.Checked = false;
@@ -190,6 +196,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             Config.ClampToScreen = _chkClamp.Checked; // 这个不需要 Action，移动窗口时实时读配置
             Config.HideTrayIcon = _chkHideTray.Checked;
             Config.HideMainForm = _chkHideMain.Checked;
+            Config.ShowTaskbar = _chkShowTaskbar.Checked;
             
             // 刷新率 (这个通常算外观，但如果放在常规页，也要处理)
             Config.RefreshMs = ParseInt(_cmbRefresh.Text);

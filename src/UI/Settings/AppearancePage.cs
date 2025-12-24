@@ -18,8 +18,9 @@ namespace LiteMonitor.src.UI.SettingsPage
         private LiteComboBox _cmbOpacity;
         private LiteComboBox _cmbScale;
         
-        private LiteCheck _chkTaskbarCompact;
-        private LiteCheck _chkTaskbarAlignLeft;
+        // 修改：改为下拉框
+        private LiteComboBox _cmbTaskbarStyle;
+        private LiteComboBox _cmbTaskbarAlign;
 
         public AppearancePage()
         {
@@ -45,7 +46,7 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private void CreateThemeCard()
         {
-            var group = new LiteSettingsGroup("主界面设置");
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.Groups.Interface")); // 建议: 这里也可以用 "主界面设置" 或对应的Key
 
             _cmbTheme = new LiteComboBox();
             foreach (var t in ThemeManager.GetAvailableThemes()) _cmbTheme.Items.Add(t);
@@ -53,8 +54,9 @@ namespace LiteMonitor.src.UI.SettingsPage
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.Theme"), _cmbTheme));
 
             _cmbOrientation = new LiteComboBox();
-            _cmbOrientation.Items.Add("Vertical");
-            _cmbOrientation.Items.Add("Horizontal");
+            // 优化1：读取语言文件
+            _cmbOrientation.Items.Add(LanguageManager.T("Menu.Vertical"));   // 对应 index 0
+            _cmbOrientation.Items.Add(LanguageManager.T("Menu.Horizontal")); // 对应 index 1
             _cmbOrientation.SelectedIndex = Config.HorizontalMode ? 1 : 0;
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.DisplayMode"), _cmbOrientation));
 
@@ -64,7 +66,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             SetComboVal(_cmbWidth, Config.PanelWidth + " px");
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.Width"), _cmbWidth));
 
-              _cmbScale = new LiteComboBox();
+            _cmbScale = new LiteComboBox();
             double[] scales = { 0.5, 0.75, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0 };
             foreach (var s in scales) _cmbScale.Items.Add((s * 100) + "%");
             SetComboVal(_cmbScale, (Config.UIScale * 100) + "%");
@@ -84,14 +86,32 @@ namespace LiteMonitor.src.UI.SettingsPage
         {
             var group = new LiteSettingsGroup(LanguageManager.T("Menu.TaskbarSettings"));
 
-            bool isCompact = (Math.Abs(Config.TaskbarFontSize - 9f) < 0.1f) && !Config.TaskbarFontBold;
-            // ★ 传入 "Enable"
-            _chkTaskbarCompact = new LiteCheck(isCompact, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarCompact"), _chkTaskbarCompact));
+            // 优化2：任务栏样式 (大字模式 / 小字模式)
+            _cmbTaskbarStyle = new LiteComboBox();
+            // 0: 大字模式 (默认), 1: 小字紧凑
+            // 请在语言文件中添加这两个Key
+            _cmbTaskbarStyle.Items.Add(LanguageManager.T("Menu.TaskbarStyleBold")); 
+            _cmbTaskbarStyle.Items.Add(LanguageManager.T("Menu.TaskbarStyleRegular"));
 
-            // ★ 传入 "Enable"
-            _chkTaskbarAlignLeft = new LiteCheck(Config.TaskbarAlignLeft, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarAlignLeft"), _chkTaskbarAlignLeft));
+            // 判断当前是否为紧凑模式
+            bool isCompact = (Math.Abs(Config.TaskbarFontSize - 9f) < 0.1f) && !Config.TaskbarFontBold;
+            _cmbTaskbarStyle.SelectedIndex = isCompact ? 1 : 0;
+            
+            // 使用新Key: Menu.TaskbarStyle (任务栏样式)
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarStyle"), _cmbTaskbarStyle));
+
+
+            // 优化3：任务栏对齐 (左侧 / 右侧)
+            _cmbTaskbarAlign = new LiteComboBox();
+            // 0: 右侧, 1: 左侧 (与 bool TaskbarAlignLeft 对应逻辑：右=false, 左=true)
+            _cmbTaskbarAlign.Items.Add(LanguageManager.T("Menu.TaskbarAlignRight"));
+            _cmbTaskbarAlign.Items.Add(LanguageManager.T("Menu.TaskbarAlignLeft"));
+            
+            _cmbTaskbarAlign.SelectedIndex = Config.TaskbarAlignLeft ? 1 : 0;
+            
+            // 使用现有Key: Menu.TaskbarAlign (显示方向)
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarAlign"), _cmbTaskbarAlign));
+
 
             var tips = new Label { 
                 Text = "Note: Alignment only works when Win11 Taskbar is centered.", 
@@ -121,36 +141,42 @@ namespace LiteMonitor.src.UI.SettingsPage
         {
             if (!_isLoaded) return;
 
-            // === 1. 收集数据 (保持原样) ===
+            // === 1. 收集数据 ===
 
-            // 主题、方向、宽度、缩放
+            // 主题
             if (_cmbTheme.SelectedItem != null) Config.Skin = _cmbTheme.SelectedItem.ToString();
+            
+            // 显示模式 (根据索引判断: 0=Vertical, 1=Horizontal)
             Config.HorizontalMode = (_cmbOrientation.SelectedIndex == 1);
+            
             Config.PanelWidth = ParseInt(_cmbWidth.Text);
             Config.UIScale = ParsePercent(_cmbScale.Text);
-            
-            // 透明度
             Config.Opacity = ParsePercent(_cmbOpacity.Text);
 
-            // 任务栏设置
-            if (_chkTaskbarCompact.Checked) {
+            // 任务栏样式 (根据索引判断: 0=Normal, 1=Compact)
+            if (_cmbTaskbarStyle.SelectedIndex == 1) {
+                // Compact
                 Config.TaskbarFontSize = 9f;
                 Config.TaskbarFontBold = false;
             } else {
+                // Normal
                 Config.TaskbarFontSize = 10f;
                 Config.TaskbarFontBold = true;
             }
-            Config.TaskbarAlignLeft = _chkTaskbarAlignLeft.Checked;
+
+            // 任务栏对齐 (根据索引判断: 0=Right, 1=Left)
+            Config.TaskbarAlignLeft = (_cmbTaskbarAlign.SelectedIndex == 1);
+
 
             // === 2. 执行动作 (调用 AppActions) ===
             
-            // A. 应用主题、布局、缩放、显示模式 (对应 Theme, Orientation, Width, Scale)
+            // A. 应用主题、布局、缩放、显示模式
             AppActions.ApplyThemeAndLayout(Config, UI, MainForm);
 
-            // B. 应用窗口属性 (对应 Opacity)
+            // B. 应用窗口属性
             AppActions.ApplyWindowAttributes(Config, MainForm);
 
-            // C. 应用任务栏样式 (对应 TaskbarCompact, TaskbarAlignLeft)
+            // C. 应用任务栏样式
             AppActions.ApplyTaskbarStyle(Config, UI);
         }
 

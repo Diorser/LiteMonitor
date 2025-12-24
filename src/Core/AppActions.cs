@@ -140,11 +140,11 @@ namespace LiteMonitor.src.Core
             // 任务栏样式改变通常不需要完全重载主题，只要刷新 TaskbarForm 即可
             // 某些样式（如字体大小计算）可能依赖 ApplyTheme，为了保险也可以调 ApplyTheme
             // 这里为了轻量化，只刷新任务栏窗口，若有问题可改为 ApplyThemeAndLayout
-            
+           
             ReloadTaskbarWindows();
             
             // 如果样式影响了主程序计算（极少情况），可解开下面注释
-            // ui?.ApplyTheme(cfg.Skin); 
+            ui?.ApplyTheme(cfg.Skin); 
         }
 
         // --- 内部辅助 ---

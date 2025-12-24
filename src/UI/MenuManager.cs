@@ -316,7 +316,7 @@ namespace LiteMonitor
 
             // 1. 简洁显示
             bool isCompact = (Math.Abs(cfg.TaskbarFontSize - 9f) < 0.1f) && !cfg.TaskbarFontBold;
-            string strCompact = LanguageManager.T("Menu.TaskbarCompact");
+            string strCompact = LanguageManager.T("Menu.TaskbarStyleRegular");
             var itemCompact = new ToolStripMenuItem(strCompact)
             {
                 Checked = isCompact,

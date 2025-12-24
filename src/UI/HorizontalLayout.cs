@@ -32,11 +32,11 @@ namespace LiteMonitor
         private const string MAX_VALUE_CLOCK = "99GHz"; 
         private const string MAX_VALUE_POWER = "999W";
 
-        public HorizontalLayout(Theme t, int initialWidth, LayoutMode mode)
+        public HorizontalLayout(Theme t, int initialWidth, LayoutMode mode, Settings? settings = null)
         {
             _t = t;
             _mode = mode;
-            _settings = Settings.Load();
+            _settings = settings ?? Settings.Load();
 
             using (var g = Graphics.FromHwnd(IntPtr.Zero))
             {
