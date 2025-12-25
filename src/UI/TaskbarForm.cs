@@ -255,7 +255,7 @@ namespace LiteMonitor
             else
             {
                 // 原有模式
-                if (isLight) _transparentKey = Color.FromArgb(210, 210, 211);
+                if (isLight) _transparentKey = Color.FromArgb(210, 210, 210);
                 else _transparentKey = Color.Black;
             }
 
