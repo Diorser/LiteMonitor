@@ -8,15 +8,16 @@ using LiteMonitor.src.UI.Controls;
 namespace LiteMonitor.src.UI.Controls
 {
     // 1. 布局常量：集中管理坐标，修改一处即可调整所有列宽
+    // ★★★ 修改：从 const 改为 static readonly，以便应用 DPI 缩放 ★★★
     public static class MonitorLayout
     {
-        public const int H_ROW = 44;     // 行高
-        public const int X_ID = 20;      // ID列起点
-        public const int X_NAME = 125;   // Name列起点
-        public const int X_SHORT = 245;  // Short列起点
-        public const int X_PANEL = 325;  // Panel开关起点
-        public const int X_TASKBAR = 415;// Taskbar开关起点
-        public const int X_SORT = 500;   // 排序按钮起点
+        public static readonly int H_ROW = UIUtils.S(44);      // 行高
+        public static readonly int X_ID = UIUtils.S(20);       // ID列起点
+        public static readonly int X_NAME = UIUtils.S(125);    // Name列起点
+        public static readonly int X_SHORT = UIUtils.S(245);   // Short列起点
+        public static readonly int X_PANEL = UIUtils.S(325);   // Panel开关起点
+        public static readonly int X_TASKBAR = UIUtils.S(415); // Taskbar开关起点
+        public static readonly int X_SORT = UIUtils.S(500);    // 排序按钮起点
     }
 
     // 2. 封装“单行监控项”：继承自 Panel，内部组合 LiteUI 组件
@@ -46,8 +47,10 @@ namespace LiteMonitor.src.UI.Controls
             var lblId = new Label
             {
                 Text = item.Key,
-                Location = new Point(MonitorLayout.X_ID, 14),
-                Size = new Size(90, 20),
+                // ★★★ 修改：Y坐标缩放 (X坐标已在 MonitorLayout 中缩放)
+                Location = new Point(MonitorLayout.X_ID, UIUtils.S(14)),
+                // ★★★ 修改：Size 缩放
+                Size = new Size(UIUtils.S(90), UIUtils.S(20)),
                 AutoEllipsis = true,
                 ForeColor = UIColors.TextSub, // 复用 LiteUI 颜色
                 Font = UIFonts.Regular(8F)    // 复用字体
@@ -58,9 +61,10 @@ namespace LiteMonitor.src.UI.Controls
             string defName = LanguageManager.T("Items." + item.Key);
             string valName = string.IsNullOrEmpty(item.UserLabel) ? defName : item.UserLabel;
             
-            // 注意：这里复用了 LiteUnderlineInput，不用重复写绘制代码
+            // 注意：LiteUnderlineInput 内部构造函数已经处理了 Width 的缩放，所以这里传入原始值 100 即可
+            // 但是！Location 的 Y 坐标需要手动缩放
             _inputName = new LiteUnderlineInput(valName, "", "", 100, UIColors.TextMain) 
-            { Location = new Point(MonitorLayout.X_NAME, 8) };
+            { Location = new Point(MonitorLayout.X_NAME, UIUtils.S(8)) };
 
             string defShortKey = "Short." + item.Key;
             string defShort = LanguageManager.T(defShortKey);
@@ -68,18 +72,19 @@ namespace LiteMonitor.src.UI.Controls
             string valShort = string.IsNullOrEmpty(item.TaskbarLabel) ? defShort : item.TaskbarLabel;
 
             _inputShort = new LiteUnderlineInput(valShort, "", "", 60, UIColors.TextMain) 
-            { Location = new Point(MonitorLayout.X_SHORT, 8) };
+            { Location = new Point(MonitorLayout.X_SHORT, UIUtils.S(8)) };
 
             // C. Checks (复用 LiteCheck)
             _chkPanel = new LiteCheck(item.VisibleInPanel, LanguageManager.T("Menu.MainForm")) 
-            { Location = new Point(MonitorLayout.X_PANEL, 10) };
+            { Location = new Point(MonitorLayout.X_PANEL, UIUtils.S(10)) };
             
             _chkTaskbar = new LiteCheck(item.VisibleInTaskbar, LanguageManager.T("Menu.Taskbar")) 
-            { Location = new Point(MonitorLayout.X_TASKBAR, 10) };
+            { Location = new Point(MonitorLayout.X_TASKBAR, UIUtils.S(10)) };
 
             // D. Sort Buttons (复用 LiteSortBtn)
-            var btnUp = new LiteSortBtn("▲") { Location = new Point(MonitorLayout.X_SORT, 10) };
-            var btnDown = new LiteSortBtn("▼") { Location = new Point(MonitorLayout.X_SORT + 36, 10) };
+            var btnUp = new LiteSortBtn("▲") { Location = new Point(MonitorLayout.X_SORT, UIUtils.S(10)) };
+            // ★★★ 修改：偏移量 36 缩放
+            var btnDown = new LiteSortBtn("▼") { Location = new Point(MonitorLayout.X_SORT + UIUtils.S(36), UIUtils.S(10)) };
             
             // 内部绑定事件转发
             btnUp.Click += (s, e) => MoveUp?.Invoke(this, EventArgs.Empty);
@@ -94,7 +99,9 @@ namespace LiteMonitor.src.UI.Controls
         {
             base.OnPaint(e);
             using (var p = new Pen(UIColors.Border))
-                e.Graphics.DrawLine(p, MonitorLayout.X_ID, Height - 1, Width - 20, Height - 1);
+                // ★★★ 修改：线段坐标缩放 (Height 和 Width 已经是缩放过的)
+                // 注意：20 需要缩放
+                e.Graphics.DrawLine(p, MonitorLayout.X_ID, Height - 1, Width - UIUtils.S(20), Height - 1);
         }
 
         // ★ 核心优势：自我管理数据回写逻辑
@@ -128,12 +135,14 @@ namespace LiteMonitor.src.UI.Controls
         {
             this.GroupKey = groupKey;
             this.Dock = DockStyle.Top;
-            this.Height = 45;
+            // ★★★ 修改：Height 缩放
+            this.Height = UIUtils.S(45);
             this.BackColor = UIColors.GroupHeader; // 复用颜色
 
             var lblId = new Label { 
                 Text = groupKey, 
-                Location = new Point(MonitorLayout.X_ID, 12), 
+                // ★★★ 修改：Location 缩放
+                Location = new Point(MonitorLayout.X_ID, UIUtils.S(12)), 
                 AutoSize = true, 
                 Font = UIFonts.Bold(9F), 
                 ForeColor = Color.Gray 
@@ -143,14 +152,14 @@ namespace LiteMonitor.src.UI.Controls
             if (defGName.StartsWith("Groups.")) defGName = groupKey;
             
             InputAlias = new LiteUnderlineInput(string.IsNullOrEmpty(alias) ? defGName : alias, "", "", 100) 
-            { Location = new Point(MonitorLayout.X_NAME, 8) };
+            { Location = new Point(MonitorLayout.X_NAME, UIUtils.S(8)) };
             
             // 特殊样式处理
             InputAlias.SetBg(UIColors.GroupHeader); 
             InputAlias.Inner.Font = UIFonts.Bold(9F);
 
-            var btnUp = new LiteSortBtn("▲") { Location = new Point(MonitorLayout.X_SORT, 10) };
-            var btnDown = new LiteSortBtn("▼") { Location = new Point(MonitorLayout.X_SORT + 36, 10) };
+            var btnUp = new LiteSortBtn("▲") { Location = new Point(MonitorLayout.X_SORT, UIUtils.S(10)) };
+            var btnDown = new LiteSortBtn("▼") { Location = new Point(MonitorLayout.X_SORT + UIUtils.S(36), UIUtils.S(10)) };
             btnUp.Click += (s, e) => MoveUp?.Invoke(this, EventArgs.Empty);
             btnDown.Click += (s, e) => MoveDown?.Invoke(this, EventArgs.Empty);
 

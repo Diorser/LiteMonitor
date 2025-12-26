@@ -83,6 +83,9 @@ namespace LiteMonitor.src.UI.SettingsPage
         protected LiteNumberInput AddNumberInt(LiteSettingsGroup group, string titleKey, string unit, Func<int> get, Action<int> set, int width = 60, Color? color = null)
         {
             var input = new LiteNumberInput("0", unit, "", width, color);
+            // ★★★ 修复：手动调整 Padding 让文字垂直居中 (Top 增加) ★★★
+            input.Padding = UIUtils.S(new Padding(0, 5, 0, 1)); 
+            
             BindInt(input, get, set);
             group.AddItem(new LiteSettingsItem(LanguageManager.T(titleKey), input));
             return input;
@@ -94,6 +97,9 @@ namespace LiteMonitor.src.UI.SettingsPage
         protected LiteNumberInput AddNumberDouble(LiteSettingsGroup group, string titleKey, string unit, Func<double> get, Action<double> set, int width = 70)
         {
             var input = new LiteNumberInput("0", unit, "", width);
+            // ★★★ 修复：手动调整 Padding ★★★
+            input.Padding = UIUtils.S(new Padding(0, 5, 0, 1));
+            
             BindDouble(input, get, set);
             group.AddItem(new LiteSettingsItem(LanguageManager.T(titleKey), input));
             return input;
@@ -105,6 +111,9 @@ namespace LiteMonitor.src.UI.SettingsPage
         protected LiteColorInput AddColor(LiteSettingsGroup group, string titleKey, Func<string> get, Action<string> set, bool enabled = true)
         {
             var input = new LiteColorInput(get());
+            // ★★★ 修复：调整颜色输入框内部的 Padding ★★★
+            input.Input.Padding = UIUtils.S(new Padding(0, 5, 0, 1));
+            
             input.Enabled = enabled;
             BindColor(input, get, set);
             group.AddItem(new LiteSettingsItem(LanguageManager.T(titleKey), input));

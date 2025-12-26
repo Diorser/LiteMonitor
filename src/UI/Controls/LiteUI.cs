@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using LiteMonitor.src.Core; // 确保引用了 UIUtils
 
 namespace LiteMonitor.src.UI.Controls
 {
@@ -42,22 +43,27 @@ namespace LiteMonitor.src.UI.Controls
             this.Dock = DockStyle.Top;
             this.Padding = new Padding(1); 
             this.BackColor = UIColors.Border; 
-            this.Margin = new Padding(0, 0, 0, 15); 
+            // ★★★ 修改：Margin 缩放
+            this.Margin = new Padding(0, 0, 0, UIUtils.S(15)); 
 
             var inner = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, AutoSize = true };
             
-            var header = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = UIColors.GroupHeader };
+            // ★★★ 修改：Height 缩放
+            var header = new Panel { Dock = DockStyle.Top, Height = UIUtils.S(40), BackColor = UIColors.GroupHeader };
+            // ★★★ 修改：Location 缩放
             var lbl = new Label { 
-                Text = title, Location = new Point(15, 10), AutoSize = true, 
+                Text = title, Location = new Point(UIUtils.S(15), UIUtils.S(10)), AutoSize = true, 
                 Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold), ForeColor = UIColors.TextMain 
             };
             header.Controls.Add(lbl);
-            header.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, 39, header.Width, 39);
+            // ★★★ 修改：绘图线坐标动态化 (header.Height - 1)
+            header.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, header.Height - 1, header.Width, header.Height - 1);
 
             _layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1,
-                Padding = new Padding(25, 10, 25, 15), BackColor = Color.White
+                // ★★★ 修改：Padding 缩放
+                Padding = UIUtils.S(new Padding(25, 10, 25, 15)), BackColor = Color.White
             };
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
@@ -71,8 +77,9 @@ namespace LiteMonitor.src.UI.Controls
         {
             _layout.Controls.Add(item);
             item.Dock = DockStyle.Fill;
-            if (_colTracker == 0) { item.Margin = new Padding(0, 2, 30, 2); _colTracker = 1; }
-            else { item.Margin = new Padding(30, 2, 0, 2); _colTracker = 0; }
+            // ★★★ 修改：Margin 缩放
+            if (_colTracker == 0) { item.Margin = UIUtils.S(new Padding(0, 2, 30, 2)); _colTracker = 1; }
+            else { item.Margin = UIUtils.S(new Padding(30, 2, 0, 2)); _colTracker = 0; }
         }
 
         public void AddFullItem(Control item)
@@ -89,14 +96,16 @@ namespace LiteMonitor.src.UI.Controls
     {
         public LiteSettingsItem(string text, Control ctrl)
         {
-            this.Height = 40;
-            this.Margin = new Padding(0, 2, 40, 2); 
+            // ★★★ 修改：Height/Margin 缩放
+            this.Height = UIUtils.S(40);
+            this.Margin = UIUtils.S(new Padding(0, 2, 40, 2)); 
             var lbl = new Label { 
                 Text = text, AutoSize = true, 
                 Font = new Font("Microsoft YaHei UI", 9F), ForeColor = UIColors.TextMain,
                 TextAlign = ContentAlignment.MiddleLeft 
             };
-            if (ctrl is LiteCheck) ctrl.Height = 22; 
+            // ★★★ 修改：Height 缩放
+            if (ctrl is LiteCheck) ctrl.Height = UIUtils.S(22); 
             this.Controls.Add(lbl);
             this.Controls.Add(ctrl);
             this.Layout += (s, e) => {
@@ -130,9 +139,10 @@ namespace LiteMonitor.src.UI.Controls
 
         public LiteUnderlineInput(string text, string unit = "", string labelPrefix = "", int width = 160, Color? fontColor = null,HorizontalAlignment align = HorizontalAlignment.Left) // ★ 新增参数)
         {
-            this.Size = new Size(width, 26); // ★ 增加高度到 28 (原26)，防止文字裁切
+            // ★★★ 修改：Size/Padding 缩放
+            this.Size = new Size(UIUtils.S(width), UIUtils.S(26)); // ★ 增加高度到 28 (原26)，防止文字裁切
             this.BackColor = Color.Transparent;
-            this.Padding = new Padding(0, 2, 0, 3); // ★ 减少顶部Padding (5->2)，给文字留足空间
+            this.Padding = UIUtils.S(new Padding(0, 2, 0, 3)); // ★ 减少顶部Padding (5->2)，给文字留足空间
             this.Cursor = Cursors.IBeam;
 
             // ★★★ 关键修复：先添加 Inner，再添加 Label ★★★
@@ -257,8 +267,9 @@ namespace LiteMonitor.src.UI.Controls
 
         public LiteColorInput(string initialHex)
         {
-            this.Size = new Size(95, 26); 
-            Picker = new LiteColorPicker(initialHex) { Size = new Size(26, 22), Location = new Point(this.Width - 26, 3) };
+            // ★★★ 修改：Size/Location 缩放
+            this.Size = new Size(UIUtils.S(95), UIUtils.S(26)); 
+            Picker = new LiteColorPicker(initialHex) { Size = new Size(UIUtils.S(26), UIUtils.S(22)), Location = new Point(this.Width - UIUtils.S(26), UIUtils.S(3)) };
             
             // 适配新构造函数
             Input = new LiteUnderlineInput(initialHex, "", "", 60) { Location = new Point(0, 0) };
@@ -275,19 +286,61 @@ namespace LiteMonitor.src.UI.Controls
         private Color _color;
         public event EventHandler? ColorChanged;
         public Color Value { get => _color; set { _color = value; Invalidate(); } }
-        public LiteColorPicker(string initialHex) { SetHex(initialHex); this.Size = new Size(24, 24); this.Cursor = Cursors.Hand; this.DoubleBuffered = true; this.Click += (s, e) => PickColor(); }
+        // ★★★ 修改：Size 缩放
+        public LiteColorPicker(string initialHex) { SetHex(initialHex); this.Size = new Size(UIUtils.S(24), UIUtils.S(24)); this.Cursor = Cursors.Hand; this.DoubleBuffered = true; this.Click += (s, e) => PickColor(); }
         public void SetHex(string hex) { try { _color = ColorTranslator.FromHtml(hex); Invalidate(); } catch {} }
         private void PickColor() { using (var cd = new ColorDialog()) { cd.Color = _color; cd.FullOpen = true; if (cd.ShowDialog() == DialogResult.OK) { _color = cd.Color; ColorChanged?.Invoke(this, EventArgs.Empty); Invalidate(); } } }
         protected override void OnPaint(PaintEventArgs e) { using (var b = new SolidBrush(_color)) e.Graphics.FillRectangle(b, 0, 0, Width - 1, Height - 1); using (var p = new Pen(Color.Gray)) e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1); }
     }
 
     // 其他原有组件
-    public class LiteNote : Panel { public LiteNote(string text, int indent = 0) { this.Dock = DockStyle.Top; this.Height = 32; this.Margin = new Padding(0); var lbl = new Label { Text = text, AutoSize = true, Font = new Font("Microsoft YaHei UI", 8F), ForeColor = Color.Gray, Location = new Point(indent, 10) }; this.Controls.Add(lbl); } }
-    public class LiteComboBox : Panel { public ComboBox Inner; public LiteComboBox() { this.Size = new Size(110,28); this.BackColor = Color.White; this.Padding = new Padding(1); Inner = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, ForeColor = UIColors.TextSub, Font = new Font("Microsoft YaHei UI", 9F), Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(0) }; this.Controls.Add(Inner); this.Paint += (s, e) => { using (var p = new Pen(UIColors.Border)) e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1); }; } public object SelectedItem { get => Inner.SelectedItem; set => Inner.SelectedItem = value; } public int SelectedIndex { get => Inner.SelectedIndex; set => Inner.SelectedIndex = value; } public ComboBox.ObjectCollection Items => Inner.Items; public override string Text { get => Inner.Text; set => Inner.Text = value; } }
-    public class LiteCheck : CheckBox { public LiteCheck(bool val, string text = "") { Checked = val; AutoSize = true; Cursor = Cursors.Hand; Text = text; Padding = new Padding(2); ForeColor = UIColors.TextSub; Font = new Font("Microsoft YaHei UI", 9F); } }
-    public class LiteButton : Button { public LiteButton(string t, bool p) { Text = t; Size = new Size(80, 32); FlatStyle = FlatStyle.Flat; Cursor = Cursors.Hand; Font = new Font("Microsoft YaHei UI", 9F); if (p) { BackColor = UIColors.Primary; ForeColor = Color.White; FlatAppearance.BorderSize = 0; } else { BackColor = Color.White; ForeColor = UIColors.TextMain; FlatAppearance.BorderColor = UIColors.Border; } } }
-    public class LiteNavBtn : Button { private bool _isActive; public bool IsActive { get => _isActive; set { _isActive = value; Invalidate(); } } public LiteNavBtn(string text) { Text = "  " + text; Size = new Size(150, 40); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; TextAlign = ContentAlignment.MiddleLeft; Font = new Font("Microsoft YaHei UI", 10F); Cursor = Cursors.Hand; Margin = new Padding(5, 2, 5, 2); BackColor = UIColors.SidebarBg; ForeColor = UIColors.TextMain; } protected override void OnPaint(PaintEventArgs e) { Color bg = _isActive ? UIColors.NavSelected : (ClientRectangle.Contains(PointToClient(Cursor.Position)) ? UIColors.NavHover : UIColors.SidebarBg); using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, ClientRectangle); if (_isActive) { using (var b = new SolidBrush(UIColors.Primary)) e.Graphics.FillRectangle(b, 0, 8, 3, Height - 16); Font = new Font(Font, FontStyle.Bold); } else { Font = new Font(Font, FontStyle.Regular); } TextRenderer.DrawText(e.Graphics, Text, Font, new Point(12, 9), UIColors.TextMain); } protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); } protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); } }
-    public class LiteSortBtn : Button { public LiteSortBtn(string txt) { Text = txt; Size = new Size(24, 24); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; BackColor = Color.FromArgb(245, 245, 245); ForeColor = Color.DimGray; Cursor = Cursors.Hand; Font = new Font("Microsoft YaHei UI", 7F, FontStyle.Bold); Margin = new Padding(0); } }
+    public class LiteNote : Panel { public LiteNote(string text, int indent = 0) { this.Dock = DockStyle.Top; this.Height = UIUtils.S(32); this.Margin = new Padding(0); var lbl = new Label { Text = text, AutoSize = true, Font = new Font("Microsoft YaHei UI", 8F), ForeColor = Color.Gray, Location = new Point(UIUtils.S(indent), UIUtils.S(10)) }; this.Controls.Add(lbl); } }
+    public class LiteComboBox : Panel 
+    { 
+        public ComboBox Inner; 
+        
+        public LiteComboBox() 
+        { 
+            this.Size = new Size(UIUtils.S(110), UIUtils.S(28)); 
+            this.BackColor = Color.White; 
+            this.Padding = new Padding(1); 
+            
+            Inner = new ComboBox 
+            { 
+                DropDownStyle = ComboBoxStyle.DropDownList, 
+                FlatStyle = FlatStyle.Flat, 
+                ForeColor = UIColors.TextSub, 
+                Font = new Font("Microsoft YaHei UI", 9F), 
+                // ★★★ 核心修复：移除 Dock.Fill，改为 None，以便我们可以手动居中它
+                Dock = DockStyle.None, 
+                BackColor = Color.White, 
+                Margin = new Padding(0) 
+            }; 
+            this.Controls.Add(Inner); 
+
+            // ★★★ 新增：手动布局以实现垂直居中 ★★★
+            // WinForms 的 ComboBox 高度是固定的，Dock=Fill 会导致它顶在上面。
+            // 这里我们手动计算 Top 坐标，让它居中。
+            this.Layout += (s, e) => {
+                Inner.Width = this.Width - 2; // 减去边框宽度
+                Inner.Location = new Point(1, (this.Height - Inner.Height) / 2);
+            };
+
+            this.Paint += (s, e) => { 
+                using (var p = new Pen(UIColors.Border)) 
+                    e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1); 
+            }; 
+        } 
+        
+        public object SelectedItem { get => Inner.SelectedItem; set => Inner.SelectedItem = value; } 
+        public int SelectedIndex { get => Inner.SelectedIndex; set => Inner.SelectedIndex = value; } 
+        public ComboBox.ObjectCollection Items => Inner.Items; 
+        public override string Text { get => Inner.Text; set => Inner.Text = value; } 
+    }
+    public class LiteCheck : CheckBox { public LiteCheck(bool val, string text = "") { Checked = val; AutoSize = true; Cursor = Cursors.Hand; Text = text; Padding = UIUtils.S(new Padding(2)); ForeColor = UIColors.TextSub; Font = new Font("Microsoft YaHei UI", 9F); } }
+    public class LiteButton : Button { public LiteButton(string t, bool p) { Text = t; Size = new Size(UIUtils.S(80), UIUtils.S(32)); FlatStyle = FlatStyle.Flat; Cursor = Cursors.Hand; Font = new Font("Microsoft YaHei UI", 9F); if (p) { BackColor = UIColors.Primary; ForeColor = Color.White; FlatAppearance.BorderSize = 0; } else { BackColor = Color.White; ForeColor = UIColors.TextMain; FlatAppearance.BorderColor = UIColors.Border; } } }
+    public class LiteNavBtn : Button { private bool _isActive; public bool IsActive { get => _isActive; set { _isActive = value; Invalidate(); } } public LiteNavBtn(string text) { Text = "  " + text; Size = new Size(UIUtils.S(150), UIUtils.S(40)); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; TextAlign = ContentAlignment.MiddleLeft; Font = new Font("Microsoft YaHei UI", 10F); Cursor = Cursors.Hand; Margin = UIUtils.S(new Padding(5, 2, 5, 2)); BackColor = UIColors.SidebarBg; ForeColor = UIColors.TextMain; } protected override void OnPaint(PaintEventArgs e) { Color bg = _isActive ? UIColors.NavSelected : (ClientRectangle.Contains(PointToClient(Cursor.Position)) ? UIColors.NavHover : UIColors.SidebarBg); using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, ClientRectangle); if (_isActive) { using (var b = new SolidBrush(UIColors.Primary)) e.Graphics.FillRectangle(b, 0, UIUtils.S(8), UIUtils.S(3), Height - UIUtils.S(16)); Font = new Font(Font, FontStyle.Bold); } else { Font = new Font(Font, FontStyle.Regular); } TextRenderer.DrawText(e.Graphics, Text, Font, new Point(UIUtils.S(12), UIUtils.S(9)), UIColors.TextMain); } protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); } protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); } }
+    public class LiteSortBtn : Button { public LiteSortBtn(string txt) { Text = txt; Size = new Size(UIUtils.S(24), UIUtils.S(24)); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; BackColor = Color.FromArgb(245, 245, 245); ForeColor = Color.DimGray; Cursor = Cursors.Hand; Font = new Font("Microsoft YaHei UI", 7F, FontStyle.Bold); Margin = new Padding(0); } }
     
     /// <summary>
     /// 终极防闪烁面板

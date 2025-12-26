@@ -25,7 +25,8 @@ namespace LiteMonitor.src.UI.SettingsPage
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
-                Padding = new Padding(20, 5, 20, 20)
+                // ★★★ 修改：Padding 缩放
+                Padding = UIUtils.S(new Padding(20, 5, 20, 20))
             };
             this.Controls.Add(_container);
             this.Controls.SetChildIndex(_container, 0);
@@ -33,13 +34,18 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private void InitHeader()
         {
-            var header = new Panel { Dock = DockStyle.Top, Height = 35, BackColor = UIColors.MainBg };
-            header.Padding = new Padding(20, 0, 20, 0);
+            // ★★★ 修改：Height 缩放
+            var header = new Panel { Dock = DockStyle.Top, Height = UIUtils.S(35), BackColor = UIColors.MainBg };
+            // ★★★ 修改：Padding 缩放
+            header.Padding = UIUtils.S(new Padding(20, 0, 20, 0));
 
             void AddLabel(string text, int x)
             {
                 header.Controls.Add(new Label {
-                    Text = text, Location = new Point(x + 20, 10), AutoSize = true,
+                    Text = text, 
+                    // ★★★ 修改：Location 缩放 (注意 x 也是像素值，需要缩放)
+                    Location = new Point(x+ UIUtils.S( 20), UIUtils.S(10)), 
+                    AutoSize = true,
                     ForeColor = UIColors.TextSub, Font = UIFonts.Bold(8F)
                 });
             }
@@ -186,7 +192,8 @@ namespace LiteMonitor.src.UI.SettingsPage
 
                 this.Dock = DockStyle.Top;
                 this.AutoSize = true;
-                this.Padding = new Padding(0, 0, 0, 20);
+                // ★★★ 修改：Padding 缩放
+                this.Padding = UIUtils.S(new Padding(0, 0, 0, 20));
 
                 var card = new LiteCard { Dock = DockStyle.Top };
                 // 同样注意添加顺序：先加内容(下)，再加表头(上)

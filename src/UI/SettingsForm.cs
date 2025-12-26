@@ -25,7 +25,10 @@ namespace LiteMonitor.src.UI
 
         private void InitializeComponent()
         {
-            this.Size = new Size(820, 680);
+            // ★★★ DPI 修复：计算缩放系数并应用 ★★★
+            UIUtils.ScaleFactor = this.DeviceDpi / 96f;
+
+            this.Size = new Size(UIUtils.S(820), UIUtils.S(680));
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             //this.MinimizeBox = false;
@@ -36,7 +39,8 @@ namespace LiteMonitor.src.UI
             this.ShowInTaskbar = false;
 
             // === 1. 侧边栏 ===
-            var pnlSidebar = new Panel { Dock = DockStyle.Left, Width = 160, BackColor = UIColors.SidebarBg };
+            // ★★★ 修改：宽度缩放
+            var pnlSidebar = new Panel { Dock = DockStyle.Left, Width = UIUtils.S(160), BackColor = UIColors.SidebarBg };
             
             
             _pnlNavContainer = new FlowLayoutPanel 
@@ -44,7 +48,8 @@ namespace LiteMonitor.src.UI
                 Dock = DockStyle.Fill, 
                 FlowDirection = FlowDirection.TopDown, 
                 WrapContents = false, 
-                Padding = new Padding(0, 20, 0, 0),
+                // ★★★ 修改：Padding 缩放
+                Padding = UIUtils.S(new Padding(0, 20, 0, 0)),
                 BackColor = UIColors.SidebarBg
             };
             
@@ -54,13 +59,15 @@ namespace LiteMonitor.src.UI
             this.Controls.Add(pnlSidebar);
 
             // === 2. 底部按钮 ===
-            var pnlBottom = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = UIColors.MainBg };
+            // ★★★ 修改：高度缩放
+            var pnlBottom = new Panel { Dock = DockStyle.Bottom, Height = UIUtils.S(60), BackColor = UIColors.MainBg };
             pnlBottom.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, 0, Width, 0);
 
             var flowBtns = new FlowLayoutPanel 
             { 
                 Dock = DockStyle.Right, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, 
-                Padding = new Padding(0, 14, 20, 0), WrapContents = false, BackColor = Color.Transparent 
+                // ★★★ 修改：Padding 缩放
+                Padding = UIUtils.S(new Padding(0, 14, 20, 0)), WrapContents = false, BackColor = Color.Transparent 
             };
             
             var btnOk = new LiteButton(LanguageManager.T("Menu.OK"), true);

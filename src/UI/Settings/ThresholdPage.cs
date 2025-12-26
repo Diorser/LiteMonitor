@@ -16,7 +16,8 @@ namespace LiteMonitor.src.UI.SettingsPage
             this.BackColor = UIColors.MainBg;
             this.Dock = DockStyle.Fill;
             this.Padding = new Padding(0);
-            _container = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(20) }; 
+            // ★★★ 修改：Padding 缩放
+            _container = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true, Padding = UIUtils.S(new Padding(20)) }; 
                 this.Controls.Add(_container);
         }
 
@@ -77,7 +78,8 @@ namespace LiteMonitor.src.UI.SettingsPage
         // 专门用于 "警告 -> 严重" 这种双输入的特殊行，保留在此处
         private void AddDoubleThresholdRow(LiteSettingsGroup group, string title, string unit, ValueRange range)
         {
-            var panel = new Panel { Height = 40, Margin = new Padding(0), Padding = new Padding(0) };
+            // ★★★ 修改：Height 缩放
+            var panel = new Panel { Height = UIUtils.S(40), Margin = new Padding(0), Padding = new Padding(0) };
             
             // 标题
             var lblTitle = new Label {
@@ -96,8 +98,15 @@ namespace LiteMonitor.src.UI.SettingsPage
 
             // 创建两个输入框
             var inputWarn = new LiteNumberInput("0", unit, LanguageManager.T("Menu.ValueWarnColor"), 140, UIColors.TextWarn);
-            var arrow = new Label { Text = "➜", AutoSize = true, ForeColor = Color.LightGray, Font = new Font("Microsoft YaHei UI", 9F), Margin = new Padding(5, 4, 5, 0) };
+            // ★★★ 修复：手动调整 Padding
+            inputWarn.Padding = UIUtils.S(new Padding(0, 5, 0, 1));
+            
+            // ★★★ 修改：Margin 缩放
+            var arrow = new Label { Text = "➜", AutoSize = true, ForeColor = Color.LightGray, Font = new Font("Microsoft YaHei UI", 9F), Margin = UIUtils.S(new Padding(5, 4, 5, 0)) };
+            
             var inputCrit = new LiteNumberInput("0", unit, LanguageManager.T("Menu.ValueCritColor"), 140, UIColors.TextCrit);
+            // ★★★ 修复：手动调整 Padding
+            inputCrit.Padding = UIUtils.S(new Padding(0, 5, 0, 1));
 
             // 复用 BindDouble 逻辑
             BindDouble(inputWarn, () => range.Warn, v => range.Warn = v);
@@ -122,7 +131,8 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private void AddGroupToPage(LiteSettingsGroup group)
         {
-            var wrapper = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, 20) };
+            // ★★★ 修改：Padding 缩放
+            var wrapper = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = UIUtils.S(new Padding(0, 0, 0, 20)) };
             wrapper.Controls.Add(group);
             _container.Controls.Add(wrapper);
             _container.Controls.SetChildIndex(wrapper, 0);

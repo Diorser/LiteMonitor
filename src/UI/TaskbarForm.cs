@@ -70,6 +70,8 @@ namespace LiteMonitor
             FindHandles();
             
             AttachToTaskbar();
+            // ★★★ 补充：挂载到任务栏后，再次强制刷新一下穿透状态 ★★★
+            SetClickThrough(_cfg.TaskbarClickThrough);
 
             _timer.Interval = Math.Max(_cfg.RefreshMs, 60);
             _timer.Tick += (_, __) => Tick();
@@ -559,7 +561,13 @@ namespace LiteMonitor
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW; 
+                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+                // ★★★ 修复：初始化时检查配置并应用鼠标穿透属性 ★★★
+                // 必须判空 _cfg，因为 CreateParams 可能会在构造函数极早期（基类构造时）被调用
+                if (_cfg != null && _cfg.TaskbarClickThrough)
+                {
+                    cp.ExStyle |= WS_EX_TRANSPARENT;
+                }
                 return cp;
             }
         }

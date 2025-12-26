@@ -139,10 +139,15 @@ namespace LiteMonitor.src.UI.SettingsPage
                 }
             );
 
+            // === 修复开始：屏幕取色器 ===
             var tbResult = new LiteUnderlineInput("#000000", "", "", 65, null, HorizontalAlignment.Center);
+            // 手动调整 Padding (之前提到的通用修复)
+            tbResult.Padding = UIUtils.S(new Padding(0, 5, 0, 1)); 
             tbResult.Inner.ReadOnly = true; 
+
             var btnPick = new LiteSortBtn("🖌"); 
-            btnPick.Location = new Point(70, 1);
+            // ★★★ 关键修复 1：坐标缩放 (70 -> S(70))
+            btnPick.Location = new Point(UIUtils.S(70), UIUtils.S(1));
 
             btnPick.Click += (s, e) => {
                 using (Form f = new Form { FormBorderStyle = FormBorderStyle.None, WindowState = FormWindowState.Maximized, TopMost = true, Cursor = Cursors.Cross })
@@ -155,7 +160,8 @@ namespace LiteMonitor.src.UI.SettingsPage
                         string hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
                         tbResult.Inner.Text = hex;
                         f.Close();
-
+                        
+                        // 提示用户
                         string confirmMsg = string.Format("{0} {1}?", LanguageManager.T("Menu.ScreenColorPickerTip"), hex);
                         if (MessageBox.Show(confirmMsg, "LiteMonitor", MessageBoxButtons.YesNo) == DialogResult.Yes)
                         {
@@ -174,13 +180,18 @@ namespace LiteMonitor.src.UI.SettingsPage
                 }
             };
 
-            Panel toolCtrl = new Panel { Size = new Size(96, 26) };
+            // ★★★ 关键修复 2：容器尺寸缩放 (96 -> S(96))
+            // 如果不缩放，容器太窄，会被父级 Layout 挤到最右边，且无法容纳变大的输入框
+            Panel toolCtrl = new Panel { Size = new Size(UIUtils.S(96), UIUtils.S(26)) };
             toolCtrl.Controls.Add(tbResult);
             toolCtrl.Controls.Add(btnPick);
+            
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ScreenColorPicker"), toolCtrl));
+            // === 修复结束 ===
 
             group.AddFullItem(new LiteNote(LanguageManager.T("Menu.TaskbarCustomTip"), 0));
 
+            // ... 后续代码保持不变 ...
             void AddC(string key, Func<string> get, Action<string> set)
             {
                 var input = AddColor(group, key, get, set, Config.TaskbarCustomStyle);
@@ -201,7 +212,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         }
         private void AddGroupToPage(LiteSettingsGroup group)
         {
-            var wrapper = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, 20) };
+            var wrapper = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, UIUtils.S(20)) };
             wrapper.Controls.Add(group);
             _container.Controls.Add(wrapper);
             _container.Controls.SetChildIndex(wrapper, 0);

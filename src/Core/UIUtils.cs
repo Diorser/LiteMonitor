@@ -1,5 +1,9 @@
 ﻿using System.Drawing.Drawing2D;
 using System.Text.RegularExpressions;
+using System.Collections.Generic; // 补全引用
+using System.Drawing; // 补全引用
+using System.Linq; // 补全引用
+using System; // 补全引用
 
 namespace LiteMonitor.src.Core
 
@@ -9,6 +13,17 @@ namespace LiteMonitor.src.Core
     /// </summary>
     public static class UIUtils
     {
+        // ============================================================
+        // ★★★ 新增：DPI 适配工具 ★★★
+        // ============================================================
+        public static float ScaleFactor { get; set; } = 1.0f;
+
+        // 核心辅助方法：将设计时的像素值转换为当前 DPI 下的像素值
+        public static int S(int px) => (int)(px * ScaleFactor);
+        public static float S(float px) => px * ScaleFactor;
+        public static Size S(Size size) => new Size(S(size.Width), S(size.Height));
+        public static Padding S(Padding p) => new Padding(S(p.Left), S(p.Top), S(p.Right), S(p.Bottom));
+
         // ============================================================
         // ★★★ 优化：画刷缓存机制下沉到此处 ★★★
         // ============================================================
