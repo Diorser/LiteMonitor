@@ -16,6 +16,9 @@ namespace LiteMonitor
 
         private IntPtr _hTaskbar = IntPtr.Zero;
         private IntPtr _hTray = IntPtr.Zero;
+        private IntPtr _hRebar = IntPtr.Zero;
+        private IntPtr _hTaskSw = IntPtr.Zero;
+        private int lastbarWidth = 0;
 
         private Rectangle _taskbarRect = Rectangle.Empty;
         private int _taskbarHeight = 32;
@@ -86,6 +89,7 @@ namespace LiteMonitor
         {
             if (disposing)
             {
+                RestoreTaskSwitchWindow();
                 _timer.Stop();
                 _timer.Dispose();
                 _currentMenu?.Dispose();
@@ -166,6 +170,7 @@ namespace LiteMonitor
         // -------------------------------------------------------------
         // Win32 API
         // -------------------------------------------------------------
+        [DllImport("user32.dll", SetLastError = true)] static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
         [DllImport("user32.dll")] private static extern IntPtr FindWindow(string cls, string? name);
         [DllImport("user32.dll")] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? name);
         [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int idx);
@@ -291,6 +296,8 @@ namespace LiteMonitor
             {
                 _hTaskbar = FindWindow("Shell_TrayWnd", null);
                 _hTray = FindWindowEx(_hTaskbar, IntPtr.Zero, "TrayNotifyWnd", null);
+                _hRebar = FindWindowEx(_hTaskbar, IntPtr.Zero, "ReBarWindow32", null);
+                _hTaskSw = FindWindowEx(_hRebar, IntPtr.Zero, "MSTaskSwWClass", null);
             }
             else
             {
@@ -562,8 +569,35 @@ namespace LiteMonitor
             }
 
             SetPosition(leftScreen, topScreen, panelWidth, _taskbarHeight);
+            AdjustTaskSwitchWindow(panelWidth, _taskbarHeight);
         }
-
+        //调整MSTaskSwWClass窗口位置和大小
+        private void AdjustTaskSwitchWindow(int panelWidth, int panelHeight)
+        {
+            if (_hTaskSw != IntPtr.Zero && _hRebar != IntPtr.Zero)
+            {
+                RECT rcReBar, rcTaskSw;
+                GetWindowRect(_hRebar, out rcReBar);
+                //GetWindowRect(_hTaskSw, out rcTaskSw);
+                int barWidth = rcReBar.right - rcReBar.left - panelWidth;
+                if (barWidth != lastbarWidth)
+                {
+                    lastbarWidth = barWidth;
+                    MoveWindow(_hTaskSw, 0, 0, barWidth, panelHeight, true);
+                }
+            }
+        }
+        //恢复MSTaskSwWClass窗口位置和大小
+        public void RestoreTaskSwitchWindow()
+        {
+            if (_hTaskSw != IntPtr.Zero && _hRebar != IntPtr.Zero)
+            {
+                RECT rcReBar;
+                GetWindowRect(_hRebar, out rcReBar);
+                int barWidth = rcReBar.right - rcReBar.left;
+                MoveWindow(_hTaskSw, 0, 0, barWidth, _taskbarHeight, true);
+            }
+        }
         // 提取出的通用设置位置方法
         private void SetPosition(int leftScreen, int topScreen, int w, int h)
         {

@@ -680,7 +680,8 @@ namespace LiteMonitor
         /// 窗体关闭时清理资源：释放 UIController 并隐藏托盘图标
         /// </summary>
         protected override void OnFormClosed(FormClosedEventArgs e)
-        {   
+        {
+            _taskbar.RestoreTaskSwitchWindow();
             // 退出时必须强制存一次最新的配置
             _cfg.Save(); // 保存配置
             TrafficLogger.Save(); // 退出时强制保存一次流量数据
