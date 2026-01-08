@@ -3,7 +3,6 @@
   "Groups": {
     "CPU": "💻CPU",
     "GPU": "🎮GPU",
-    "MEM": "💾内存",
     "HOST": "🖥️主机",
     "DISK": "📀磁盘",
     "NET": "🌐网络",

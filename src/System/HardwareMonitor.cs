@@ -84,7 +84,10 @@ namespace LiteMonitor.src.SystemServices
                 bool needNet = _cfg.IsAnyEnabled("NET") || _cfg.IsAnyEnabled("DATA");
                 bool needDisk = _cfg.IsAnyEnabled("DISK");
                 // ★★★ [新增] 判断主板更新需求 ★★★
-                bool needMobo = _cfg.IsAnyEnabled("MOBO") || _cfg.IsAnyEnabled("CPU.Fan");
+                bool needMobo = _cfg.IsAnyEnabled("MOBO") || 
+                _cfg.IsAnyEnabled("CPU.Fan") || 
+                _cfg.IsAnyEnabled("CPU.Pump") || 
+                _cfg.IsAnyEnabled("CASE.Fan");
 
                 bool isSlowScanTick = (now - _lastSlowScan).TotalSeconds > 3;
                 bool needDiskBgScan = (now - _lastDiskBgScan).TotalSeconds > 10;
