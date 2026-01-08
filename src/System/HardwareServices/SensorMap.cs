@@ -214,7 +214,7 @@ namespace LiteMonitor.src.SystemServices
         }
 
         // ===========================================================
-        // ★★★ [优化] 全局智能风扇匹配算法 (增加低转速过滤) ★★★
+        // ★★★ [终极修复版] 智能风扇匹配算法 (黑名单机制 + 漏斗筛选) ★★★
         // ===========================================================
         private void ScanAndMapFans(Computer computer, Settings cfg, Dictionary<string, ISensor> targetMap)
         {
@@ -222,20 +222,39 @@ namespace LiteMonitor.src.SystemServices
             ISensor? cpuPump = null; 
             ISensor? caseFan = null;
             
-            // 1. 搜集全系统所有“活着”的风扇 
-            // ★★★ 优化 1：初始搜集时稍微提高门槛，过滤掉 0-10 RPM 的纯底噪 ★★★
+            // 1. 搜集全系统所有“活着”的风扇 (采用黑名单机制，防止遗漏 USB 水冷等奇怪设备)
             var activeFans = new List<(IHardware Hw, ISensor S, float Rpm)>();
             
             void CollectFans(IHardware hw)
             {
-                hw.Update();
-                foreach (var s in hw.Sensors)
+                // ★★★ 黑名单：坚决排除以下类型的风扇 ★★★
+                // 显卡(Gpu)、处理器(Cpu自带)、硬盘(Storage)、内存(Memory)、网卡(Network)
+                // 注意：Network 类型包含物理网卡和虚拟网卡，必须排除
+                bool isExcluded = hw.HardwareType == HardwareType.GpuNvidia ||
+                                  hw.HardwareType == HardwareType.GpuAmd ||
+                                  hw.HardwareType == HardwareType.GpuIntel ||
+                                  hw.HardwareType == HardwareType.Cpu ||
+                                  hw.HardwareType == HardwareType.Storage ||
+                                  hw.HardwareType == HardwareType.Memory ||
+                                  hw.HardwareType == HardwareType.Network;
+
+                // 只要不在黑名单里，全部允许扫描！
+                // 这确保了 NZXT Kraken (UsbHid/Cooler) 或其他未知类型设备能被扫到
+                if (!isExcluded)
                 {
-                    // 包含 HardwareType.Cooler 下的风扇/Control
-                    // 这里过滤 > 10 RPM，避免绝对的 1-2 转干扰
-                    if ((s.SensorType == SensorType.Fan) && s.Value.HasValue && s.Value.Value > 10) 
+                    hw.Update();
+                    foreach (var s in hw.Sensors)
                     {
-                        activeFans.Add((hw, s, s.Value.Value));
+                        // [类型过滤] 只看 Fan (转速)，剔除 Control/Level (百分比)
+                        if (s.SensorType == SensorType.Fan && s.Value.HasValue)
+                        {
+                            // [底噪过滤] 门槛 200 RPM
+                            // 解决 "2 RPM" 幽灵读数，同时过滤掉未接风扇的感应电压底噪
+                            if (s.Value.Value > 200)
+                            {
+                                activeFans.Add((hw, s, s.Value.Value));
+                            }
+                        }
                     }
                 }
                 foreach (var sub in hw.SubHardware) CollectFans(sub);
@@ -244,81 +263,119 @@ namespace LiteMonitor.src.SystemServices
 
             // 辅助函数：判断是否已被占用
             bool IsTaken(ISensor s) => s == cpuFan || s == cpuPump || s == caseFan;
+            
+            // 辅助：判断是否为独立水冷设备 (名字包含特征词 或 类型为Cooler)
+            bool IsCoolerHardware(IHardware h) 
+            {
+                if (h.HardwareType == HardwareType.Cooler) return true;
+                string n = h.Name;
+                return Has(n, "Kraken") || Has(n, "Corsair") || Has(n, "Liquid") || Has(n, "AIO") || Has(n, "Cooler");
+            }
 
             // -----------------------------------------------------------
-            // 阶段 1: 尊重用户手动配置 (最高优先级 - 即使转速低也认)
+            // 步骤 2: 尊重用户手动配置 (最高优先级)
             // -----------------------------------------------------------
             if (!string.IsNullOrEmpty(cfg.PreferredCpuFan)) cpuFan = FindFanByConfig(activeFans, cfg.PreferredCpuFan);
             if (!string.IsNullOrEmpty(cfg.PreferredCaseFan)) caseFan = FindFanByConfig(activeFans, cfg.PreferredCaseFan);
             if (!string.IsNullOrEmpty(cfg.PreferredCpuPump)) cpuPump = FindFanByConfig(activeFans, cfg.PreferredCpuPump);
 
             // -----------------------------------------------------------
-            // 阶段 2: 确定 CPU 风扇 (核心任务 - 优先找名字匹配的)
+            // 步骤 3: 确立 CPU 风扇 (必须最先定下来)
             // -----------------------------------------------------------
             if (cpuFan == null && activeFans.Count > 0)
             {
-                // 1. 优先找名字里带 CPU 的未占用风扇
-                var match = activeFans.FirstOrDefault(x => !IsTaken(x.S) && Has(x.S.Name, "CPU"));
+                // A. 优先：独立水冷设备的风扇 (排除掉 Pump)
+                var coolerFan = activeFans.FirstOrDefault(x => !IsTaken(x.S) && 
+                    IsCoolerHardware(x.Hw) && !Has(x.S.Name, "Pump"));
                 
-                if (match.S != null)
+                if (coolerFan.S != null)
                 {
-                    cpuFan = match.S;
+                    cpuFan = coolerFan.S;
                 }
                 else
                 {
-                    // 2. 如果没名字带 CPU 的，默认取列表里第一个未占用的 (通常主板 Fan #1 是 CPU)
-                    // 注意：这里我们信任主板的顺序，通常第一个非零风扇就是 CPU
-                    var firstAvailable = activeFans.FirstOrDefault(x => !IsTaken(x.S));
-                    if (firstAvailable.S != null) cpuFan = firstAvailable.S;
+                    // B. 其次：主板上名字带 CPU 的
+                    var namedCpu = activeFans.FirstOrDefault(x => !IsTaken(x.S) && Has(x.S.Name, "CPU"));
+                    if (namedCpu.S != null)
+                    {
+                        cpuFan = namedCpu.S;
+                    }
+                    else
+                    {
+                        // C. 兜底：列表里第一个有效的 (通常 Fan #1 是 CPU)
+                        var first = activeFans.FirstOrDefault(x => !IsTaken(x.S));
+                        if (first.S != null) cpuFan = first.S;
+                    }
                 }
             }
 
             // -----------------------------------------------------------
-            // 阶段 3: 基于名称的精确匹配 (Pump / Case)
+            // 步骤 4: 确立 水泵 (Pump) - 优先匹配独立设备
             // -----------------------------------------------------------
+            if (cpuPump == null && activeFans.Count > 0)
+            {
+                // A. 独立水冷设备的 Pump
+                var coolerPump = activeFans.FirstOrDefault(x => !IsTaken(x.S) && 
+                    IsCoolerHardware(x.Hw) && 
+                    (Has(x.S.Name, "Pump") || Has(x.S.Name, "Speed"))); 
+                
+                // 如果 Cooler 设备里就剩一个没分配的，那它大概率就是 Pump
+                if (coolerPump.S == null)
+                    coolerPump = activeFans.FirstOrDefault(x => !IsTaken(x.S) && IsCoolerHardware(x.Hw));
+
+                if (coolerPump.S != null)
+                {
+                    cpuPump = coolerPump.S;
+                }
+                else
+                {
+                    // B. 主板上名字带 Pump/AIO 的
+                    var namedPump = activeFans.FirstOrDefault(x => !IsTaken(x.S) && 
+                        (Has(x.S.Name, "Pump") || Has(x.S.Name, "Water") || Has(x.S.Name, "AIO")));
+                    if (namedPump.S != null) cpuPump = namedPump.S;
+                }
+            }
+
+            // 4.1 智能猜想水泵 (如果还没找到，且有转速 > 3000 的，大概率是泵)
             if (cpuPump == null)
             {
-                var match = activeFans.FirstOrDefault(x => !IsTaken(x.S) && 
-                    (Has(x.S.Name, "Pump") || Has(x.S.Name, "Water") || Has(x.S.Name, "AIO") || x.Hw.HardwareType == HardwareType.Cooler));
-                if (match.S != null) cpuPump = match.S;
-            }
-
-            if (caseFan == null)
-            {
-                var match = activeFans.FirstOrDefault(x => !IsTaken(x.S) && 
-                    (Has(x.S.Name, "Chassis") || Has(x.S.Name, "Sys") || Has(x.S.Name, "Case")));
-                if (match.S != null) caseFan = match.S;
+                var highSpeedCandidate = activeFans.Where(x => !IsTaken(x.S) && x.Rpm > 3000)
+                                                   .OrderByDescending(x => x.Rpm)
+                                                   .FirstOrDefault();
+                if (highSpeedCandidate.S != null) cpuPump = highSpeedCandidate.S;
             }
 
             // -----------------------------------------------------------
-            // 阶段 4: 剩余风扇的“猜谜”逻辑 (基于转速对比)
+            // 步骤 5: 确立 机箱风扇 (剩余分配)
             // -----------------------------------------------------------
-            // 获取所有还未被分配的风扇
-            var leftovers = activeFans.Where(x => !IsTaken(x.S)).ToList();
-
-            // ★★★ 优化 2：在自动分配机箱/水泵时，严格过滤掉低转速（如停转或幽灵读数） ★★★
-            // 只有 > 300 RPM 的风扇才有资格参与“竞标”
-            // 这样 2 RPM 的风扇会被直接忽略，不会被当成“最小转速”分配给机箱
-            var validLeftovers = leftovers.Where(x => x.Rpm > 300).OrderBy(x => x.Rpm).ToList();
-
-            if (validLeftovers.Count > 0)
+            if (caseFan == null && activeFans.Count > 0)
             {
-                // 场景 A: 还需要分配机箱风扇
-                if (caseFan == null)
+                var leftovers = activeFans.Where(x => !IsTaken(x.S)).ToList();
+
+                // A. 名字明确的 (Rear > Chassis...)
+                var best = leftovers.FirstOrDefault(x => Has(x.S.Name, "Rear"));
+                if (best.S == null) best = leftovers.FirstOrDefault(x => Has(x.S.Name, "Chassis"));
+                if (best.S == null) best = leftovers.FirstOrDefault(x => Has(x.S.Name, "Sys"));
+                if (best.S == null) best = leftovers.FirstOrDefault(x => Has(x.S.Name, "Case"));
+
+                if (best.S != null)
                 {
-                    // 取有效转速中最低的 (静音逻辑)
-                    caseFan = validLeftovers.First().S;
-                    validLeftovers.RemoveAt(0); 
+                    caseFan = best.S;
                 }
-            }
-
-            if (validLeftovers.Count > 0)
-            {
-                // 场景 B: 还需要分配水泵
-                if (cpuPump == null)
+                else if (leftovers.Count > 0)
                 {
-                    // 取有效转速中最高的 (水泵通常转速高)
-                    cpuPump = validLeftovers.Last().S;
+                    // B. 无名氏分配策略：
+                    // 按转速排序：小的给机箱(安静)，大的给水泵(高速)
+                    var sorted = leftovers.OrderBy(x => x.Rpm).ToList();
+
+                    // 5.1 最小的给机箱
+                    caseFan = sorted.First().S; 
+                    
+                    // 5.2 如果还缺水泵，且还有剩余，最大的给水泵
+                    if (cpuPump == null && sorted.Count > 1)
+                    {
+                        cpuPump = sorted.Last().S;
+                    }
                 }
             }
 

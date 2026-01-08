@@ -45,7 +45,7 @@ namespace LiteMonitor.src.SystemServices
                 IsStorageEnabled = true,
                 // ★★★ 修改：开启主板，关闭控制器(遵照指示) ★★★
                 IsMotherboardEnabled = true,
-                IsControllerEnabled = false
+                IsControllerEnabled = true,
             };
 
             // 初始化子服务
@@ -175,34 +175,54 @@ namespace LiteMonitor.src.SystemServices
         public static List<string> ListAllNetworks() => Instance?._computer.Hardware.Where(h => h.HardwareType == HardwareType.Network).Select(h => h.Name).Distinct().ToList() ?? new List<string>();
         public static List<string> ListAllDisks() => Instance?._computer.Hardware.Where(h => h.HardwareType == HardwareType.Storage).Select(h => h.Name).Distinct().ToList() ?? new List<string>();
         
-        // ★★★ [新增] 列出所有风扇 ★★★
+       // ★★★ [修复] 列出所有风扇 (黑名单机制：排除干扰项，允许 USB/Cooler) ★★★
         public static List<string> ListAllFans()
         {
             if (Instance == null) return new List<string>();
             var list = new List<string>();
 
-            foreach (var hw in Instance._computer.Hardware)
+            // 辅助递归函数
+            void ScanHardware(IHardware hw)
             {
-                // ★★★ 核心优化：只允许主板、SuperIO 和 水冷控制器 ★★★
-                // 排除掉 GPU、硬盘、内存等不可能接 CPU 风扇的硬件
-                bool isAssignable = hw.HardwareType == HardwareType.Motherboard || 
-                                    hw.HardwareType == HardwareType.SuperIO || 
-                                    hw.HardwareType == HardwareType.Cooler;
+                // ★★★ 黑名单：与 SensorMap 保持一致 ★★★
+                // 坚决排除 显卡、CPU、硬盘、内存、网卡
+                bool isExcluded = hw.HardwareType == HardwareType.GpuNvidia ||
+                                  hw.HardwareType == HardwareType.GpuAmd ||
+                                  hw.HardwareType == HardwareType.GpuIntel ||
+                                  hw.HardwareType == HardwareType.Cpu ||
+                                  hw.HardwareType == HardwareType.Storage ||
+                                  hw.HardwareType == HardwareType.Memory ||
+                                  hw.HardwareType == HardwareType.Network;
 
-                if (isAssignable)
+                // 只要不在黑名单里，都扫描！
+                if (!isExcluded)
                 {
-                    // 递归查找该硬件下的所有风扇
-                    foreach (var s in GetAllSensors(hw, SensorType.Fan))
+                    foreach (var s in hw.Sensors)
                     {
-                        // 格式化为唯一标识符: "[硬件名] 传感器名"
-                        // 例如: "[Nuvoton NCT6796D] Fan #1"
-                        //list.Add($"[{hw.Name}] {s.Name}");
-                        list.Add($"{s.Name}");
+                        // 只列出 Fan 类型 (转速)
+                        if (s.SensorType == SensorType.Fan)
+                        {
+                            // 格式化名称：[硬件名] 传感器名
+                            // 例如: "[NZXT Kraken X] Fan 1"
+                            list.Add($"{s.Name} [{hw.Name}]");
+                        }
                     }
                 }
+
+                // 递归扫描子硬件
+                foreach (var sub in hw.SubHardware)
+                {
+                    ScanHardware(sub);
+                }
+            }
+
+            // 开始扫描根节点
+            foreach (var hw in Instance._computer.Hardware)
+            {
+                ScanHardware(hw);
             }
             
-            // 排序并去重，让列表更整洁
+            // 排序并去重
             list.Sort(); 
             return list.Distinct().ToList();
         }

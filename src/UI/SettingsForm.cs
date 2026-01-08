@@ -31,7 +31,7 @@ namespace LiteMonitor.src.UI
             this.Size = new Size(UIUtils.S(820), UIUtils.S(680));
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
-            //this.MinimizeBox = false;
+            this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Text = LanguageManager.T("Menu.SettingsPanel");
             this.Font = new Font("Microsoft YaHei UI", 9F);

@@ -302,29 +302,51 @@ namespace LiteMonitor
         private void CheckTemperatureAlert()
         {
             if (!_cfg.AlertTempEnabled) return;
+            // 3分钟冷却时间，避免频繁弹窗
             if ((DateTime.Now - _cfg.LastAlertTime).TotalMinutes < 3) return;
 
-            int threshold = _cfg.AlertTempThreshold;
+            int globalThreshold = _cfg.AlertTempThreshold; // 默认 80
+            // ★ 针对磁盘给一个更灵敏的阈值 (硬盘超过60度通常就需要关注了)
+            int diskThreshold = Math.Min(globalThreshold - 20, 60); 
+
             List<string> alertLines = new List<string>();
             string alertTitle = LanguageManager.T("Menu.AlertTemp"); 
-            
+
+            // 1. CPU
             float? cpuTemp = _mon.Get("CPU.Temp");
-            if (cpuTemp.HasValue && cpuTemp.Value >= threshold)
+            if (cpuTemp.HasValue && cpuTemp.Value >= globalThreshold)
                 alertLines.Add($"CPU {alertTitle}: 🔥{cpuTemp:F0}°C");
 
+            // 2. GPU
             float? gpuTemp = _mon.Get("GPU.Temp");
-            if (gpuTemp.HasValue && gpuTemp.Value >= threshold)
+            if (gpuTemp.HasValue && gpuTemp.Value >= globalThreshold)
                 alertLines.Add($"GPU {alertTitle}: 🔥{gpuTemp:F0}°C");
 
+            // ★★★ 3. 主板 (MOBO) ★★★
+            float? moboTemp = _mon.Get("MOBO.Temp");
+            if (moboTemp.HasValue && moboTemp.Value >= globalThreshold)
+                alertLines.Add($"MOBO {alertTitle}: 🔥{moboTemp:F0}°C");
+
+            // ★★★ 4. 磁盘 (DISK) - 使用更严格的阈值 ★★★
+            float? diskTemp = _mon.Get("DISK.Temp");
+            if (diskTemp.HasValue && diskTemp.Value >= diskThreshold)
+                alertLines.Add($"DISK {alertTitle}: 🔥{diskTemp:F0}°C (>{diskThreshold}°C)");
+
+            // 触发报警
             if (alertLines.Count > 0)
             {
-                alertTitle+= $" (>{threshold}°C)";
+                // 如果只有磁盘报警，标题显示磁盘的阈值，否则显示全局阈值
+                string thresholdText = (alertLines.Count == 1 && alertLines[0].StartsWith("DISK")) 
+                    ? $"(>{diskThreshold}°C)" 
+                    : $"(>{globalThreshold}°C)";
+
+                alertTitle += $" {thresholdText}";
                 string bodyText = string.Join("\n", alertLines);
+                
                 ((MainForm)_form).ShowNotification(alertTitle, bodyText, ToolTipIcon.Warning);
                 _cfg.LastAlertTime = DateTime.Now;
             }
         }
-
         public void Dispose()
         {
             _timer.Stop();

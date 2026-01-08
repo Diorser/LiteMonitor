@@ -165,6 +165,7 @@ namespace LiteMonitor
 
         private static string FilePath => Path.Combine(AppContext.BaseDirectory, "settings.json");
 
+
         public static Settings Load()
         {
             Settings s = new Settings();
@@ -180,16 +181,106 @@ namespace LiteMonitor
                 }
             }
             catch { }
+
             if (s.GroupAliases == null) s.GroupAliases = new Dictionary<string, string>();
-            if (s.MonitorItems == null || s.MonitorItems.Count == 0) s.InitDefaultItems();
-            // ★★★ 新增：旧版本数据兼容 ★★★
-            // 如果所有项的 TaskbarSortIndex 都是 0（说明是旧配置），则初始化为 SortIndex
-            if (s.MonitorItems.All(x => x.TaskbarSortIndex == 0))
+
+            // 1. 检查是否是全新安装
+            if (s.MonitorItems == null || s.MonitorItems.Count == 0)
             {
+                s.InitDefaultItems();
+                // 确保 TaskbarSortIndex 有初始值
                 foreach (var item in s.MonitorItems) item.TaskbarSortIndex = item.SortIndex;
             }
+            else
+            {
+                // 2. 智能版本判断
+                // 如果所有项的 TaskbarSortIndex 都是 0，说明这是老版本的配置文件
+                bool isLegacyConfig = s.MonitorItems.All(x => x.TaskbarSortIndex == 0);
+
+                if (isLegacyConfig)
+                {
+                    // ★★★ 方案 A：旧版升级（重构式迁移） ★★★
+                    // 用户希望：不要乱追加，直接按新版默认顺序重新整理，但保留我的开关设置
+                    s.RebuildAndMigrateSettings();
+                }
+                else
+                {
+                    // ★★★ 方案 B：日常更新（温和补全） ★★★
+                    // 说明用户已经是新版本（已有任务栏排序），可能只是我们又加了一个小功能
+                    // 这时不要重置用户的排序，而是追加到最后
+                    s.CheckAndAppendMissingItems();
+                }
+            }
+
             s.SyncToLanguage();
             return s;
+        }
+
+        /// <summary>
+        /// [核心重构] 以新版默认列表为蓝本，回填用户的旧设置
+        /// 效果：排序会被重置为新版逻辑（整洁），但用户的“显示/隐藏”和“自定义命名”会被保留
+        /// </summary>
+        private void RebuildAndMigrateSettings()
+        {
+            // 1. 获取新版本的标准模板（顺序是最完美的逻辑分组）
+            var temp = new Settings();
+            temp.InitDefaultItems();
+            var standardItems = temp.MonitorItems;
+
+            var migratedList = new List<MonitorItemConfig>();
+
+            foreach (var stdItem in standardItems)
+            {
+                // 2. 在用户旧配置中查找对应的项
+                var userOldItem = MonitorItems.FirstOrDefault(x => x.Key.Equals(stdItem.Key, StringComparison.OrdinalIgnoreCase));
+
+                if (userOldItem != null)
+                {
+                    // 3. 【关键】保留用户的个性化设置
+                    stdItem.VisibleInPanel = userOldItem.VisibleInPanel;
+                    stdItem.VisibleInTaskbar = userOldItem.VisibleInTaskbar;
+                    stdItem.UserLabel = userOldItem.UserLabel;
+                    stdItem.TaskbarLabel = userOldItem.TaskbarLabel;
+                    
+                    // 注意：这里我们故意【不继承】userOldItem.SortIndex
+                    // 这样就能强行纠正旧版本的排序，让 CPU.Fan 自动插到 CPU 组里，而不是排到最后
+                }
+
+                // 4. 确保新项的任务栏排序有默认值 (默认为 SortIndex)
+                if (stdItem.TaskbarSortIndex == 0) 
+                {
+                    stdItem.TaskbarSortIndex = stdItem.SortIndex;
+                }
+
+                migratedList.Add(stdItem);
+            }
+
+            // 5. 替换生效
+            MonitorItems = migratedList;
+            
+            // 可选：保存一下，让迁移立即固化到磁盘
+            // Save(); 
+        }
+
+        // 辅助：普通补全逻辑（用于已经是新版后的后续小更新）
+        private void CheckAndAppendMissingItems()
+        {
+            var temp = new Settings();
+            temp.InitDefaultItems();
+            
+            // 计算追加的起始 ID（防止冲突）
+            int maxSort = MonitorItems.Count > 0 ? MonitorItems.Max(x => x.SortIndex) : 0;
+            int maxTaskbarSort = MonitorItems.Count > 0 ? MonitorItems.Max(x => x.TaskbarSortIndex) : 0;
+
+            foreach (var stdItem in temp.MonitorItems)
+            {
+                if (!MonitorItems.Any(x => x.Key.Equals(stdItem.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    stdItem.SortIndex = ++maxSort;
+                    stdItem.TaskbarSortIndex = ++maxTaskbarSort;
+                    MonitorItems.Add(stdItem);
+                }
+            }
         }
 
         public void Save()
