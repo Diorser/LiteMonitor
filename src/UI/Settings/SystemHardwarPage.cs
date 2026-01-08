@@ -145,19 +145,18 @@ namespace LiteMonitor.src.UI.SettingsPage
                 v => Config.PreferredCpuFan = (v == strAuto) ? "" : v
             );
 
-            // 机箱风扇首选
-            // 复用 "Items.CASE.Fan" 作为标题 (即 "机箱风扇")
-            AddCombo(group, "Items.CASE.Fan", fans,
-                () => string.IsNullOrEmpty(Config.PreferredCaseFan) ? strAuto : Config.PreferredCaseFan,
-                v => Config.PreferredCaseFan = (v == strAuto) ? "" : v
-            );
-
             // 水冷泵选择
             AddCombo(group, "Items.CPU.Pump", fans,
                 () => string.IsNullOrEmpty(Config.PreferredCpuPump) ? strAuto : Config.PreferredCpuPump,
                 v => Config.PreferredCpuPump = (v == strAuto) ? "" : v
             );
 
+            // 机箱风扇首选
+            // 复用 "Items.CASE.Fan" 作为标题 (即 "机箱风扇")
+            AddCombo(group, "Items.CASE.Fan", fans,
+                () => string.IsNullOrEmpty(Config.PreferredCaseFan) ? strAuto : Config.PreferredCaseFan,
+                v => Config.PreferredCaseFan = (v == strAuto) ? "" : v
+            );
            
             
             // 5. 刷新率
