@@ -1,0 +1,10 @@
+﻿################################################################################
+# 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
+################################################################################
+
+/.vs/LiteMonitor/FileContentIndex
+/.vs/LiteMonitor/v18
+/LiteMonitor.Updater/obj
+/obj
+/.gitignore
+*.user
