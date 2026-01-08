@@ -28,9 +28,9 @@ namespace LiteMonitor.src.UI.SettingsPage
             _container.Controls.Clear();
             _originalLanguage = Config.Language;
 
-            CreateSystemCard();
-            CreateCalibrationCard();
             CreateSourceCard();
+            CreateCalibrationCard();
+            CreateSystemCard();
 
             _container.ResumeLayout();
             _isLoaded = true;
@@ -82,10 +82,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 // 使用工厂方法 AddNumberDouble
                 // 注意：Settings item 的 titleKey 机制是取翻译，这里我们手动拼接了 suffix
                 // 所以我们稍微绕过工厂的 titleKey 翻译，或者直接传拼接好的 string 作为一个假 key (因为 LanguageManager 如果找不到 key 会返回 key 本身)
-                // 但更优雅的方式是修改工厂方法支持 rawTitle，这里暂且用 key 拼接方式
                 
-                // 为了复用工厂，我们直接在外部创建 LiteSettingsItem 也可以，但这里我们用一点小技巧：
-                // 如果 LanguageManager.T 找不到 key，它会返回 key 原文。
                 string title = LanguageManager.T(key) + suffix; 
                 
                 // 同时在 Getter/Setter 中强制转为 int，实现“不显示也不保存小数”的效果
@@ -94,18 +91,22 @@ namespace LiteMonitor.src.UI.SettingsPage
                     v => set((float)(int)v)  // Setter: double -> int -> float (输入 65.5 -> 存为 65.0)
                 );
                 
-                
                 // 修正 Label 的文字 (因为工厂里把它当 Key 去翻译了)
-                // 实际上我们可以在工厂里加个重载，但为了不改太多，这里手动修正一下 Parent 的 Label
                 if(input.Parent.Controls[0] is Label lbl) lbl.Text = title;
             }
             group.AddFullItem(new LiteNote(LanguageManager.T("Menu.CalibrationTip"), 0));
+            
+            // 功耗与频率
             AddCalib("Items.CPU.Power", "W",   () => Config.RecordedMaxCpuPower, v => Config.RecordedMaxCpuPower = v);
             AddCalib("Items.CPU.Clock", "MHz", () => Config.RecordedMaxCpuClock, v => Config.RecordedMaxCpuClock = v);
             AddCalib("Items.GPU.Power", "W",   () => Config.RecordedMaxGpuPower, v => Config.RecordedMaxGpuPower = v);
             AddCalib("Items.GPU.Clock", "MHz", () => Config.RecordedMaxGpuClock, v => Config.RecordedMaxGpuClock = v);
 
-            
+            // [新增] 风扇转速最大值设置
+            AddCalib("Items.CPU.Fan",   "RPM", () => Config.RecordedMaxCpuFan,     v => Config.RecordedMaxCpuFan = v);
+            AddCalib("Items.GPU.Fan",   "RPM", () => Config.RecordedMaxGpuFan,     v => Config.RecordedMaxGpuFan = v);
+            AddCalib("Items.CASE.Fan",  "RPM", () => Config.RecordedMaxChassisFan, v => Config.RecordedMaxChassisFan = v);
+
             AddGroupToPage(group);
         }
 
@@ -130,9 +131,30 @@ namespace LiteMonitor.src.UI.SettingsPage
                 v => Config.PreferredNetwork = (v == strAuto) ? "" : v
             );
 
+            // [新增] 3. 风扇源
+            // 获取系统内所有识别到的风扇名称
+            var fans = HardwareMonitor.ListAllFans(); 
+            // 这里的 fans 列表会被下拉框直接引用，Insert 0 位置会影响所有引用，但因为每次 Update 都是新的 List 所以没问题
+            fans.Insert(0, strAuto);
+
+            // CPU 风扇首选
+            // 这里复用了 "Items.CPU.Fan" 作为标题 (即 "CPU风扇")
+            AddCombo(group, "Items.CPU.Fan", fans,
+                () => string.IsNullOrEmpty(Config.PreferredCpuFan) ? strAuto : Config.PreferredCpuFan,
+                v => Config.PreferredCpuFan = (v == strAuto) ? "" : v
+            );
+
+            // 机箱风扇首选
+            // 复用 "Items.CASE.Fan" 作为标题 (即 "机箱风扇")
+            AddCombo(group, "Items.CASE.Fan", fans,
+                () => string.IsNullOrEmpty(Config.PreferredCaseFan) ? strAuto : Config.PreferredCaseFan,
+                v => Config.PreferredCaseFan = (v == strAuto) ? "" : v
+            );
+
+            // 4. 其他设置
             AddBool(group, "Menu.UseSystemCpuLoad", () => Config.UseSystemCpuLoad, v => Config.UseSystemCpuLoad = v);
             
-            // 3. 刷新率
+            // 5. 刷新率
             int[] rates = { 100, 200, 300, 500, 600, 700, 800, 1000, 1500, 2000, 3000 };
             AddCombo(group, "Menu.Refresh", rates.Select(r => r + " ms"),
                 () => Config.RefreshMs + " ms",

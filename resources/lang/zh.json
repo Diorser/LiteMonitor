@@ -151,7 +151,7 @@
     "DailyTraffic": "每日流量统计",
 
     "__Comment_Page5__": "--- 5. 系统与硬件 (SystemHardwarPage) ---",
-    "SystemHardwar": "系统与硬件",
+    "SystemHardwar": "硬件与系统",
     
     "SystemSettings": "系统设置",
     "Language": "语言/Language",
@@ -160,7 +160,7 @@
 
     "Calibration": "硬件参数校准",
     "MaxLimits": "最大值",
-    "CalibrationTip": "⚠️为了进度条显示更准确，请填写硬件实际的最大频率和功耗，不填将在高负载时自动学习并更新最大值",
+    "CalibrationTip": "⚠️为了进度条显示更准确，请填写硬件实际的最大值，不填将在高负载时自动学习并更新最大值",
 
     "HardwareSettings": "硬件设置",
     "DiskSource": "首选磁盘",

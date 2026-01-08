@@ -72,7 +72,8 @@ namespace LiteMonitor.src.SystemServices
             ISensor? newBusSensor = null; // 临时变量
             
             // ★★★ [新增] 临时列表：用于智能匹配 ★★★
-            var candidatesMoboFans = new List<ISensor>();
+            // 注意：这里不再在递归中直接处理风扇匹配，而是收集起来统一交给 ScanAndMapFans 处理
+            // 但为了保持原代码结构，我们依然用candidates收集主板相关数据
             var candidatesMoboTemps = new List<ISensor>();
 
             // 局部递归函数
@@ -141,7 +142,7 @@ namespace LiteMonitor.src.SystemServices
                 {
                     foreach (var s in hw.Sensors)
                     {
-                        if (s.SensorType == SensorType.Fan) candidatesMoboFans.Add(s);
+                        // 风扇数据由后续 ScanAndMapFans 全局扫描，这里只收集温度备用
                         if (s.SensorType == SensorType.Temperature) candidatesMoboTemps.Add(s);
                     }
                 }
@@ -165,47 +166,39 @@ namespace LiteMonitor.src.SystemServices
             // ★★★ [新增] 智能匹配逻辑 ★★★
             // ============================================
             
-            // A. 主板温度
+            // A. 主板温度 (策略：System > Motherboard > Chipset > MaxValue)
             if (!newMap.ContainsKey("MOBO.Temp") && candidatesMoboTemps.Count > 0)
             {
-                ISensor? maxTemp = null;
-                float maxVal = -999f;
-                foreach (var t in candidatesMoboTemps)
+                // 1. 优先匹配标准名称 (System, Motherboard)
+                var best = candidatesMoboTemps.FirstOrDefault(x => Has(x.Name, "System"));
+                if (best == null) best = candidatesMoboTemps.FirstOrDefault(x => Has(x.Name, "Motherboard"));
+                
+                // 2. 其次匹配芯片组 (Chipset)
+                if (best == null) best = candidatesMoboTemps.FirstOrDefault(x => Has(x.Name, "Chipset") || Has(x.Name, "PCH"));
+                
+                // 3. 兜底策略：找有效值中最大的 (假设热点即关键点，且排除 0 和 200+ 异常值)
+                if (best == null)
                 {
-                    if (!t.Value.HasValue) continue;
-                    float v = t.Value.Value;
-                    if (v > 0 && v < 150 && v > maxVal) { maxVal = v; maxTemp = t; }
+                    float maxVal = -999f;
+                    foreach (var t in candidatesMoboTemps)
+                    {
+                        if (!t.Value.HasValue) continue;
+                        float v = t.Value.Value;
+                        // 过滤掉 0 和 >150 的异常读数
+                        if (v > 0 && v < 150 && v > maxVal) 
+                        { 
+                            maxVal = v; 
+                            best = t; 
+                        }
+                    }
                 }
-                if (maxTemp != null) newMap["MOBO.Temp"] = maxTemp;
+                
+                if (best != null) newMap["MOBO.Temp"] = best;
             }
 
-            // B. 风扇匹配
-            ISensor? cpuFan = null;
-            ISensor? chassisFan = null;
-
-            if (!string.IsNullOrEmpty(_cfg.PreferredCpuFan))
-            {
-                cpuFan = candidatesMoboFans.FirstOrDefault(x => x.Name == _cfg.PreferredCpuFan);
-            }
-            if (cpuFan == null)
-            {
-                cpuFan = candidatesMoboFans.FirstOrDefault(x => Has(x.Name, "CPU") && x.Value.HasValue && x.Value > 0);
-                if (cpuFan == null) cpuFan = candidatesMoboFans.FirstOrDefault(x => x.Value.HasValue && x.Value > 0);
-                if (cpuFan == null && candidatesMoboFans.Count > 0) cpuFan = candidatesMoboFans[0];
-            }
-            if (cpuFan != null) newMap["CPU.Fan"] = cpuFan;
-
-            if (!string.IsNullOrEmpty(_cfg.PreferredCaseFan))
-            {
-                chassisFan = candidatesMoboFans.FirstOrDefault(x => x.Name == _cfg.PreferredCaseFan);
-            }
-            else
-            {
-                var others = candidatesMoboFans.Where(x => x != cpuFan && x.Value.HasValue && x.Value > 0).ToList();
-                chassisFan = others.FirstOrDefault(x => x.Value < 3000);
-                if (chassisFan == null) chassisFan = others.FirstOrDefault();
-            }
-            if (chassisFan != null) newMap["CASE.Fan"] = chassisFan;
+            // B. 风扇匹配 (调用全新智能算法)
+            // 传入 newMap 以便写入 CPU.Fan 和 CASE.Fan
+            ScanAndMapFans(computer, cfg, newMap);
 
             // 2. 原子交换数据 (加锁)
             lock (_lock)
@@ -218,6 +211,115 @@ namespace LiteMonitor.src.SystemServices
                 CpuBusSpeedSensor = newBusSensor; // ★ 更新 Bus Sensor 缓存
                 _lastMapBuild = DateTime.Now;
             }
+        }
+
+        // ===========================================================
+        // ★★★ [新增] 全局智能风扇匹配算法 ★★★
+        // ===========================================================
+        private void ScanAndMapFans(Computer computer, Settings cfg, Dictionary<string, ISensor> targetMap)
+        {
+            ISensor? cpuFan = null;
+            ISensor? caseFan = null;
+            
+            // 1. 搜集全系统所有“活着”的风扇 (RPM > 0)
+            //    格式: (硬件, 传感器, 转速)
+            var activeFans = new List<(IHardware Hw, ISensor S, float Rpm)>();
+            
+            // 辅助递归找风扇
+            void CollectFans(IHardware hw)
+            {
+                hw.Update(); // 确保有最新数据
+                foreach (var s in hw.Sensors)
+                {
+                    // 只收录有转速的风扇 (或者用户强制指定的，哪怕没转速也要能匹配到，所以这里先全收录再过滤? 
+                    // 不，为了性能和逻辑简化，我们假设用户指定的名称在后续 FindFanByConfig 单独找)
+                    // 这里 activeFans 主要用于"自动猜测"
+                    if (s.SensorType == SensorType.Fan && s.Value.HasValue && s.Value.Value > 0)
+                    {
+                        activeFans.Add((hw, s, s.Value.Value));
+                    }
+                }
+                foreach (var sub in hw.SubHardware) CollectFans(sub);
+            }
+            foreach (var hw in computer.Hardware) CollectFans(hw);
+
+            // -----------------------------------------------------------
+            // 步骤 A: 确定 CPU 风扇
+            // -----------------------------------------------------------
+            // 1. 用户强制指定 (优先级最高)
+            if (!string.IsNullOrEmpty(cfg.PreferredCpuFan))
+            {
+                cpuFan = FindFanByConfig(computer, cfg.PreferredCpuFan);
+            }
+
+            // 2. 自动匹配：找名字带 CPU 的，或者排在第一个的 (Fan #1)
+            if (cpuFan == null && activeFans.Count > 0)
+            {
+                // 按名字排序 (Fan #1, Fan #2...)
+                var sorted = activeFans.OrderBy(x => x.S.Name).ToList();
+                
+                // 尝试找名字里明确带 CPU 的
+                var namedCpu = sorted.FirstOrDefault(x => Has(x.S.Name, "CPU"));
+                
+                if (namedCpu.S != null) 
+                    cpuFan = namedCpu.S;
+                else 
+                    cpuFan = sorted.First().S; // 没有任何特征时，选排在第一位的 (命中 Fan #1)
+            }
+
+            // -----------------------------------------------------------
+            // 步骤 B: 确定 机箱风扇
+            // -----------------------------------------------------------
+            // 1. 用户强制指定
+            if (!string.IsNullOrEmpty(cfg.PreferredCaseFan))
+            {
+                caseFan = FindFanByConfig(computer, cfg.PreferredCaseFan);
+            }
+
+            // 2. 自动匹配：排除掉 CPU 风扇，找剩下里转速最低的 (避开水泵)
+            if (caseFan == null && activeFans.Count > 0)
+            {
+                // 排除已选的 CPU 风扇
+                var candidates = activeFans.Where(x => x.S != cpuFan).ToList();
+
+                if (candidates.Count > 0)
+                {
+                    // ★ 核心优化：按 RPM 升序，选最慢的那个 (通常是机箱风扇)
+                    var bestCandidate = candidates.OrderBy(x => x.Rpm).First();
+                    caseFan = bestCandidate.S; 
+                }
+            }
+
+            // 3. 写入 Map
+            if (cpuFan != null) targetMap["CPU.Fan"] = cpuFan;
+            if (caseFan != null) targetMap["CASE.Fan"] = caseFan;
+        }
+
+        // 辅助：全局查找指定配置的风扇 (即使它转速为0也能找到)
+        private ISensor? FindFanByConfig(Computer computer, string configStr)
+        {
+            // 需要重新遍历一次全硬件，因为 activeFans 只包含了转速>0的
+            ISensor? found = null;
+            void FindRecursive(IHardware hw)
+            {
+                if (found != null) return;
+                foreach (var s in hw.Sensors)
+                {
+                    if (s.SensorType == SensorType.Fan)
+                    {
+                        string uid = $"[{hw.Name}] {s.Name}";
+                        // 兼容新版 UID 格式和旧版 Name 格式
+                        if (uid == configStr || s.Name == configStr)
+                        {
+                            found = s;
+                            return;
+                        }
+                    }
+                }
+                foreach (var sub in hw.SubHardware) FindRecursive(sub);
+            }
+            foreach (var hw in computer.Hardware) FindRecursive(hw);
+            return found;
         }
 
         // ===========================================================

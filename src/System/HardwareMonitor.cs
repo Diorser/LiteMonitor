@@ -177,10 +177,30 @@ namespace LiteMonitor.src.SystemServices
         {
             if (Instance == null) return new List<string>();
             var list = new List<string>();
+
             foreach (var hw in Instance._computer.Hardware)
             {
-                list.AddRange(GetAllSensors(hw, SensorType.Fan).Select(s => s.Name));
+                // ★★★ 核心优化：只允许主板、SuperIO 和 水冷控制器 ★★★
+                // 排除掉 GPU、硬盘、内存等不可能接 CPU 风扇的硬件
+                bool isAssignable = hw.HardwareType == HardwareType.Motherboard || 
+                                    hw.HardwareType == HardwareType.SuperIO || 
+                                    hw.HardwareType == HardwareType.Cooler;
+
+                if (isAssignable)
+                {
+                    // 递归查找该硬件下的所有风扇
+                    foreach (var s in GetAllSensors(hw, SensorType.Fan))
+                    {
+                        // 格式化为唯一标识符: "[硬件名] 传感器名"
+                        // 例如: "[Nuvoton NCT6796D] Fan #1"
+                        //list.Add($"[{hw.Name}] {s.Name}");
+                        list.Add($"{s.Name}");
+                    }
+                }
             }
+            
+            // 排序并去重，让列表更整洁
+            list.Sort(); 
             return list.Distinct().ToList();
         }
 
