@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using System.Drawing;
 using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.Core;
+using LiteMonitor.src.UI;
 using System.Collections.Generic;
 
 namespace LiteMonitor
@@ -425,6 +426,23 @@ namespace LiteMonitor
             }
             menu.Items.Add(themeRoot);
             menu.Items.Add(new ToolStripSeparator());
+
+
+            // --- [新增代码开始] ---
+            var btnHardware = new ToolStripMenuItem(LanguageManager.T("Hardware Info")); // 记得在多语言json里加 key，或者直接写死中文 "硬件检测"
+            btnHardware.Image = null; // 或者找个图标
+            btnHardware.Click += (s, e) => 
+            {
+                // 这里的模式是：每次点击都 new 一个新的，关闭即销毁。
+                // 不占用后台内存。
+                var form = new HardwareInfoForm();
+                form.Show(); // 非模态显示，允许用户一边看一边操作其他
+            };
+            menu.Items.Add(btnHardware);
+            // --- [新增代码结束] ---
+
+            menu.Items.Add(new ToolStripSeparator());
+
 
             // 网络测速 (独立窗口，保持原样)
             var speedWindow = new ToolStripMenuItem(LanguageManager.T("Menu.Speedtest"));

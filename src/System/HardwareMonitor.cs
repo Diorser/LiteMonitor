@@ -42,6 +42,8 @@ namespace LiteMonitor.src.SystemServices
         private DateTime _startTime = DateTime.Now;
         private DateTime _lastSlowScan = DateTime.Now;
         private DateTime _lastDiskBgScan = DateTime.Now;
+        
+        public IComputer ComputerInstance => _computer;// [新增] 允许 UI 层访问原始硬件树（用于硬件信息面板）
 
         // ★★★ 新增：声明 Windows API 用于修剪工作集内存 ★★★
         [DllImport("psapi.dll")]
