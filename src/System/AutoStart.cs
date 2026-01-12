@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
 using System.Windows.Forms;
+using System.Xml.Linq; // 新增：用于 XDocument
 
 namespace LiteMonitor.src.SystemServices
 {
@@ -33,11 +34,11 @@ namespace LiteMonitor.src.SystemServices
 
                 try
                 {
-                    // 生成 XML 内容
-                    string xmlContent = GetTaskXml(exePath);
+                    // 生成 XML 内容 (修改为获取 XDocument 对象)
+                    var doc = GetTaskXml(exePath);
                     
-                    // 写入临时文件
-                    File.WriteAllText(tempXmlPath, xmlContent);
+                    // 写入临时文件 (修改为 doc.Save，它会自动处理 UTF-16 编码)
+                    doc.Save(tempXmlPath);
 
                     // 调用 schtasks 导入 XML
                     // /F: 强制覆盖
@@ -111,79 +112,69 @@ namespace LiteMonitor.src.SystemServices
 
         /// <summary>
         /// 生成 XML 配置：完美复刻原始逻辑 + 增加高级电池/延迟设置
+        /// (已重构为 XDocument 方式)
         /// </summary>
-        private static string GetTaskXml(string exePath)
+        private static XDocument GetTaskXml(string exePath)
         {
             // 细节保留：获取工作目录，对应你原始代码的 /STRTIN
             string exeDir = Path.GetDirectoryName(exePath)!;
-            
-            // ★★★ 核心修正：移除 UserId 获取逻辑 ★★★
-            // 旧逻辑: string userId = WindowsIdentity.GetCurrent().Name;
-            // 修正原因: 显式指定 Microsoft 账户会导致 "网络地址无效" 错误。
-            // 修正方案: 移除 <UserId> 节点，依靠 InteractiveToken 自动绑定当前用户。
 
-            // ★★★ 细节处理：XML 特殊字符转义 ★★★
-            // 你的原始代码只处理了引号，这里必须处理 XML 敏感字符 (& < > " ')
-            string safeExePath = EscapeXml(exePath);
-            string safeExeDir = EscapeXml(exeDir);
-            
-            // 下面的 XML 结构对应了你原始代码的所有参数：
-            // /RL HIGHEST -> <RunLevel>HighestAvailable</RunLevel>
-            // /IT -> <LogonType>InteractiveToken</LogonType>
-            // /SC ONLOGON -> <LogonTrigger>
-            
-            return $@"<?xml version=""1.0"" encoding=""UTF-16""?>
-<Task version=""1.2"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
-  <RegistrationInfo>
-    <Description>LiteMonitor Auto Start</Description>
-  </RegistrationInfo>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-      <Delay>PT2S</Delay>
-    </LogonTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id=""Author"">
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>false</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context=""Author"">
-    <Exec>
-      <Command>{safeExePath}</Command>
-      <WorkingDirectory>{safeExeDir}</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>";
+            XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
+            // 使用 XDocument 构建 XML
+            // 自动处理特殊字符转义（如路径中的 & ' 等）
+            // 自动处理编码声明 (UTF-16)
+            var doc = new XDocument(
+                new XDeclaration("1.0", "UTF-16", null),
+                new XElement(ns + "Task",
+                    new XAttribute("version", "1.2"),
+                    new XElement(ns + "RegistrationInfo",
+                        new XElement(ns + "Description", "LiteMonitor Auto Start")
+                    ),
+                    new XElement(ns + "Triggers",
+                        new XElement(ns + "LogonTrigger",
+                            new XElement(ns + "Enabled", "true"),
+                            new XElement(ns + "Delay", "PT2S")
+                        )
+                    ),
+                    new XElement(ns + "Principals",
+                        new XElement(ns + "Principal",
+                            new XAttribute("id", "Author"),
+                            new XElement(ns + "LogonType", "InteractiveToken"),
+                            new XElement(ns + "RunLevel", "HighestAvailable")
+                        )
+                    ),
+                    new XElement(ns + "Settings",
+                        new XElement(ns + "MultipleInstancesPolicy", "IgnoreNew"),
+                        new XElement(ns + "DisallowStartIfOnBatteries", "false"),
+                        new XElement(ns + "StopIfGoingOnBatteries", "false"),
+                        new XElement(ns + "AllowHardTerminate", "true"),
+                        new XElement(ns + "StartWhenAvailable", "false"),
+                        new XElement(ns + "RunOnlyIfNetworkAvailable", "false"),
+                        new XElement(ns + "IdleSettings",
+                            new XElement(ns + "StopOnIdleEnd", "true"),
+                            new XElement(ns + "RestartOnIdle", "false")
+                        ),
+                        new XElement(ns + "AllowStartOnDemand", "true"),
+                        new XElement(ns + "Enabled", "true"),
+                        new XElement(ns + "Hidden", "false"),
+                        new XElement(ns + "RunOnlyIfIdle", "false"),
+                        new XElement(ns + "ExecutionTimeLimit", "PT0S"),
+                        new XElement(ns + "Priority", "7")
+                    ),
+                    new XElement(ns + "Actions",
+                        new XAttribute("Context", "Author"),
+                        new XElement(ns + "Exec",
+                            new XElement(ns + "Command", exePath),
+                            new XElement(ns + "WorkingDirectory", exeDir)
+                        )
+                    )
+                )
+            );
+
+            return doc;
         }
 
-        private static string EscapeXml(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return input;
-            return input.Replace("&", "&amp;")
-                        .Replace("\"", "&quot;")
-                        .Replace("'", "&apos;")
-                        .Replace("<", "&lt;")
-                        .Replace(">", "&gt;");
-        }
+        // 原 EscapeXml 方法已移除，因 XDocument 会自动处理转义
     }
 }

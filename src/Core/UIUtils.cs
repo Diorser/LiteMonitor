@@ -148,7 +148,9 @@ namespace LiteMonitor.src.Core
                 // 模式为 0 (百分比)，或者还没探测到总容量 -> 回落显示百分比
                 return $"{v:0.0}%";
             }
-
+            // ★★★ [新增] 在这里插入 FPS 格式化逻辑 ★★★
+            if (key == "FPS") return $"{v:0} FPS";
+            
             // 2. 百分比类 (Load)
             if (key.IndexOf("LOAD", StringComparison.OrdinalIgnoreCase) >= 0)
                 return $"{v:0.0}%";

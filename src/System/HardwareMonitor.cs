@@ -22,6 +22,7 @@ namespace LiteMonitor.src.SystemServices
         private readonly SensorMap _sensorMap;
         private readonly NetworkManager _networkManager;
         private readonly DiskManager _diskManager;
+        private readonly FpsCounter _fpsCounter; // <--- 新增
         private readonly DriverInstaller _driverInstaller;
         private readonly HardwareValueProvider _valueProvider;
 
@@ -75,10 +76,11 @@ namespace LiteMonitor.src.SystemServices
             _sensorMap = new SensorMap();
             _networkManager = new NetworkManager();
             _diskManager = new DiskManager();
+            _fpsCounter = new FpsCounter(); // <--- 新增
             _driverInstaller = new DriverInstaller(cfg, _computer, ReloadComputerSafe);
 
             // ★★★ [修改] 2. 将 Manager 注入给 ValueProvider ★★★
-            _valueProvider = new HardwareValueProvider(_computer, cfg, _sensorMap, _networkManager, _diskManager, _perfCounterManager, _lock, _lastValidMap);
+            _valueProvider = new HardwareValueProvider(_computer, cfg, _sensorMap, _networkManager, _diskManager, _fpsCounter, _perfCounterManager, _lock, _lastValidMap);
 
             // 3. 异步启动 (唯一优化：不卡UI)
             Task.Run(async () =>
@@ -315,6 +317,7 @@ namespace LiteMonitor.src.SystemServices
             _computer.Close();
             _valueProvider.Dispose();
             _perfCounterManager.Dispose(); // ★★★ [新增] 释放计数器资源 ★★★
+            _fpsCounter.Dispose(); // <--- 新增
             _networkManager.ClearCache();
             _diskManager.ClearCache(); // 漏掉的，补上
         }

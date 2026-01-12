@@ -15,6 +15,7 @@ namespace LiteMonitor.src.SystemServices
         private readonly SensorMap _sensorMap;
         private readonly NetworkManager _networkManager;
         private readonly DiskManager _diskManager;
+        private readonly FpsCounter _fpsCounter; // <--- 新增
         private readonly object _lock;
         private readonly Dictionary<string, float> _lastValidMap; 
         
@@ -31,13 +32,14 @@ namespace LiteMonitor.src.SystemServices
         // 缓存住找到的 ISensor 对象，彻底消除每秒的字符串解析和遍历开销
         private readonly Dictionary<string, (ISensor Sensor, string ConfigSource)> _manualSensorCache = new();
 
-        public HardwareValueProvider(Computer c, Settings s, SensorMap map, NetworkManager net, DiskManager disk, PerformanceCounterManager perfManager, object syncLock, Dictionary<string, float> lastValid)
+        public HardwareValueProvider(Computer c, Settings s, SensorMap map, NetworkManager net, DiskManager disk, FpsCounter fpsCounter,PerformanceCounterManager perfManager, object syncLock, Dictionary<string, float> lastValid)
         {
             _computer = c;
             _cfg = s;
             _sensorMap = map;
             _networkManager = net;
             _diskManager = disk;
+            _fpsCounter = fpsCounter; // <--- 赋值
             _perfManager = perfManager; // ★★★ [新增] 赋值 ★★★
             _lock = syncLock;
             _lastValidMap = lastValid;
@@ -281,6 +283,11 @@ namespace LiteMonitor.src.SystemServices
                         }
                     }
                     // 没找到则 break，走下方通用兜底
+                    break;
+
+                // ★★★ [新增] FPS 支持 ★★★
+                case "FPS":
+                    result = _fpsCounter.GetFps();
                     break;
 
                 // 默认分支：处理模糊匹配 (StartsWith/Contains)
