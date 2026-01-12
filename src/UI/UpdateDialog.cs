@@ -163,7 +163,7 @@ namespace LiteMonitor
                 long totalBytes = resp.Content.Headers.ContentLength ?? -1;
                 
                 // 6. 流式下载与进度报告
-                using (var fs = new FileStream(_targetZipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var fs = new FileStream(_targetZipPath, FileMode.Create, FileAccess.Write, FileShare.Read))
                 using (var stream = await resp.Content.ReadAsStreamAsync(_cts.Token))
                 {
                     byte[] buffer = new byte[81920]; // 增大缓冲区到 80KB 提升 I/O 性能
