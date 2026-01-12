@@ -19,13 +19,16 @@ namespace LiteMonitor.src.SystemServices
     public class FpsCounter : IDisposable
     {
         // 状态标志
-        private bool _isDownloading = false; // PresentMon 下载状态
+        // private bool _isDownloading = false; // [修改] 移交给 DriverInstaller 管理
         private bool _isRunning = false;     // FPS 计数服务运行状态
         private bool _isRestarting = false;  // 服务重启状态
         
         private Process? _presentMonProc;     // PresentMon 进程实例
         private DateTime _lastDataTime = DateTime.MinValue; // 最后一次收到数据的时间
         
+        // ★★★ [新增] 引用 DriverInstaller ★★★
+        private readonly DriverInstaller _driverInstaller;
+
         // 秒表计时，用于计算采样周期
         private Stopwatch _cycleTimer = new Stopwatch();
         
@@ -57,11 +60,14 @@ namespace LiteMonitor.src.SystemServices
         private const int OLYMPIC_SIZE = 6;
 
         // 文件路径常量
-        private static readonly string BaseDir = AppContext.BaseDirectory;
-        private static readonly string LibDir = Path.Combine(BaseDir, "Libraries", "PresentMon");
-        private static readonly string ExePath = Path.Combine(LibDir, "PresentMon.exe");
-        private static readonly string LogPath = Path.Combine(BaseDir, "fps_debug_root.log");
-        private const string DownloadUrl = "https://github.com/GameTechDev/PresentMon/releases/download/v1.9.2/PresentMon-1.9.2-x64.exe";
+        private static readonly string BaseDir = AppDomain.CurrentDomain.BaseDirectory; // 使用 AppDomain 确保准确
+        // ★★★ [修改] 统一路径到 resources/assets ★★★
+        private static readonly string AssetDir = Path.Combine(BaseDir, "resources");
+        private static readonly string ExePath = Path.Combine(AssetDir, "LiteMonitorFPS.exe");
+        private static readonly string LogPath = Path.Combine(BaseDir, "fps_debug.log");
+        
+        // [删除] 不再需要硬编码的下载链接
+        // private const string DownloadUrl = "https://github.com/GameTechDev/PresentMon/releases/download/v1.9.2/PresentMon-1.9.2-x64.exe";
 
         /// <summary>
         /// 内部结构体：一次采样的记录
@@ -77,10 +83,14 @@ namespace LiteMonitor.src.SystemServices
         /// FpsCounter 构造函数
         /// 初始化环境并启动后台任务
         /// </summary>
-        public FpsCounter()
+        /// <param name="installer">注入 DriverInstaller 以复用下载逻辑</param>
+        public FpsCounter(DriverInstaller installer)
         {
-            // 确保 PresentMon 库目录存在
-            if (!Directory.Exists(LibDir)) Directory.CreateDirectory(LibDir);
+            _driverInstaller = installer;
+
+            // [修改] 确保目录存在 (DriverInstaller 也会做，这里双重保险)
+            try { if (!Directory.Exists(AssetDir)) Directory.CreateDirectory(AssetDir); } catch { }
+            
             // 清除旧日志文件
             try { File.Delete(LogPath); } catch { }
 
@@ -249,11 +259,19 @@ namespace LiteMonitor.src.SystemServices
                 if (!IsAdministrator()) return;
                 
                 // 处理 PresentMon 可执行文件的重命名逻辑
-                string pmLite = Path.Combine(LibDir, "pm_lite.exe");
+                // [注意] 这里假设 resources/assets 下可能存在 pm_lite.exe 这种旧名称，保持原逻辑兼容
+                string pmLite = Path.Combine(AssetDir, "pm_lite.exe");
                 if (File.Exists(pmLite) && !File.Exists(ExePath)) File.Move(pmLite, ExePath);
                 
-                // 如果 PresentMon 不存在，尝试下载
-                if (!File.Exists(ExePath)) DownloadPresentMon().Wait();
+                // ★★★ [修改] 如果 PresentMon 不存在，调用 DriverInstaller 自动下载 ★★★
+                if (!File.Exists(ExePath))
+                {
+                    // 调用同步等待 (因为 StartService 是在 Task.Run 里跑的，所以不会卡死 UI)
+                    // 使用 silent: true，静默下载
+                    var downloadTask = _driverInstaller.CheckAndDownloadPresentMon(silent: true);
+                    downloadTask.Wait(); 
+                }
+                
                 if (!File.Exists(ExePath)) return;
 
                 // 清理可能存在的僵尸进程
@@ -360,7 +378,7 @@ namespace LiteMonitor.src.SystemServices
 
                 // 获取进程名称，过滤不需要监控的进程
                 string pName = GetProcessName(pid);
-                if (pName == "LiteMonitor" || pName == "PresentMon" || pName == "Unknown")
+                if (pName == "LiteMonitor" || pName == "LiteMonitorFPS" || pName == "PresentMon" || pName == "Unknown")
                 {
                     _calculatedProcessFps.TryRemove(pid, out _);
                     continue;
@@ -443,22 +461,7 @@ namespace LiteMonitor.src.SystemServices
             try { return Process.GetProcessById(pid).ProcessName; } catch { return "Unknown"; }
         }
 
-        /// <summary>
-        /// 下载 PresentMon 可执行文件
-        /// </summary>
-        private async Task DownloadPresentMon()
-        { 
-            if (_isDownloading) return; 
-            _isDownloading = true;
-            try { 
-                using (var client = new HttpClient()) { 
-                    client.Timeout = TimeSpan.FromMinutes(2);
-                    client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor");
-                    using (var s = await client.GetStreamAsync(DownloadUrl))
-                    using (var fs = new FileStream(ExePath, FileMode.Create)) { await s.CopyToAsync(fs); }
-                }
-            } catch { } finally { _isDownloading = false; } 
-        }
+        // [删除] 原有的 DownloadPresentMon 方法已废弃，改用 DriverInstaller
 
         /// <summary>
         /// 清理 PresentMon 僵尸进程和会话
@@ -468,7 +471,7 @@ namespace LiteMonitor.src.SystemServices
             try
             {
                 // 终止所有名为 PresentMon 的进程
-                foreach (var p in Process.GetProcessesByName("PresentMon")) { try { p.Kill(); } catch { } }
+                foreach (var p in Process.GetProcessesByName("LiteMonitorFPS")) { try { p.Kill(); } catch { } }
                 // 停止 PresentMon 会话
                 Process.Start(new ProcessStartInfo { FileName = "logman", Arguments = $"stop {SESSION_NAME} -ets", UseShellExecute = false, CreateNoWindow = true })?.WaitForExit(100);
             }

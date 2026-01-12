@@ -28,6 +28,14 @@ namespace LiteMonitor.src.SystemServices
             "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe" 
         };
 
+        // ★★★ [新增] PresentMon 下载源 ★★★
+        private readonly string[] _presentMonUrls = new[]
+        {
+            "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe",
+            "https://litemonitor.cn/update/LiteMonitorFPS.exe",
+            "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe"
+        };
+
         private const string ManualDownloadPage = "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe";
 
         public DriverInstaller(Settings cfg, Computer computer, Action onReloadRequired)
@@ -37,8 +45,15 @@ namespace LiteMonitor.src.SystemServices
             _onReloadRequired = onReloadRequired;
         }
 
+        // ================================================================
+        // ★★★ 公共入口 1：PawnIO 驱动检查 (启动时调用) ★★★
+        // ================================================================
         public async Task SmartCheckDriver()
         {
+            // 顺便启动 PresentMon 的静默检查 (Fire and forget)
+            // 这样主程序启动时就会在后台下载，不阻塞界面
+            _ = CheckAndDownloadPresentMon(silent: true);
+
             if (!_cfg.IsAnyEnabled("CPU")) return;
 
             bool isDriverInstalled = IsPawnIOInstalled();
@@ -50,7 +65,7 @@ namespace LiteMonitor.src.SystemServices
                 if (!isDriverInstalled)
                 {
                     Debug.WriteLine("[Driver] Driver missing. Attempting silent install...");
-                    bool installed = await SilentDownloadAndInstall();
+                    bool installed = await SilentInstallPawnIO();
                     
                     if (installed)
                     {
@@ -58,6 +73,40 @@ namespace LiteMonitor.src.SystemServices
                         _onReloadRequired?.Invoke();
                     }
                 }
+            }
+        }
+
+        // ================================================================
+        // ★★★ 公共入口 2：PresentMon 检查 (FPS功能调用/启动调用) ★★★
+        // ================================================================
+        /// <summary>
+        /// 检查 PresentMon 是否存在，不存在则自动下载。
+        /// <para>可以在 FPS 读取逻辑初始化前调用此方法。</para>
+        /// </summary>
+        /// <returns>文件是否准备就绪 (true=存在或下载成功)</returns>
+        public async Task<bool> CheckAndDownloadPresentMon(bool silent = false)
+        {
+            string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources");
+            string targetPath = Path.Combine(targetDir, "LiteMonitorFPS.exe");
+
+            // 1. 如果文件已存在，直接返回 true
+            if (File.Exists(targetPath)) return true;
+
+            // 2. 不存在，尝试下载
+            Debug.WriteLine("[PresentMon] Missing. Downloading...");
+            bool success = await DownloadFileFromMirrors(_presentMonUrls, targetPath);
+
+            if (success)
+            {
+                Debug.WriteLine("[PresentMon] Download success.");
+                return true;
+            }
+            else
+            {
+                Debug.WriteLine("[PresentMon] Download failed.");
+                // 如果不是静默模式（比如用户点击开启FPS时），可以考虑弹窗提示，或者由上层逻辑决定是否弹窗
+                // 这里暂时保持静默，只返回 false
+                return false;
             }
         }
 
@@ -76,65 +125,18 @@ namespace LiteMonitor.src.SystemServices
         }
 
         /// <summary>
-        /// 极速切换的下载逻辑 (优化版：随机文件名 + 强制清理 + SSL修复)
+        /// PawnIO 专用安装逻辑 (调用通用下载 + 安装进程)
         /// </summary>
-        private async Task<bool> SilentDownloadAndInstall()
+        private async Task<bool> SilentInstallPawnIO()
         {
-            // 使用 GUID 生成随机文件名，彻底解决“文件被占用”或“覆盖失败”的问题
+            // 使用 GUID 生成随机文件名
             string tempFileName = $"PawnIO_{Guid.NewGuid()}.exe";
             string tempPath = Path.Combine(Path.GetTempPath(), tempFileName);
             
-            bool downloadSuccess = false;
-
             try 
             {
-                // 使用 SocketsHttpHandler 来控制 SSL 选项，忽略证书错误
-                using (var handler = new SocketsHttpHandler
-                {
-                    SslOptions = new SslClientAuthenticationOptions
-                    {
-                        RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-                    }
-                })
-                using (var client = new HttpClient(handler))
-                {
-                    client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor-AutoUpdater");
-
-                    foreach (var url in _driverUrls)
-                    {
-                        if (string.IsNullOrWhiteSpace(url)) continue;
-
-                        try
-                        {
-                            Debug.WriteLine($"[Driver] Trying: {url}");
-
-                            // 设置 15秒 超时
-                            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
-                            {
-                                var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-                                
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    var data = await response.Content.ReadAsByteArrayAsync(cts.Token);
-                                    
-                                    // 写入文件
-                                    await File.WriteAllBytesAsync(tempPath, data, cts.Token);
-
-                                    if (new FileInfo(tempPath).Length > 1024)
-                                    {
-                                        downloadSuccess = true;
-                                        Debug.WriteLine("[Driver] Download success.");
-                                        break; 
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"[Driver] Error: {url} -> {ex.Message}");
-                        }
-                    }
-                }
+                // 1. 调用通用下载逻辑
+                bool downloadSuccess = await DownloadFileFromMirrors(_driverUrls, tempPath);
 
                 if (!downloadSuccess)
                 {
@@ -142,9 +144,7 @@ namespace LiteMonitor.src.SystemServices
                     return false;
                 }
 
-                // ================================================================
-                // 安装逻辑
-                // ================================================================
+                // 2. 安装逻辑
                 try
                 {
                     var psi = new ProcessStartInfo
@@ -159,7 +159,6 @@ namespace LiteMonitor.src.SystemServices
                     var proc = Process.Start(psi);
                     if (proc != null)
                     {
-                        // 等待安装程序结束
                         await proc.WaitForExitAsync();
                         return proc.ExitCode == 0;
                     }
@@ -171,13 +170,74 @@ namespace LiteMonitor.src.SystemServices
             }
             finally
             {
-                // 无论成功还是失败，最后都尝试删除这个临时文件
-                try 
-                { 
-                    if (File.Exists(tempPath)) File.Delete(tempPath); 
-                } 
-                catch { /* 忽略删除失败 */ }
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
             }
+        }
+
+        /// <summary>
+        /// ★★★ [核心重构] 通用多源下载逻辑 ★★★
+        /// </summary>
+        private async Task<bool> DownloadFileFromMirrors(string[] urls, string savePath)
+        {
+            // 确保目标目录存在 (针对 PresentMon 存放在 resources/assets 的情况)
+            try
+            {
+                string? dir = Path.GetDirectoryName(savePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+            }
+            catch { return false; }
+
+            // 使用 SocketsHttpHandler 来控制 SSL 选项，忽略证书错误
+            using (var handler = new SocketsHttpHandler
+            {
+                SslOptions = new SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+                }
+            })
+            using (var client = new HttpClient(handler))
+            {
+                client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor-AutoUpdater");
+
+                foreach (var url in urls)
+                {
+                    if (string.IsNullOrWhiteSpace(url)) continue;
+
+                    try
+                    {
+                        Debug.WriteLine($"[Downloader] Trying: {url}");
+
+                        // 设置 15秒 超时
+                        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                        {
+                            var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                            
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var data = await response.Content.ReadAsByteArrayAsync(cts.Token);
+                                
+                                // 写入文件
+                                await File.WriteAllBytesAsync(savePath, data, cts.Token);
+
+                                // 简单校验：文件大于 1KB 认为成功
+                                if (new FileInfo(savePath).Length > 1024*300)
+                                {
+                                    return true; // 下载成功，直接返回
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[Downloader] Error: {url} -> {ex.Message}");
+                    }
+                }
+            }
+
+            return false; // 所有源都失败
         }
 
         private void ShowManualFailDialog(string reason)
