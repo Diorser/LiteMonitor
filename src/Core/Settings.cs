@@ -113,6 +113,9 @@ namespace LiteMonitor
         
         public bool AlertTempEnabled { get; set; } = true;
         public int AlertTempThreshold { get; set; } = 80;
+
+        public bool WebServerEnabled { get; set; } = false;
+        public int WebServerPort { get; set; } = 5000; // 默认端口
         
         public ThresholdsSet Thresholds { get; set; } = new ThresholdsSet();
 

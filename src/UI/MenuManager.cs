@@ -87,6 +87,41 @@ namespace LiteMonitor
             };
 
             modeRoot.DropDownItems.Add(taskbarMode);
+
+
+            // === [新增] 网页显示选项 ===
+            var itemWeb = new ToolStripMenuItem(LanguageManager.T("Menu.WebDisplay")); // 需要去 en.json/zh.json 加这个 Key
+            itemWeb.CheckOnClick = true;
+            
+            // 初始化勾选状态：检查 Config 是否开启
+            itemWeb.Checked = cfg.WebServerEnabled;
+
+            itemWeb.Click += (s, e) => 
+            {
+                bool isEnabled = itemWeb.Checked;
+                cfg.WebServerEnabled = isEnabled;
+                cfg.Save(); // 保存设置
+
+                // 1. 启停服务
+                if (isEnabled)
+                {
+                    LiteMonitor.src.WebServer.LiteWebServer.Instance?.Start();
+                    // 2. 弹窗询问是否打开浏览器
+                    if (MessageBox.Show("Web Server Started.\nOpen in browser now?", "Web Remote", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                    {
+                        string url = $"http://localhost:{cfg.WebServerPort}/";
+                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch {}
+                    }
+                }
+                else
+                {
+                    LiteMonitor.src.WebServer.LiteWebServer.Instance?.Stop();
+                }
+            };
+            
+            // 将其添加到菜单合适的位置，比如放在“显示设置”下面
+            modeRoot.DropDownItems.Add(itemWeb);
+
             modeRoot.DropDownItems.Add(new ToolStripSeparator());
 
 

@@ -87,7 +87,7 @@
     "ActionTaskMgr": "打开任务管理器",
     "ActionSettings": "打开设置面板",
     "ActionTrafficHistory": "打开历史流量统计",
-
+    "WebDisplay": "网页监控 (Web Remote)",
     "Appearance": "外观设置",
     "Theme": "主题",
     "DisplayMode": "显示模式",

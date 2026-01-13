@@ -273,6 +273,8 @@ namespace LiteMonitor
 
             // 将 _cfg 传递给 UIController（构造内会统一加载语言与主题，并应用宽度等）
             _ui = new UIController(_cfg, this);
+            // ★★★ 初始化 WebServer 单例 (此时不启动，只创建对象) ★★★
+            new src.WebServer.LiteWebServer(_cfg);
 
             // 现在主题已可用，再设置背景色与菜单
             BackColor = ThemeManager.ParseColor(ThemeManager.Current.Color.Background);
@@ -767,6 +769,12 @@ namespace LiteMonitor
 
             // === 静默更新 ===
             _ = UpdateChecker.CheckAsync();
+
+            if (_cfg.WebServerEnabled)
+            {
+                // 确保你已经创建了 src/WebServer/LiteWebServer.cs
+                src.WebServer.LiteWebServer.Instance?.Start();
+            }
         }
 
         // [新增] 检查并提示更新成功
@@ -812,6 +820,7 @@ namespace LiteMonitor
             // 退出时必须强制存一次最新的配置
             _cfg.Save(); // 保存配置
             TrafficLogger.Save(); // 退出时强制保存一次流量数据
+            src.WebServer.LiteWebServer.Instance?.Stop();
             base.OnFormClosed(e); // 调用基类方法确保正常关闭
             _ui?.Dispose();      // 释放 UI 资源
             _tray.Visible = false; // 隐藏托盘图标
