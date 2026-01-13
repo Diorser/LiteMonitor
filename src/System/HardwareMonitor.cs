@@ -328,6 +328,21 @@ namespace LiteMonitor.src.SystemServices
 
         public void Dispose()
         {
+            // ★★★ 核心修复：加锁！防止与正在运行的 UpdateAll() 冲突 ★★★
+            lock (_lock)
+            {
+                try 
+                {
+                    // 将 Close 操作放入锁内，确保此时 UpdateAll 不在运行
+                    _computer.Close(); 
+                }
+                catch (Exception ex)
+                {
+                    // 吞掉关闭时的异常，防止弹窗报错困扰用户
+                    System.Diagnostics.Debug.WriteLine($"Dispose Error: {ex.Message}");
+                }
+            }
+
             _computer.Close();
             _valueProvider.Dispose();
             _perfCounterManager.Dispose(); // ★★★ [新增] 释放计数器资源 ★★★

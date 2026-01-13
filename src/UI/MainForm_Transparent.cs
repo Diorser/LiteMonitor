@@ -82,6 +82,7 @@ namespace LiteMonitor
         private enum DockEdge { None, Left, Right, Top, Bottom }
         private DockEdge _dock = DockEdge.None;
         private bool _uiDragging = false;
+        private DateTime _keepVisibleUntil = DateTime.MinValue; // 保护期截止时间
 
         public void InitAutoHideTimer()
         {
@@ -98,6 +99,8 @@ namespace LiteMonitor
             if (!_cfg.AutoHide) return;
             if (!Visible) return;
             if (_uiDragging || ContextMenuStrip?.Visible == true) return;
+            // ★★★ 优化：如果在保护期内，暂时不执行隐藏逻辑 ★★★
+            if (DateTime.Now < _keepVisibleUntil) return;
 
             // ==== 关键修改：基于"当前窗体所在屏幕"计算区域 ====
             var center = new Point(Left + Width / 2, Top + Height / 2);
@@ -547,6 +550,24 @@ namespace LiteMonitor
             this.Activate();
             _cfg.HideMainForm = false;
             _cfg.Save();
+
+            // ★★★ 优化：双击托盘时，如果处于自动隐藏状态，强制拉出来 ★★★
+            if (_isHidden)
+            {
+                _isHidden = false; // 重置隐藏标志
+                _dock = DockEdge.None; // 重置停靠状态
+                
+                // 强制把窗口拉回屏幕可视区域 (利用现有的 ClampToScreen 逻辑，或者手动计算)
+                // 注意：ClampToScreen 依赖配置，如果用户关了 ClampToScreen 可能会失效，建议手动强制拉回
+                var area = Screen.FromControl(this).WorkingArea;
+                if (Left > area.Right - Width) Left = area.Right - Width;
+                if (Left < area.Left) Left = area.Left;
+                if (Top < area.Top) Top = area.Top;
+            }
+
+            // ★★★ 优化：唤醒后给予 3 秒保护期，让用户有时间操作 ★★★
+            _keepVisibleUntil = DateTime.Now.AddSeconds(3.0);
+
             // 关键补充：每次显示主窗口时同步刷新菜单状态
             RebuildMenus();
         }
@@ -734,6 +755,9 @@ namespace LiteMonitor
 
             // 确保圆角生效
             ApplyRoundedCorners();
+
+            // ★★★ 优化：启动时强制显示 2 秒，防止瞬间自动隐藏 ★★★
+            _keepVisibleUntil = DateTime.Now.AddSeconds(3.0);
 
             // === 根据配置启动任务栏模式 ===
             if (_cfg.ShowTaskbar)

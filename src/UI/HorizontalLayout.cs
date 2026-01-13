@@ -91,7 +91,7 @@ namespace LiteMonitor
                         if (item.Key == "NET.IP")
                         {
                             string valText = item.TextValue;
-                            if (string.IsNullOrEmpty(valText)) valText = "0.0.0.0"; // 最小占位
+                            if (string.IsNullOrEmpty(valText)) return 0;// 最小占位
 
                             Font valFont = (_mode == LayoutMode.Taskbar) 
                                 ? new Font(s.Font, s.Size, s.Bold ? FontStyle.Bold : FontStyle.Regular) 

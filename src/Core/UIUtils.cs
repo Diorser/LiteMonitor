@@ -123,7 +123,8 @@ namespace LiteMonitor.src.Core
             {
                 // 默认给速率类添加 /s
                 // GetDefaultUnit 也可以在这里复用，但为了性能保持原样或直接写死
-                if (key.StartsWith("NET") || key.StartsWith("DISK")) return calculatedUnit + "/s";
+                if ((key.StartsWith("NET") && key.IndexOf("IP", StringComparison.OrdinalIgnoreCase) < 0) || 
+                    (key.StartsWith("DISK") && key.IndexOf("TEMP", StringComparison.OrdinalIgnoreCase) < 0)) return calculatedUnit + "/s";
                 return calculatedUnit;
             }
 
@@ -216,22 +217,14 @@ namespace LiteMonitor.src.Core
             return (len.ToString(format), sizes[order]);
         }
 
-        // [兼容旧代码] 
-        public static string FormatValue(string key, float? raw)
-        {
-            var (val, unit) = FormatValueParts(key, raw);
-            // 默认行为：如果是速率，追加 /s
-            if (key.StartsWith("NET") || key.StartsWith("DISK")) unit += "/s";
-            return val + unit;
-        }
-
         // ============================================================
         // ★★★ 修改：获取默认单位 (区分主界面/任务栏) ★★★
         // ============================================================
         public static string GetDefaultUnit(string key, bool isTaskbar)
         {
             // 1. 速率类：主界面带 /s，任务栏默认省空间不带
-            if (key.StartsWith("NET") || (key.StartsWith("DISK") && !key.StartsWith("Temp"))) 
+            if ((key.StartsWith("NET") && key.IndexOf("IP", StringComparison.OrdinalIgnoreCase) < 0) || 
+                (key.StartsWith("DISK") && key.IndexOf("TEMP", StringComparison.OrdinalIgnoreCase) < 0))
                 return isTaskbar ? "{u}" : "{u}/s";
             
             // 2. 数据总量
