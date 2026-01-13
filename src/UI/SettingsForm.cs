@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using LiteMonitor.src.UI.Controls;
@@ -74,11 +75,41 @@ namespace LiteMonitor.src.UI
             var btnCancel = new LiteButton(LanguageManager.T("Menu.Cancel"), false);
             var btnApply = new LiteButton(LanguageManager.T("Menu.Apply"), false);
 
+            // [需求1] 增加恢复默认设置按钮
+            var btnReset = new LiteButton(LanguageManager.T("Menu.Reset"), false);
+            btnReset.ForeColor = UIColors.TextWarn; // 使用警告色提示
+
             btnOk.Click += (s, e) => { ApplySettings(); this.DialogResult = DialogResult.OK; this.Close(); };
             btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
             btnApply.Click += (s, e) => { ApplySettings(); };
+            
+            // [需求1] 恢复默认逻辑 - 修复版
+            btnReset.Click += (s, e) => 
+            {
+                if (MessageBox.Show(LanguageManager.T("Menu.ResetConfirm"), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                {
+                    try 
+                    {
+                        // ★★★ 核心修复：开启全局保存锁 ★★★
+                        // 阻止程序退出时自动保存旧配置
+                        Settings.GlobalBlockSave = true;
+                        
+                        var path = Path.Combine(AppContext.BaseDirectory, "settings.json");
+                        if (File.Exists(path)) File.Delete(path);
+                        
+                        Application.Restart();
+                        Environment.Exit(0);
+                    }
+                    catch (Exception ex) 
+                    {
+                        // 如果重置失败（例如文件占用），必须解开锁，否则用户后续无法正常保存
+                        Settings.GlobalBlockSave = false; 
+                        MessageBox.Show("Error: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            };
 
-            flowBtns.Controls.Add(btnOk); flowBtns.Controls.Add(btnCancel); flowBtns.Controls.Add(btnApply);
+            flowBtns.Controls.Add(btnOk); flowBtns.Controls.Add(btnCancel); flowBtns.Controls.Add(btnApply); flowBtns.Controls.Add(btnReset);
             pnlBottom.Controls.Add(flowBtns);
             this.Controls.Add(pnlBottom);
 

@@ -66,6 +66,8 @@
     "OK": "确定",
     "Cancel": "取消",
     "Apply": "应用",
+    "Reset": "全部重置",
+    "ResetConfirm": "确定要全部恢复系统默认设置吗？\n(程序将自动重启)",
     "Enable": "启用",
     "HardwareInfo": "系统硬件详情",
     "SpeedTest": "网速测试",
@@ -132,6 +134,7 @@
     "sort": "显示顺序",
     "Taskbar": "任务栏",
     "MainForm": "主界面",
+    "OnlyShowEnabled": "仅看显示项",
     "HorizontalFollowsTaskbar": "横条模式采用任务栏排序",
 
     "__Comment_Page4__": "--- 4. 告警阈值设置 (ThresholdPage) ---",

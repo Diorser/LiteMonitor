@@ -66,6 +66,8 @@
     "OK": "OK",
     "Cancel": "Cancel",
     "Apply": "Aplicar",
+    "Reset": "Restablecer",
+    "ResetConfirm": "Restablecer todos los ajustes?\n(Se reiniciará el programa)",
     "Enable": "Activar",
     "HardwareInfo": "Info. Hardware",
     "SpeedTest": "Velocidad",
@@ -134,6 +136,7 @@
     "sort": "Orden",
     "Taskbar": "Tray",
     "MainForm": "Panel",
+    "OnlyShowEnabled": "Solo activados",
 
     "__Comment_Page4__": "--- 4. Umbrales ---",
     "Thresholds": "Umbrales",

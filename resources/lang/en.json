@@ -66,6 +66,8 @@
         "OK": "OK",
         "Cancel": "Cancel",
         "Apply": "Apply",
+        "Reset": "Reset",
+        "ResetConfirm": "Reset all settings?\n(App will restart)",
         "Enable": "Enable",
         "HardwareInfo": "Hardware Info",
         "SpeedTest": "Network Test",
@@ -134,6 +136,8 @@
     "sort": "Sort",
     "Taskbar": "Taskbar",
     "MainForm": "Panel",
+    "OnlyShowEnabled": "Enabled Only",
+    "HorizontalFollowsTaskbar": "Bar follows taskbar order",
 
     "__Comment_Page4__": "--- 4. Thresholds ---",
     "Thresholds": "Thresholds",

@@ -110,6 +110,12 @@ namespace LiteMonitor.src.UI.Controls
             });
         }
 
+        // [需求2] 暴露方法供组开关调用
+        public void SetPanelChecked(bool check) 
+        {
+            _chkPanel.Checked = check;
+        }
+
         public void SetMode(bool isTaskbarMode)
         {
             if (isTaskbarMode)
@@ -162,8 +168,10 @@ namespace LiteMonitor.src.UI.Controls
     {
         public string GroupKey { get; private set; }
         public LiteUnderlineInput InputAlias { get; private set; }
+        private LiteCheck _chkAll; // [需求2] 增加组开关
         public event EventHandler MoveUp;
         public event EventHandler MoveDown;
+        public event EventHandler<bool> ToggleGroup; // [需求2] 组开关事件
 
         public MonitorGroupHeader(string groupKey, string alias)
         {
@@ -188,13 +196,22 @@ namespace LiteMonitor.src.UI.Controls
             InputAlias.SetBg(UIColors.GroupHeader); 
             InputAlias.Inner.Font = UIFonts.Bold(9F);
 
+            // [需求2] 组开关复选框
+            _chkAll = new LiteCheck(true, "") 
+            { 
+                Location = new Point(MonitorLayout.X_COL3, UIUtils.S(12)),
+                // 默认不显示文字，只作为全选/全不选开关
+            };
+            // 点击事件：触发 ToggleGroup
+            _chkAll.Click += (s, e) => ToggleGroup?.Invoke(this, _chkAll.Checked);
+
             var btnUp = new LiteSortBtn("▲") { Location = new Point(MonitorLayout.X_COL4, UIUtils.S(10)) };
             var btnDown = new LiteSortBtn("▼") { Location = new Point(MonitorLayout.X_COL4 + UIUtils.S(36), UIUtils.S(10)) };
             
             btnUp.Click += (s, e) => MoveUp?.Invoke(this, EventArgs.Empty);
             btnDown.Click += (s, e) => MoveDown?.Invoke(this, EventArgs.Empty);
 
-            this.Controls.AddRange(new Control[] { lblId, InputAlias, btnUp, btnDown });
+            this.Controls.AddRange(new Control[] { lblId, InputAlias, _chkAll, btnUp, btnDown });
         }
 
         protected override void OnPaint(PaintEventArgs e)

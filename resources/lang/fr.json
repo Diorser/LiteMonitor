@@ -67,6 +67,8 @@
     "OK": "OK",
     "Cancel": "Annuler",
     "Apply": "Appliquer",
+    "Reset": "Réinitialiser",
+    "ResetConfirm": "Réinitialiser tous les paramètres?\n(Le programme redémarrera)",
     "Enable": "Actif",
     "HardwareInfo": "Info Matériel",
     "SpeedTest": "Test débit",
@@ -135,6 +137,7 @@
     "sort": "Tri",
     "Taskbar": "Tray",
     "MainForm": "Panel",
+    "OnlyShowEnabled": "Actifs seulement",
 
     "__Comment_Page4__": "--- 4. Seuils ---",
     "Thresholds": "Seuils",

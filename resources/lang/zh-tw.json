@@ -66,6 +66,8 @@
         "OK": "確定",
         "Cancel": "取消",
         "Apply": "應用",
+        "Reset": "全部重置",
+        "ResetConfirm": "確定要全部恢復系統預設設定嗎？\n(程式將自動重啟)",
         "Enable": "啟用",
         "HardwareInfo": "檢視硬體詳情",
         "SpeedTest": "網速測試",
@@ -133,6 +135,7 @@
     "sort": "顯示順序",
     "Taskbar": "工作列",
     "MainForm": "主介面",
+    "OnlyShowEnabled": "僅看已開啟顯示",
 
     "__Comment_Page4__": "--- 4. 告警閾值設定 (ThresholdPage) ---",
     "Thresholds": "告警閾值設定",

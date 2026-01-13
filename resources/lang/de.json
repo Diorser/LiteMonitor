@@ -66,6 +66,8 @@
     "OK": "OK",
     "Cancel": "Abbr.",
     "Apply": "OK",
+    "Reset": "Zurücksetzen",
+    "ResetConfirm": "Einstellungen zurücksetzen?\n(Programm startet neu)",
     "Enable": "An",
     "HardwareInfo": "Hardwareinfo",
     "SpeedTest": "Speedtest",
@@ -134,6 +136,7 @@
     "sort": "Sort.",
     "Taskbar": "Tray",
     "MainForm": "Panel",
+    "OnlyShowEnabled": "Nur aktiviert",
 
     "__Comment_Page4__": "--- 4. Grenzwerte ---",
     "Thresholds": "Grenzwerte",

@@ -380,8 +380,15 @@ namespace LiteMonitor
             }
         }
 
+        // ★★★ 核心修复：添加全局保存锁，防止重置时被自动保存覆盖 ★★★
+        [JsonIgnore]
+        public static bool GlobalBlockSave { get; set; } = false;
+
         public void Save()
         {
+            // ★★★ 如果开启了保存锁，直接返回，什么都不做 ★★★
+            if (GlobalBlockSave) return;
+
             try
             {
                 var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });

@@ -67,6 +67,8 @@
     "OK": "OK",
     "Cancel": "キャンセル",
     "Apply": "適用",
+    "Reset": "リセット",
+    "ResetConfirm": "すべての設定をリセットしますか？\n(アプリが再起動します)",
     "Enable": "有効",
     "HardwareInfo": "ハードウェア情報",
     "SpeedTest": "速度テスト",
@@ -135,6 +137,7 @@
     "sort": "順序",
     "Taskbar": "タスクバー",
     "MainForm": "パネル",
+    "OnlyShowEnabled": "有効のみ",
 
     "__Comment_Page4__": "--- 4. 閾値設定 ---",
     "Thresholds": "アラート閾値",

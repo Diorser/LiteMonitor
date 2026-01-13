@@ -66,6 +66,8 @@
     "OK": "확인",
     "Cancel": "취소",
     "Apply": "적용",
+    "Reset": "초기화",
+    "ResetConfirm": "모든 설정을 초기화하시겠습니까?\n(프로그램이 재시작됩니다)",
     "Enable": "사용",
     "HardwareInfo": "하드웨어 정보",
     "SpeedTest": "속도 측정",
@@ -134,6 +136,7 @@
     "sort": "정렬",
     "Taskbar": "작업줄",
     "MainForm": "패널",
+    "OnlyShowEnabled": "사용중만",
 
     "__Comment_Page4__": "--- 4. Thresholds ---",
     "Thresholds": "알림 임계값",

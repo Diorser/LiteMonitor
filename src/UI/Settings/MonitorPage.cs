@@ -20,11 +20,15 @@ namespace LiteMonitor.src.UI.SettingsPage
         private Button _btnTabMain;
         private Button _btnTabBar;
         private LiteCheck _chkLinkHorizontal;
+        private LiteCheck _chkOnlyVisible;
         
         private Label _lblCol1; 
         private Label _lblCol2; 
         private Label _lblCol3; 
         private Label _lblCol4; 
+
+        // 本地工作副本
+        private List<MonitorItemConfig> _workingList;
 
         public MonitorPage()
         {
@@ -36,26 +40,21 @@ namespace LiteMonitor.src.UI.SettingsPage
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
-                Padding = UIUtils.S(new Padding(20, 5, 20, 0)) // 这里的 Bottom Padding 在 AutoScroll 下可能失效，依靠 Spacer 解决
+                Padding = UIUtils.S(new Padding(20, 5, 20, 0))
             };
             this.Controls.Add(_container);
 
             InitHeader();
-            
             this.Controls.SetChildIndex(_container, 0); 
         }
 
         private void InitHeader()
         {
-            // === A. 选项卡面板 ===
             _tabPanel = new Panel 
             { 
-                Dock = DockStyle.Top, 
-                Height = UIUtils.S(42), 
-                BackColor = UIColors.MainBg,
+                Dock = DockStyle.Top, Height = UIUtils.S(42), BackColor = UIColors.MainBg,
                 Padding = UIUtils.S(new Padding(20, 0, 20, 0))
             };
-
             _tabPanel.Paint += (s, e) => {
                 using (var p = new Pen(UIColors.Border))
                     e.Graphics.DrawLine(p, 0, _tabPanel.Height - 1, _tabPanel.Width, _tabPanel.Height - 1);
@@ -72,62 +71,51 @@ namespace LiteMonitor.src.UI.SettingsPage
 
             _chkLinkHorizontal = new LiteCheck(false, LanguageManager.T("Menu.HorizontalFollowsTaskbar")) 
             {
-                AutoSize = true,
-                Visible = false,
-                ForeColor = UIColors.TextSub,
-                Font = UIFonts.Bold(9F)
+                AutoSize = true, Visible = false, ForeColor = UIColors.TextSub, Font = UIFonts.Bold(9F)
+            };
+            
+            _chkOnlyVisible = new LiteCheck(false, LanguageManager.T("Menu.OnlyShowEnabled")) 
+            {
+                AutoSize = true, Visible = false, ForeColor = UIColors.TextSub, Font = UIFonts.Bold(9F)
+            };
+            
+            // ★★★ 核心修复：切换前先保存当前的排序状态 ★★★
+            _chkOnlyVisible.CheckedChanged += (s, e) => 
+            {
+                // 当复选框改变时，界面上显示的还是改变之前的状态
+                // 例如：从 [未勾选] -> [勾选]，UI 显示的是 [全部列表]
+                // 所以我们需要用 (!Checked) 也就是 [未勾选/全部模式] 的逻辑来保存当前的 UI 顺序
+                SaveToWorkingList(isFilteredOverride: !_chkOnlyVisible.Checked);
+                
+                ReloadList();
             };
             
             _tabPanel.Resize += (s, e) => {
-                _chkLinkHorizontal.Location = new Point(
-                    _tabPanel.Width - _chkLinkHorizontal.Width - UIUtils.S(20), 
-                    UIUtils.S(10));
+                _chkLinkHorizontal.Location = new Point(_tabPanel.Width - _chkLinkHorizontal.Width - UIUtils.S(20), UIUtils.S(10));
+                _chkOnlyVisible.Location = new Point(_chkLinkHorizontal.Left - _chkOnlyVisible.Width - UIUtils.S(20), UIUtils.S(10));
             };
 
-            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _chkLinkHorizontal });
+            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _chkLinkHorizontal, _chkOnlyVisible });
 
-
-            // === B. 表头面板 ===
             _headerPanel = new Panel
             {
-                Dock = DockStyle.Top,
-                Height = UIUtils.S(34), 
-                BackColor = UIColors.MainBg, 
+                Dock = DockStyle.Top, Height = UIUtils.S(34), BackColor = UIColors.MainBg, 
                 Padding = UIUtils.S(new Padding(20, 0, 20, 0))
             };
 
-            _lblCol1 = CreateHeaderLabel();
-            _lblCol2 = CreateHeaderLabel();
-            _lblCol3 = CreateHeaderLabel();
-            _lblCol4 = CreateHeaderLabel();
-            
+            _lblCol1 = CreateHeaderLabel(); _lblCol2 = CreateHeaderLabel();
+            _lblCol3 = CreateHeaderLabel(); _lblCol4 = CreateHeaderLabel();
             _headerPanel.Controls.AddRange(new Control[] { _lblCol1, _lblCol2, _lblCol3, _lblCol4 });
 
             this.Controls.Add(_headerPanel);
             this.Controls.Add(_tabPanel);
         }
 
-        private Label CreateHeaderLabel()
-        {
-            return new Label {
-                AutoSize = true,
-                ForeColor = UIColors.TextSub, 
-                Font = UIFonts.Bold(8F),
-                Visible = true
-            };
-        }
-
+        private Label CreateHeaderLabel() => new Label { AutoSize = true, ForeColor = UIColors.TextSub, Font = UIFonts.Bold(8F), Visible = true };
+        
         private Button CreateTabButton(string text, bool active)
         {
-            var btn = new Button
-            {
-                Text = text,
-                AutoSize = true,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = UIFonts.Bold(9F),
-                Padding = new Padding(5, 0, 5, 0)
-            };
+            var btn = new Button { Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = UIFonts.Bold(9F), Padding = new Padding(5, 0, 5, 0) };
             btn.FlatAppearance.BorderSize = 0;
             UpdateBtnStyle(btn, active);
             return btn;
@@ -135,22 +123,16 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private void UpdateBtnStyle(Button btn, bool active)
         {
-            if (active)
-            {
-                btn.BackColor = UIColors.Primary;
-                btn.ForeColor = Color.White;
-            }
-            else
-            {
-                btn.BackColor = Color.Transparent;
-                btn.ForeColor = UIColors.TextSub;
-            }
+            btn.BackColor = active ? UIColors.Primary : Color.Transparent;
+            btn.ForeColor = active ? Color.White : UIColors.TextSub;
         }
 
         private void SwitchTab(bool toTaskbarMode)
         {
             if (_isTaskbarTab == toTaskbarMode && _isLoaded) return;
-            if (_isLoaded) Save(); 
+            
+            // 切换 Tab 时保存当前状态
+            if (_isLoaded) SaveToWorkingList(); 
 
             _isTaskbarTab = toTaskbarMode;
 
@@ -158,14 +140,13 @@ namespace LiteMonitor.src.UI.SettingsPage
             UpdateBtnStyle(_btnTabBar, _isTaskbarTab);
             
             _chkLinkHorizontal.Visible = _isTaskbarTab;
+            _chkOnlyVisible.Visible = _isTaskbarTab;
+            
             if (_isTaskbarTab && Config != null)
                 _chkLinkHorizontal.Checked = Config.HorizontalFollowsTaskbar;
 
-            _tabPanel.PerformLayout(); 
-            _chkLinkHorizontal.Location = new Point(
-                    _tabPanel.Width - _chkLinkHorizontal.Width - UIUtils.S(20), 
-                    UIUtils.S(10));
-
+            _tabPanel.Width++; _tabPanel.Width--; 
+            
             ReloadList();
         }
 
@@ -173,6 +154,23 @@ namespace LiteMonitor.src.UI.SettingsPage
         {
             base.OnShow();
             if (Config == null) return;
+
+            // 初始化副本
+            _workingList = new List<MonitorItemConfig>();
+            foreach(var item in Config.MonitorItems)
+            {
+                _workingList.Add(new MonitorItemConfig 
+                {
+                    Key = item.Key,
+                    UserLabel = item.UserLabel,
+                    TaskbarLabel = item.TaskbarLabel,
+                    VisibleInPanel = item.VisibleInPanel,
+                    VisibleInTaskbar = item.VisibleInTaskbar,
+                    SortIndex = item.SortIndex,
+                    TaskbarSortIndex = item.TaskbarSortIndex
+                });
+            }
+
             if (!_isLoaded) SwitchTab(false);
         }
 
@@ -180,59 +178,48 @@ namespace LiteMonitor.src.UI.SettingsPage
         {
             _container.SuspendLayout();
             
-            // ★★★ 修复事件处理程序泄露：在移除控件之前取消订阅事件 ★★★
+            // [新增] 刷新语言缓存：确保 _workingList 中的最新文本(如 FPS) 生效
+            // 解决 "FPSs" 缓存导致删除 's' 后重绘又变回 "FPSs" 的 Bug
+            UpdateLanguageCacheFromWorkingList();
+
+            // 清理旧控件 (注意：SaveToWorkingList 已经在 Reload 之前负责了保存数据)
             while (_container.Controls.Count > 0)
             {
                 var control = _container.Controls[0];
-                
                 if (control is GroupBlock block)
                 {
-                    // ✅ 正确：使用命名方法取消订阅
-                    block.Header.MoveUp -= GroupHeader_MoveUp;
-                    block.Header.MoveDown -= GroupHeader_MoveDown;
-                    
-                    foreach (var row in block.RowsPanel.Controls.OfType<MonitorItemRow>())
-                    {
-                        row.MoveUp -= Row_MoveUp;
-                        row.MoveDown -= Row_MoveDown;
-                    }
-                    // ... dispose logic
+                    block.Header.MoveUp -= GroupHeader_MoveUp; block.Header.MoveDown -= GroupHeader_MoveDown;
+                    foreach (var row in block.RowsPanel.Controls.OfType<MonitorItemRow>()) { row.MoveUp -= Row_MoveUp; row.MoveDown -= Row_MoveDown; }
                 }
                 else if (control is MonitorItemRow row)
                 {
-                    // ✅ 正确
-                    row.MoveUp -= Row_MoveUp;
-                    row.MoveDown -= Row_MoveDown;
+                    row.MoveUp -= Row_MoveUp; row.MoveDown -= Row_MoveDown;
                 }
                 control.Dispose();
             }
 
             UpdateHeaderLayout();
 
-            // [需求3] 强制底部留白 Spacer
-            // 因为我们是倒序添加 (Dock=Top)，最先添加的控件会被挤到最底部
-            // 所以先添加这个 Spacer，它就会呆在列表的最下面
             var spacer = new Panel { Dock = DockStyle.Top, Height = UIUtils.S(30), BackColor = Color.Transparent };
             _container.Controls.Add(spacer);
 
             if (_isTaskbarTab)
             {
-                var items = Config.MonitorItems.OrderBy(x => x.TaskbarSortIndex).ToList();
+                var items = _workingList.OrderBy(x => x.TaskbarSortIndex).ToList();
+                if (_chkOnlyVisible.Checked)
+                    items = items.Where(x => x.VisibleInTaskbar).ToList();
+
                 for (int i = items.Count - 1; i >= 0; i--)
                 {
                     var row = new MonitorItemRow(items[i]);
                     row.SetMode(true);
-                    // ✅ 正确：使用命名方法订阅
-                    row.MoveUp += Row_MoveUp; 
-                    row.MoveDown += Row_MoveDown;
+                    row.MoveUp += Row_MoveUp; row.MoveDown += Row_MoveDown;
                     _container.Controls.Add(row);
                 }
             }
             else
             {
-                var items = Config.MonitorItems.OrderBy(x => x.SortIndex).ToList();
-                
-                // ★★★ 修改：使用 GetGroupKey 实现强制分组 ★★★
+                var items = _workingList.OrderBy(x => x.SortIndex).ToList();
                 var groups = items.GroupBy(x => x.UIGroup);
                 
                 foreach (var g in groups.Reverse())
@@ -246,19 +233,50 @@ namespace LiteMonitor.src.UI.SettingsPage
             _isLoaded = true;
         }
 
+        // [新增] 临时将工作列表中的文本应用到语言管理器，以实现所见即所得
+        private void UpdateLanguageCacheFromWorkingList()
+        {
+            if (_workingList == null) return;
+            
+            LanguageManager.ClearOverrides();
+            if (Config.GroupAliases != null)
+            {
+                foreach (var kv in Config.GroupAliases)
+                    LanguageManager.SetOverride(UIUtils.Intern("Groups." + kv.Key), kv.Value);
+            }
+            
+            foreach (var item in _workingList)
+            {
+                if (!string.IsNullOrEmpty(item.UserLabel))
+                    LanguageManager.SetOverride(UIUtils.Intern("Items." + item.Key), item.UserLabel);
+                if (!string.IsNullOrEmpty(item.TaskbarLabel))
+                    LanguageManager.SetOverride(UIUtils.Intern("Short." + item.Key), item.TaskbarLabel);
+            }
+        }
+
+        private void SyncUIToWorkingList()
+        {
+            foreach (Control c in _container.Controls)
+            {
+                if (c is MonitorItemRow row) row.SyncToConfig();
+                else if (c is GroupBlock block)
+                {
+                    foreach (Control rc in block.RowsPanel.Controls)
+                        if (rc is MonitorItemRow r) r.SyncToConfig();
+                }
+            }
+        }
+
         private void UpdateHeaderLayout()
         {
             int y = UIUtils.S(10); 
-            // [需求1] 还原 20px 偏移
             int offset = UIUtils.S(20); 
 
             _lblCol1.Text = LanguageManager.T("Menu.MonitorItem");
             _lblCol1.Location = new Point(MonitorLayout.X_COL1 + offset, y);
 
-            if (_isTaskbarTab)
-                _lblCol2.Text = LanguageManager.T("Menu.short"); 
-            else
-                _lblCol2.Text = LanguageManager.T("Menu.name");  
+            if (_isTaskbarTab) _lblCol2.Text = LanguageManager.T("Menu.short"); 
+            else _lblCol2.Text = LanguageManager.T("Menu.name");  
             _lblCol2.Location = new Point(MonitorLayout.X_COL2 + offset, y);
 
             _lblCol3.Text = LanguageManager.T("Menu.showHide"); 
@@ -275,119 +293,157 @@ namespace LiteMonitor.src.UI.SettingsPage
             var rowsPanel = new Panel { Dock = DockStyle.Top, AutoSize = true, BackColor = Color.White };
             var block = new GroupBlock(header, rowsPanel);
 
-            // 使用命名方法代替匿名委托，便于后续取消订阅
             header.MoveUp += GroupHeader_MoveUp;
             header.MoveDown += GroupHeader_MoveDown;
-            
-            // 保存block引用，以便事件处理程序可以访问它
+            header.ToggleGroup += (s, checkState) => 
+            {
+                foreach(MonitorItemRow row in rowsPanel.Controls) row.SetPanelChecked(checkState);
+            };
             header.Tag = block;
 
             for (int i = items.Count - 1; i >= 0; i--)
             {
                 var row = new MonitorItemRow(items[i]);
                 row.SetMode(false); 
-                row.MoveUp += Row_MoveUp;
-                row.MoveDown += Row_MoveDown;
+                row.MoveUp += Row_MoveUp; row.MoveDown += Row_MoveDown;
                 rowsPanel.Controls.Add(row);
             }
             return block;
         }
 
-        // ★★★ 新增的命名事件处理方法 ★★★
-        private void GroupHeader_MoveUp(object sender, EventArgs e)
-        {
-            if (sender is MonitorGroupHeader header && header.Tag is GroupBlock block)
-            {
-                MoveControl(block, -1);
-            }
-        }
-        
-        private void GroupHeader_MoveDown(object sender, EventArgs e)
-        {
-            if (sender is MonitorGroupHeader header && header.Tag is GroupBlock block)
-            {
-                MoveControl(block, 1);
-            }
-        }
-        
-        private void Row_MoveUp(object sender, EventArgs e)
-        {
-            if (sender is Control row)
-            {
-                MoveControl(row, -1);
-            }
-        }
-        
-        private void Row_MoveDown(object sender, EventArgs e)
-        {
-            if (sender is Control row)
-            {
-                MoveControl(row, 1);
-            }
-        }
+        private void GroupHeader_MoveUp(object sender, EventArgs e) { if (sender is MonitorGroupHeader h && h.Tag is GroupBlock b) MoveControl(b, -1); }
+        private void GroupHeader_MoveDown(object sender, EventArgs e) { if (sender is MonitorGroupHeader h && h.Tag is GroupBlock b) MoveControl(b, 1); }
+        private void Row_MoveUp(object sender, EventArgs e) { if (sender is Control r) MoveControl(r, -1); }
+        private void Row_MoveDown(object sender, EventArgs e) { if (sender is Control r) MoveControl(r, 1); }
         
         private void MoveControl(Control c, int dir)
         {
-            var p = c.Parent;
-            if (p == null) return;
-            int idx = p.Controls.GetChildIndex(c);
-            int newIdx = idx - dir; 
-            if (newIdx >= 0 && newIdx < p.Controls.Count)
-                p.Controls.SetChildIndex(c, newIdx);
+            var p = c.Parent; if (p == null) return;
+            int idx = p.Controls.GetChildIndex(c); int newIdx = idx - dir; 
+            if (newIdx >= 0 && newIdx < p.Controls.Count) p.Controls.SetChildIndex(c, newIdx);
         }
 
-        public override void Save()
+        // ★★★ 核心方法：保存 UI 状态到 _workingList ★★★
+        private void SaveToWorkingList(bool? isFilteredOverride = null)
         {
-            if (!_isLoaded || Config == null) return;
+            if (_workingList == null) return;
 
-            Config.HorizontalFollowsTaskbar = _chkLinkHorizontal.Checked;
-            var flatList = new List<MonitorItemConfig>();
-            
-            // 注意：因为增加了 Spacer，且 Spacer 是最先添加的(Index最大)
-            // Reverse后 Spacer 会变成第一个，所以我们要过滤掉它
-            var controls = _container.Controls.Cast<Control>().Reverse().Where(c => c is MonitorItemRow || c is GroupBlock).ToList();
-            
-            int indexCounter = 0;
+            // 1. 同步属性 (勾选、文本)
+            SyncUIToWorkingList();
 
             if (_isTaskbarTab)
             {
-                foreach (Control c in controls)
+                // 决定当前 UI 应该被视为 "过滤列表" 还是 "全量列表"
+                // 默认使用复选框状态，但允许 override (用于事件触发时的前置保存)
+                bool isFiltered = isFilteredOverride ?? _chkOnlyVisible.Checked;
+
+                if (isFiltered)
                 {
-                    if (c is MonitorItemRow row)
+                    // === 算法：骨架+插队 (处理部分视图排序) ===
+                    
+                    // 获取当前 UI 上的顺序
+                    var uiRows = _container.Controls.Cast<Control>().Reverse().OfType<MonitorItemRow>().ToList();
+                    var newVisibleList = uiRows.Select(r => r.Config).ToList();
+                    
+                    var fullList = _workingList.OrderBy(x => x.TaskbarSortIndex).ToList();
+                    var oldVisibleList = fullList.Where(x => newVisibleList.Contains(x)).ToList();
+
+                    // 识别锚点 (未移动的项)
+                    var lcs = GetLCS(oldVisibleList, newVisibleList);
+                    var anchors = new HashSet<MonitorItemConfig>(lcs);
+
+                    // 构建 "骨架"：移除所有被移动的显示项，保留隐藏项和锚点
+                    var backbone = new List<MonitorItemConfig>();
+                    foreach (var item in fullList)
                     {
-                        row.SyncToConfig();
-                        row.Config.TaskbarSortIndex = indexCounter++; 
-                        flatList.Add(row.Config);
+                        if (!newVisibleList.Contains(item) || anchors.Contains(item))
+                        {
+                            backbone.Add(item);
+                        }
                     }
+
+                    // 将 "移动项" 插回骨架
+                    int insertCursor = 0;
+                    foreach (var item in newVisibleList)
+                    {
+                        if (anchors.Contains(item))
+                        {
+                            // 遇到锚点：更新游标到它后面
+                            int idx = backbone.IndexOf(item);
+                            if (idx >= 0) insertCursor = idx + 1;
+                        }
+                        else
+                        {
+                            // 遇到移动项：强行插入当前位置
+                            if (insertCursor > backbone.Count) insertCursor = backbone.Count;
+                            backbone.Insert(insertCursor, item);
+                            insertCursor++;
+                        }
+                    }
+
+                    // 更新索引
+                    for (int i = 0; i < backbone.Count; i++) backbone[i].TaskbarSortIndex = i;
+                }
+                else
+                {
+                    // === 算法：全量覆盖 (处理全部视图排序) ===
+                    // 直接按照 UI 顺序重置所有索引
+                    var uiRows = _container.Controls.Cast<Control>().Reverse().OfType<MonitorItemRow>().ToList();
+                    for(int i=0; i<uiRows.Count; i++) uiRows[i].Config.TaskbarSortIndex = i;
                 }
             }
             else
             {
-                foreach (Control c in controls)
+                // 主面板排序逻辑
+                int idx = 0;
+                var blocks = _container.Controls.Cast<Control>().Reverse().OfType<GroupBlock>();
+                foreach (var block in blocks)
                 {
-                    if (c is GroupBlock block)
-                    {
-                        string alias = block.Header.InputAlias.Inner.Text.Trim();
-                        string defName = LanguageManager.T("Groups." + block.Header.GroupKey);
-                        if (!string.IsNullOrEmpty(alias) && alias != defName) 
-                            Config.GroupAliases[block.Header.GroupKey] = alias;
-                        else 
-                            Config.GroupAliases.Remove(block.Header.GroupKey);
+                    string alias = block.Header.InputAlias.Inner.Text.Trim();
+                    string defName = LanguageManager.T("Groups." + block.Header.GroupKey);
+                    if (!string.IsNullOrEmpty(alias) && alias != defName) 
+                        Config.GroupAliases[block.Header.GroupKey] = alias;
+                    else 
+                        Config.GroupAliases.Remove(block.Header.GroupKey);
 
-                        var rows = block.RowsPanel.Controls.Cast<Control>().Reverse();
-                        foreach (Control rc in rows)
-                        {
-                            if (rc is MonitorItemRow row)
-                            {
-                                row.SyncToConfig();
-                                row.Config.SortIndex = indexCounter++; 
-                                flatList.Add(row.Config);
-                            }
-                        }
-                    }
+                    foreach (MonitorItemRow row in block.RowsPanel.Controls.Cast<Control>().Reverse())
+                        row.Config.SortIndex = idx++;
                 }
             }
+        }
+
+        public override void Save()
+        {
+            if (!_isLoaded || Config == null || _workingList == null) return;
+            
+            Config.HorizontalFollowsTaskbar = _chkLinkHorizontal.Checked;
+            
+            // 执行最后的保存计算
+            SaveToWorkingList();
+
+            // 提交副本到全局配置
+            Config.MonitorItems = new List<MonitorItemConfig>(_workingList);
             Config.SyncToLanguage();
+        }
+
+        private List<MonitorItemConfig> GetLCS(List<MonitorItemConfig> list1, List<MonitorItemConfig> list2)
+        {
+            int n = list1.Count; int m = list2.Count;
+            int[,] dp = new int[n + 1, m + 1];
+            for (int i = 1; i <= n; i++) {
+                for (int j = 1; j <= m; j++) {
+                    if (list1[i - 1] == list2[j - 1]) dp[i, j] = dp[i - 1, j - 1] + 1;
+                    else dp[i, j] = Math.Max(dp[i - 1, j], dp[i, j - 1]);
+                }
+            }
+            var lcs = new List<MonitorItemConfig>();
+            int x = n, y = m;
+            while (x > 0 && y > 0) {
+                if (list1[x - 1] == list2[y - 1]) { lcs.Add(list1[x - 1]); x--; y--; }
+                else if (dp[x - 1, y] > dp[x, y - 1]) x--; else y--;
+            }
+            lcs.Reverse();
+            return lcs;
         }
 
         private class GroupBlock : Panel
@@ -400,8 +456,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 Dock = DockStyle.Top; AutoSize = true;
                 Padding = UIUtils.S(new Padding(0, 0, 0, 20));
                 var card = new LiteCard { Dock = DockStyle.Top };
-                card.Controls.Add(rowsPanel);
-                card.Controls.Add(header);
+                card.Controls.Add(rowsPanel); card.Controls.Add(header);
                 Controls.Add(card);
             }
         }

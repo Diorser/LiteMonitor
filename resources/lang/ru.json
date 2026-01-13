@@ -66,6 +66,8 @@
     "OK": "ОК",
     "Cancel": "Отмена",
     "Apply": "Применить",
+    "Reset": "Сбросить",
+    "ResetConfirm": "Сбросить все настройки?\n(Программа перезапустится)",
     "Enable": "Вкл",
     "HardwareInfo": "Инфо о железе",
     "SpeedTest": "Тест сети",
@@ -134,6 +136,7 @@
     "sort": "Сорт.",
     "Taskbar": "Трей",
     "MainForm": "Окно",
+    "OnlyShowEnabled": "Только вкл",
 
     "__Comment_Page4__": "--- 4. Thresholds ---",
     "Thresholds": "Пороги",
