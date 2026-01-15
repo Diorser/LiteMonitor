@@ -2,15 +2,15 @@ using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Security; // 引用 SslClientAuthenticationOptions
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using LibreHardwareMonitor.Hardware;
 using LiteMonitor.src.Core;
 using Debug = System.Diagnostics.Debug;
+using LiteMonitor; // 引用 DownloadContext
 
 namespace LiteMonitor.src.SystemServices
 {
@@ -21,22 +21,26 @@ namespace LiteMonitor.src.SystemServices
         private readonly Action _onReloadRequired; // 回调：通知主程序重载
 
         // 建议把最快的 Gitee/国内源放在第一个
-        private readonly string[] _driverUrls = new[]
+        private readonly string[] _driverPackageUrls = new[]
         {
-            "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe",
-            "https://litemonitor.cn/update/PawnIO_setup.exe", 
-            "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe" 
+            "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/driver.zip",
+            "https://litemonitor.cn/update/driver.zip", 
+            "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/driver.zip" 
         };
 
-        // ★★★ [新增] PresentMon 下载源 ★★★
+        // ★★★ [新增] PresentMon 下载源 (FPS 单独下载用) ★★★
         private readonly string[] _presentMonUrls = new[]
         {
             "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe",
             "https://litemonitor.cn/update/LiteMonitorFPS.exe",
             "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe"
         };
+        
+        // 缓存当前的下载任务，避免并发重复弹窗
+        private static Task<bool>? _activeDownloadTask;
+        private static readonly SemaphoreSlim _downloadLock = new SemaphoreSlim(1, 1);
 
-        private const string ManualDownloadPage = "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe";
+        private bool IsChinese => _cfg?.Language?.ToLower() == "zh";
 
         public DriverInstaller(Settings cfg, Computer computer, Action onReloadRequired)
         {
@@ -50,63 +54,235 @@ namespace LiteMonitor.src.SystemServices
         // ================================================================
         public async Task SmartCheckDriver()
         {
-            // 顺便启动 PresentMon 的静默检查 (Fire and forget)
-            // 这样主程序启动时就会在后台下载，不阻塞界面
-            _ = CheckAndDownloadPresentMon(silent: true);
-
-            if (!_cfg.IsAnyEnabled("CPU")) return;
-
-            bool isDriverInstalled = IsPawnIOInstalled();
-            var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
-            bool isCpuValid = cpu != null && cpu.Sensors.Length > 0;
-
-            if (!isDriverInstalled || !isCpuValid)
+            await EnsureComponents(forceFpsCheck: false);
+        }
+        
+        /// <summary>
+        /// 核心统一检查逻辑：防止并发弹窗，智能判断下载策略
+        /// </summary>
+        private async Task<bool> EnsureComponents(bool forceFpsCheck)
+        {
+            await _downloadLock.WaitAsync();
+            try
             {
-                if (!isDriverInstalled)
+                if (_activeDownloadTask != null && !_activeDownloadTask.IsCompleted)
                 {
-                    Debug.WriteLine("[Driver] Driver missing. Attempting silent install...");
-                    bool installed = await SilentInstallPawnIO();
-                    
-                    if (installed)
-                    {
-                        Debug.WriteLine("[Driver] Installed. Reloading...");
-                        _onReloadRequired?.Invoke();
-                    }
+                    return await _activeDownloadTask;
                 }
+
+                bool needPawnIO = _cfg.IsAnyEnabled("CPU") && !IsPawnIOInstalled();
+                string fpsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "LiteMonitorFPS.exe");
+                bool isFpsEnabled = _cfg.IsAnyEnabled("FPS");
+                bool needFPS = forceFpsCheck || (isFpsEnabled && !File.Exists(fpsPath));
+
+                if (needPawnIO || (needFPS && !File.Exists(fpsPath)))
+                {
+                    _activeDownloadTask = needPawnIO 
+                        ? InstallDriverPackage(needFPS) // 重命名为 InstallDriverPackage
+                        : InstallFpsComponent();        // 重命名为 InstallFpsComponent
+                    
+                    return await _activeDownloadTask;
+                }
+                
+                return true;
+            }
+            finally
+            {
+                _downloadLock.Release();
             }
         }
 
         // ================================================================
         // ★★★ 公共入口 2：PresentMon 检查 (FPS功能调用/启动调用) ★★★
         // ================================================================
-        /// <summary>
-        /// 检查 PresentMon 是否存在，不存在则自动下载。
-        /// <para>可以在 FPS 读取逻辑初始化前调用此方法。</para>
-        /// </summary>
-        /// <returns>文件是否准备就绪 (true=存在或下载成功)</returns>
         public async Task<bool> CheckAndDownloadPresentMon(bool silent = false)
         {
-            string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources");
-            string targetPath = Path.Combine(targetDir, "LiteMonitorFPS.exe");
+            return await EnsureComponents(forceFpsCheck: true);
+        }
 
-            // 1. 如果文件已存在，直接返回 true
-            if (File.Exists(targetPath)) return true;
+        // ----------------------------------------------------------------
+        // 模块化安装流程
+        // ----------------------------------------------------------------
 
-            // 2. 不存在，尝试下载
-            Debug.WriteLine("[PresentMon] Missing. Downloading...");
-            bool success = await DownloadFileFromMirrors(_presentMonUrls, targetPath);
-
-            if (success)
+        /// <summary>
+        /// 流程 A: 仅安装 FPS 组件
+        /// </summary>
+        private async Task<bool> InstallFpsComponent()
+        {
+            string targetPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "LiteMonitorFPS.exe");
+            
+            var context = new DownloadContext
             {
-                Debug.WriteLine("[PresentMon] Download success.");
+                Title = IsChinese ? "检测到缺失FPS组件" : "FPS Monitor Component Missing",
+                Description = IsChinese 
+                    ? "您开启了FPS监控，但检测到 FPS 监控组件缺失。\n需要安装该组件来支持 FPS 帧率显示功能。\n点击“立即安装”自动获取并安装。"
+                    : "FPS Monitor Component Missing.\nLiteMonitor needs to download an additional component to support FPS monitoring.\nClick 'Install' to proceed.",
+                Urls = _presentMonUrls,
+                SavePath = targetPath,
+                ActionButtonText = "Install",
+                VersionLabel = IsChinese ? "请安装FPS组件" : "Install FPS Component"
+            };
+
+            if (!await ShowDownloadDialog(context)) return false;
+
+            // ★★★ [新增] 下载后校验 ★★★
+            if (!IsValidExecutable(targetPath))
+            {
+                try { File.Delete(targetPath); } catch { }
+                ShowMessageBox(IsChinese ? "下载的文件校验失败(大小或格式错误)，可能是下载源失效。" : "Downloaded file verification failed.",
+                               IsChinese ? "校验失败" : "Verification Failed", MessageBoxIcon.Error);
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 流程 B: 安装完整驱动包 (包含 PawnIO 和可选的 FPS)
+        /// </summary>
+        private async Task<bool> InstallDriverPackage(bool needFPS)
+        {
+            string tempZip = Path.Combine(Path.GetTempPath(), $"LiteMonitor_Drivers_{Guid.NewGuid()}.zip");
+            string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources");
+            
+            try 
+            {
+                // 1. 准备并下载
+                var context = new DownloadContext
+                {
+                    Title = IsChinese ? "检测到电脑缺失CPU依赖驱动" : "PawnIO Driver Missing",
+                    Description = IsChinese
+                        ? "电脑缺失CPU的PawnIO驱动\n软件将无法获取CPU的温度/频率/功耗等数据 \n点击“立即安装”自动获取并安装（约5MB）\n\n安装完成后即可自动恢复CPU监控等功能。"
+                        : "LiteMonitor needs to install the driver to monitor CPU temperature, frequency, and power consumption.\nClick 'Install' to install.",
+                    Urls = _driverPackageUrls,
+                    SavePath = tempZip,
+                    ActionButtonText = "Install",
+                    VersionLabel = IsChinese ? "请安装PawnIO驱动" : "Install PawnIO Driver"
+                };
+
+                if (!await ShowDownloadDialog(context)) return false;
+
+                // 2. 解压
+                if (!ExtractZipPackage(tempZip, targetDir)) return false;
+
+                // 3. 安装 PawnIO
+                await ProcessPawnIOInstallation(targetDir);
+
+                // FPS 组件已在解压步骤中处理完成
                 return true;
+            }
+            finally
+            {
+                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // 基础服务方法 (原子操作)
+        // ----------------------------------------------------------------
+
+        private bool ExtractZipPackage(string zipPath, string targetDir)
+        {
+            try
+            {
+                if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+                
+                using (ZipArchive archive = ZipFile.OpenRead(zipPath))
+                {
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        string destPath = Path.Combine(targetDir, entry.FullName);
+                        
+                        // 智能跳过逻辑：FPS 组件如果存在且有效则不覆盖
+                        if (entry.Name.Equals("LiteMonitorFPS.exe", StringComparison.OrdinalIgnoreCase) && IsValidExecutable(destPath))
+                        {
+                            Debug.WriteLine($"[安装程序] 跳过 {entry.Name} (文件存在且有效)");
+                            continue; 
+                        }
+
+                        // 确保父目录存在
+                        string? entryDir = Path.GetDirectoryName(destPath);
+                        if (!string.IsNullOrEmpty(entryDir) && !Directory.Exists(entryDir))
+                            Directory.CreateDirectory(entryDir);
+
+                        try
+                        {
+                            entry.ExtractToFile(destPath, true);
+                        }
+                        catch (IOException) when (entry.Name.Equals("LiteMonitorFPS.exe", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // 忽略 FPS 文件锁定错误
+                            Debug.WriteLine($"[安装程序] 无法覆盖 {entry.Name} (文件被锁定)。保留现有版本。");
+                        }
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ShowMessageBox(IsChinese ? $"驱动包解压失败: {ex.Message}" : $"Failed to extract driver package: {ex.Message}", 
+                               IsChinese ? "解压失败" : "Extraction Failed", MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        private async Task ProcessPawnIOInstallation(string searchDir)
+        {
+            // 查找安装包
+            string[] possibleNames = { "PawnIO_setup.exe", "pawnio.exe", "PawnIO.exe" };
+            string setupPath = "";
+            foreach(var name in possibleNames)
+            {
+                 string p = Path.Combine(searchDir, name);
+                 if(File.Exists(p)) { setupPath = p; break; }
+            }
+
+            if (string.IsNullOrEmpty(setupPath)) return;
+
+            // 校验
+            if (!IsValidExecutable(setupPath))
+            {
+                ShowMessageBox(IsChinese ? "PawnIO 安装包校验失败(文件损坏)。" : "PawnIO installer verification failed.", 
+                               IsChinese ? "校验失败" : "Verification Failed", MessageBoxIcon.Error);
+                try { File.Delete(setupPath); } catch { }
+                return;
+            }
+
+            // 尝试静默安装
+            bool installed = await RunPawnIOInstaller(setupPath, silent: true);
+            
+            if (!installed) 
+            {
+                // 失败处理：引导手动安装
+                string msg = IsChinese 
+                    ? "PawnIO 驱动自动安装失败。\n是否立即启动手动安装？" 
+                    : "PawnIO driver installation failed.\nLaunch manual installation now?";
+                
+                if (MessageBox.Show(msg, IsChinese ? "需要协助" : "Help", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    await RunPawnIOInstaller(setupPath, silent: false);
+                    
+                    if (IsPawnIOInstalled())
+                    {
+                        ShowMessageBox(IsChinese ? "PawnIO 驱动已安装。请重启软件。" : "PawnIO driver installed. Please restart.", 
+                                       IsChinese ? "安装成功" : "Success", MessageBoxIcon.Information);
+                        try { File.Delete(setupPath); } catch { }
+                        _onReloadRequired?.Invoke();
+                    }
+                    else
+                    {
+                        ShowMessageBox(IsChinese ? "未检测到驱动安装。请重启尝试。" : "Driver not detected. Please restart.", 
+                                       IsChinese ? "未完成" : "Not Completed", MessageBoxIcon.Warning);
+                    }
+                }
             }
             else
             {
-                Debug.WriteLine("[PresentMon] Download failed.");
-                // 如果不是静默模式（比如用户点击开启FPS时），可以考虑弹窗提示，或者由上层逻辑决定是否弹窗
-                // 这里暂时保持静默，只返回 false
-                return false;
+                // 成功处理
+                try { File.Delete(setupPath); } catch { }
+                ShowMessageBox(IsChinese ? "PawnIO 驱动安装成功！\n 稍后软件将自动恢复CPU温度等数据监控" : "PawnIO driver installed!\nCPU temperature monitoring will be restored automatically.", 
+                               IsChinese ? "成功" : "Success", MessageBoxIcon.Information);
+                _onReloadRequired?.Invoke();
             }
         }
 
@@ -124,158 +300,127 @@ namespace LiteMonitor.src.SystemServices
             return false;
         }
 
-        /// <summary>
-        /// PawnIO 专用安装逻辑 (调用通用下载 + 安装进程)
-        /// </summary>
-        private async Task<bool> SilentInstallPawnIO()
+        private bool IsValidExecutable(string path)
         {
-            // 使用 GUID 生成随机文件名
-            string tempFileName = $"PawnIO_{Guid.NewGuid()}.exe";
-            string tempPath = Path.Combine(Path.GetTempPath(), tempFileName);
-            
-            try 
+            if (!File.Exists(path)) return false;
+            try
             {
-                // 1. 调用通用下载逻辑
-                bool downloadSuccess = await DownloadFileFromMirrors(_driverUrls, tempPath);
+                var info = new FileInfo(path);
+                if (info.Length < 300 * 1024) return false;
+                
+                // 简单的 PE 头检查 "MZ"
+                using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                if (fs.Length < 64) return false;
+                var buffer = new byte[2];
+                fs.Read(buffer, 0, 2);
+                return buffer[0] == 0x4D && buffer[1] == 0x5A;
+            }
+            catch { return false; }
+        }
 
-                if (!downloadSuccess)
-                {
-                    ShowManualFailDialog("下载超时或连接失败，请检查网络。");
-                    return false;
-                }
-
-                // 2. 安装逻辑
+        private async Task<bool> RunPawnIOInstaller(string installerPath, bool silent = true)
+        {
+            int maxRetries = 3;
+            for (int i = 0; i < maxRetries; i++)
+            {
                 try
                 {
                     var psi = new ProcessStartInfo
                     {
-                        FileName = tempPath,
-                        Arguments = "-install -silent",
+                        FileName = installerPath,
+                        Arguments = silent ? "-install -silent" : "",
                         UseShellExecute = true,
                         Verb = "runas",
-                        WindowStyle = ProcessWindowStyle.Hidden
+                        WindowStyle = silent ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal
                     };
 
                     var proc = Process.Start(psi);
                     if (proc != null)
                     {
                         await proc.WaitForExitAsync();
-                        return proc.ExitCode == 0;
+                        
+                        // 1. 优先判断 ExitCode (仅静默模式下完全可信)
+                        if (silent && proc.ExitCode == 0) return true;
                     }
                 }
-                catch { } // UAC 取消
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[安装程序] 第 {i + 1} 次尝试失败: {ex.Message}");
+                }
+
+                // 2. 等待 2 秒后检查注册表 (解决安装延迟或ExitCode不准的问题)
+                await Task.Delay(2000);
+                if (IsPawnIOInstalled())
+                {
+                    Debug.WriteLine("[安装程序] 通过注册表验证安装成功。");
+                    return true;
+                }
                 
-                ShowManualFailDialog("自动安装被取消或拦截。");
-                return false;
+                // 如果是手动模式，只尝试一次，不进行循环重试（用户关闭窗口算结束）
+                if (!silent) break;
+
+                // 准备重试
+                if (i < maxRetries - 1)
+                {
+                    Debug.WriteLine("[安装程序] 正在重试安装...");
+                }
             }
-            finally
-            {
-                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
-            }
+            return false;
+        }
+
+        private void ShowMessageBox(string msg, string title, MessageBoxIcon icon)
+        {
+            MessageBox.Show(msg, title, MessageBoxButtons.OK, icon);
         }
 
         /// <summary>
-        /// ★★★ [核心重构] 通用多源下载逻辑 ★★★
+        /// 在 UI 线程显示下载对话框
         /// </summary>
-        private async Task<bool> DownloadFileFromMirrors(string[] urls, string savePath)
+        private Task<bool> ShowDownloadDialog(DownloadContext context)
         {
-            // 确保目标目录存在 (针对 PresentMon 存放在 resources/assets 的情况)
-            try
+            var tcs = new TaskCompletionSource<bool>();
+
+            void Show()
             {
-                string? dir = Path.GetDirectoryName(savePath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                try
                 {
-                    Directory.CreateDirectory(dir);
+                    using var dlg = new UpdateDialog(context, _cfg);
+                    var result = dlg.ShowDialog();
+                    tcs.TrySetResult(result == DialogResult.OK);
                 }
-            }
-            catch { return false; }
-
-            // 使用 SocketsHttpHandler 来控制 SSL 选项，忽略证书错误
-            using (var handler = new SocketsHttpHandler
-            {
-                SslOptions = new SslClientAuthenticationOptions
+                catch (Exception ex)
                 {
-                    RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-                }
-            })
-            using (var client = new HttpClient(handler))
-            {
-                client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor-AutoUpdater");
-
-                foreach (var url in urls)
-                {
-                    if (string.IsNullOrWhiteSpace(url)) continue;
-
-                    try
-                    {
-                        Debug.WriteLine($"[Downloader] Trying: {url}");
-
-                        // 设置 15秒 超时
-                        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
-                        {
-                            var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-                            
-                            if (response.IsSuccessStatusCode)
-                            {
-                                var data = await response.Content.ReadAsByteArrayAsync(cts.Token);
-                                
-                                // 写入文件
-                                await File.WriteAllBytesAsync(savePath, data, cts.Token);
-
-                                // 简单校验：文件大于  300KB认为成功
-                                if (new FileInfo(savePath).Length > 1024*300)
-                                {
-                                    return true; // 下载成功，直接返回
-                                }
-                                else
-                                {
-                                    // ★★★ [修复] 文件太小，可能是错误的网页，删除文件以免影响下次判断 ★★★
-                                    Debug.WriteLine($"[Downloader] File too small ({new FileInfo(savePath).Length} bytes), deleting...");
-                                    try { File.Delete(savePath); } catch { }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[Downloader] Error: {url} -> {ex.Message}");
-                        // 下载异常也尝试清理可能残留的空文件
-                        try { if (File.Exists(savePath) && new FileInfo(savePath).Length < 1024) File.Delete(savePath); } catch { }
-                    }
+                    tcs.TrySetException(ex);
                 }
             }
 
-            return false; // 所有源都失败
-        }
-
-        private void ShowManualFailDialog(string reason)
-        {
-            // 确保在 UI 线程弹窗
+            // ... (STA 线程处理逻辑保持不变，只需调用新的 Show)
             if (Application.OpenForms.Count > 0)
             {
-                Application.OpenForms[0]?.Invoke(new Action(() => 
+                var form = Application.OpenForms[0];
+                if (form != null && !form.IsDisposed && form.IsHandleCreated)
                 {
-                    DoShowDialog(reason);
-                }));
+                    if (form.InvokeRequired) form.Invoke(new Action(Show));
+                    else Show();
+                    return tcs.Task;
+                }
+            }
+            
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                Show();
             }
             else
             {
-                DoShowDialog(reason);
+                var thread = new Thread(() => Show());
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
             }
+
+            return tcs.Task;
         }
 
-        private void DoShowDialog(string reason)
-        {
-             var result = MessageBox.Show(
-                $"PawnIO驱动缺失！\n\nLiteMonitor 无法自动配置 CPU 所需的PawnIO驱动\n将无法读取部分CPU数据！\n原因：{reason}\n\n点击“确定”手动下载安装。",
-                "LiteMonitor",
-                MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Warning);
 
-            if (result == DialogResult.OK)
-            {
-                try { Process.Start(new ProcessStartInfo(ManualDownloadPage) { UseShellExecute = true }); } catch { }
-            }
-        }
     }
 }

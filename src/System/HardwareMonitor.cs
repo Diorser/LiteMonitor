@@ -45,6 +45,9 @@ namespace LiteMonitor.src.SystemServices
         
         public IComputer ComputerInstance => _computer;// [新增] 允许 UI 层访问原始硬件树（用于硬件信息面板）
 
+        // ★★★ 新增：允许主程序手动触发驱动检查 (用于解决启动弹窗冲突) ★★★
+        public Task SmartCheckDriver() => _driverInstaller.SmartCheckDriver();
+
         // ★★★ 新增：声明 Windows API 用于修剪工作集内存 ★★★
         [DllImport("psapi.dll")]
         private static extern int EmptyWorkingSet(IntPtr hwProc);
@@ -117,8 +120,6 @@ namespace LiteMonitor.src.SystemServices
                         _sensorMap.Rebuild(_computer, cfg); 
                     }
                     
-                    await _driverInstaller.SmartCheckDriver();
-
                     // ★★★ 优化 T1：启动后大扫除 ★★★
                     // 1. 强制 GC：清理初始化过程中(如JSON解析、驱动检查)产生的临时垃圾
                     GC.Collect(2, GCCollectionMode.Forced, true, true);

@@ -1,4 +1,4 @@
-﻿using LiteMonitor.src.Core;
+﻿﻿using LiteMonitor.src.Core;
 namespace LiteMonitor
 {
     /// <summary>
@@ -42,7 +42,7 @@ namespace LiteMonitor
             // 将写死的像素值进行缩放
             int innerPad = (int)(10 * s);      // 原本是 10
             int innerPadTotal = innerPad * 2;  // 原本是 20
-            int barMinH = (int)(6 * s);        // 原本是 6
+            int barMinH = (int)(4 * s);        // 原本是 6
             int barBotGap = (int)(3 * s);      // 原本是 3
 
             // ★★★ [视觉补偿] x 减去 1px ★★★
@@ -120,15 +120,15 @@ namespace LiteMonitor
                         // 内部：左右 padding 使用缩放后的 innerPad
                         var inner = new Rectangle(x + innerPad, itemY, w - innerPadTotal, rowH);
                         
-                        // 文本区域占上部 55%
-                        int topH = (int)(inner.Height * 0.55);
+                        // 文本区域占上部 60%
+                        int topH = (int)(inner.Height * 0.60);
                         var topRect = new Rectangle(inner.X, inner.Y, inner.Width, topH);
                         
                         it.LabelRect = topRect;
                         it.ValueRect = topRect;
 
                         // 进度条占底部，最小高度使用缩放后的 barMinH
-                        int barH = Math.Max(barMinH, (int)(inner.Height * 0.25));
+                        int barH = Math.Max(barMinH, (int)(inner.Height * 0.20));
                         int barY = inner.Bottom - barH - barBotGap; // 底部间距也缩放
                         it.BarRect = new Rectangle(inner.X, barY, inner.Width, barH);
 

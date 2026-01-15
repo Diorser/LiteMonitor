@@ -337,6 +337,27 @@ namespace LiteMonitor.src.UI.Controls
         public ComboBox.ObjectCollection Items => Inner.Items; 
         public override string Text { get => Inner.Text; set => Inner.Text = value; } 
     }
+    public class LiteLink : Label
+    {
+        private Color _normalColor = Color.DodgerBlue;
+        private Color _hoverColor = Color.FromArgb(0, 100, 200);
+
+        public LiteLink(string text, Action onClick = null)
+        {
+            this.Text = text;
+            this.AutoSize = true;
+            this.Cursor = Cursors.Hand;
+            this.ForeColor = _normalColor;
+            this.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Underline);
+            
+            if (onClick != null)
+                this.Click += (s, e) => onClick();
+
+            this.MouseEnter += (s, e) => this.ForeColor = _hoverColor;
+            this.MouseLeave += (s, e) => this.ForeColor = _normalColor;
+        }
+    }
+
     public class LiteCheck : CheckBox { public LiteCheck(bool val, string text = "") { Checked = val; AutoSize = true; Cursor = Cursors.Hand; Text = text; Padding = UIUtils.S(new Padding(2)); ForeColor = UIColors.TextSub; Font = new Font("Microsoft YaHei UI", 9F); } }
     public class LiteButton : Button { public LiteButton(string t, bool p) { Text = t; Size = new Size(UIUtils.S(80), UIUtils.S(32)); FlatStyle = FlatStyle.Flat; Cursor = Cursors.Hand; Font = new Font("Microsoft YaHei UI", 9F); if (p) { BackColor = UIColors.Primary; ForeColor = Color.White; FlatAppearance.BorderSize = 0; } else { BackColor = Color.White; ForeColor = UIColors.TextMain; FlatAppearance.BorderColor = UIColors.Border; } } }
     public class LiteNavBtn : Button { private bool _isActive; public bool IsActive { get => _isActive; set { _isActive = value; Invalidate(); } } public LiteNavBtn(string text) { Text = "  " + text; Size = new Size(UIUtils.S(150), UIUtils.S(40)); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; TextAlign = ContentAlignment.MiddleLeft; Font = new Font("Microsoft YaHei UI", 10F); Cursor = Cursors.Hand; Margin = UIUtils.S(new Padding(5, 2, 5, 2)); BackColor = UIColors.SidebarBg; ForeColor = UIColors.TextMain; } protected override void OnPaint(PaintEventArgs e) { Color bg = _isActive ? UIColors.NavSelected : (ClientRectangle.Contains(PointToClient(Cursor.Position)) ? UIColors.NavHover : UIColors.SidebarBg); using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, ClientRectangle); if (_isActive) { using (var b = new SolidBrush(UIColors.Primary)) e.Graphics.FillRectangle(b, 0, UIUtils.S(8), UIUtils.S(3), Height - UIUtils.S(16)); Font = new Font(Font, FontStyle.Bold); } else { Font = new Font(Font, FontStyle.Regular); } TextRenderer.DrawText(e.Graphics, Text, Font, new Point(UIUtils.S(12), UIUtils.S(9)), UIColors.TextMain); } protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); } protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); } }

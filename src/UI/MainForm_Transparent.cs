@@ -767,8 +767,8 @@ namespace LiteMonitor
                 ToggleTaskbar(true);
             }
 
-            // === 静默更新 ===
-            _ = UpdateChecker.CheckAsync();
+            // === 静默更新 (串行检查：先软件后驱动) ===
+            _ = CheckUpdatesAndDriversAsync();
 
             if (_cfg.WebServerEnabled)
             {
@@ -777,24 +777,34 @@ namespace LiteMonitor
             }
         }
 
+        // [新增] 串行检查更新和驱动
+        private async Task CheckUpdatesAndDriversAsync()
+        {
+            try
+            {
+                // 1. 先检查驱动缺失 (优先保证功能可用)
+                if (src.SystemServices.HardwareMonitor.Instance != null)
+                {
+                    await src.SystemServices.HardwareMonitor.Instance.SmartCheckDriver();
+                }
+
+                // 2. 再检查软件更新 (非阻塞，作为最后一步)
+                await UpdateChecker.CheckAsync();
+            }
+            catch { }
+        }
+
         // [新增] 检查并提示更新成功
         private void CheckUpdateSuccess()
         {
             string tokenPath = Path.Combine(AppContext.BaseDirectory, "update_success");
-            // ★★★ [修正] 这里的路径改为 resources 目录下的 Updater.exe.bak ★★★
-            string updaterBak = Path.Combine(AppContext.BaseDirectory, "resources", "Updater.exe.bak");
 
             if (File.Exists(tokenPath))
             {
                 // 1. 尝试删除标志文件（防止下次启动重复提示）
                 try { File.Delete(tokenPath); } catch { }
-                // 2. 清理 resources 目录下的 Updater 备份文件
-                if (File.Exists(updaterBak))
-                {
-                    try { File.Delete(updaterBak); } catch { }
-                }
 
-                // 3. 方式 A：弹出气泡提示（推荐，不打扰）
+                // 2. 方式 A：弹出气泡提示（推荐，不打扰）
                 string title = "⚡️LiteMonitor_v" + UpdateChecker.GetCurrentVersion();
                 string content = _cfg.Language == "zh" ? "🎉 软件已成功更新到最新版本！" : "🎉 Software updated to latest version!";
                 ShowNotification(title, content, ToolTipIcon.Info);

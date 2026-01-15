@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
@@ -13,10 +17,11 @@ namespace LiteMonitor.src.WebServer
 {
     public class LiteWebServer : IDisposable
     {
-        private HttpListener? _listener;
-        private Thread? _serverThread;
+        private TcpListener? _listener;
         private volatile bool _isRunning = false;
         private readonly Settings _cfg;
+        // 存储所有活跃的 WebSocket 客户端
+        private readonly ConcurrentDictionary<TcpClient, bool> _wsClients = new();
 
         public static LiteWebServer? Instance { get; private set; }
 
@@ -33,83 +38,274 @@ namespace LiteMonitor.src.WebServer
 
             try
             {
-                // 配置防火墙 (传入当前端口)
-                ConfigFirewall(_cfg.WebServerPort);
-                _listener = new HttpListener();
-                _listener.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
-
-                try
-                {
-                    // 优先尝试监听所有网卡 (需要管理员权限)
-                    _listener.Prefixes.Add($"http://*:{_cfg.WebServerPort}/");
-                    _listener.Start();
-                }
-                catch (HttpListenerException hlex) when (hlex.ErrorCode == 5) // Error 5 = Access Denied
-                {
-                    // ★★★ 修复：如果权限不足，自动回退到仅监听本机 (无需管理员权限) ★★★
-                    _listener.Prefixes.Clear();
-                    _listener.Prefixes.Add($"http://localhost:{_cfg.WebServerPort}/");
-                    _listener.Start();
-                    Debug.WriteLine("WebServer: Admin rights missing, fallback to localhost.");
-                }
-
+                _listener = new TcpListener(IPAddress.Any, _cfg.WebServerPort);
+                _listener.Start();
                 _isRunning = true;
 
-                _serverThread = new Thread(ListenLoop) { IsBackground = true };
-                _serverThread.Start();
+                // 1. 启动监听连接的循环
+                Task.Run(ListenLoop);
+                
+                // 2. 启动数据广播循环 (WebSocket 推送)
+                Task.Run(BroadcastLoop);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("WebServer Start Error: " + ex.Message);
+                Debug.WriteLine("WebServer Start Error: " + ex.Message);
             }
         }
 
         public void Stop()
         {
             _isRunning = false;
-            try { _listener?.Stop(); _listener?.Close(); } catch { }
+            try { _listener?.Stop(); } catch { }
+            // 关闭所有客户端
+            foreach (var client in _wsClients.Keys) try { client.Close(); } catch { }
+            _wsClients.Clear();
         }
 
-        private void ListenLoop()
+        private async Task ListenLoop()
         {
-            while (_isRunning && _listener != null && _listener.IsListening)
+            while (_isRunning && _listener != null)
             {
                 try
                 {
-                    var context = _listener.GetContext();
-                    Task.Run(() => ProcessRequest(context));
+                    var client = await _listener.AcceptTcpClientAsync();
+                    _ = Task.Run(() => HandleClient(client));
                 }
-                catch { }
+                catch (ObjectDisposedException) { break; }
+                catch (Exception ex) { Debug.WriteLine(ex.Message); }
             }
         }
 
-        private void ProcessRequest(HttpListenerContext context)
+        // === 核心广播循环 ===
+        private async Task BroadcastLoop()
         {
-            var response = context.Response;
-            string responseString = "";
-            string contentType = "text/html";
-            response.AddHeader("Access-Control-Allow-Origin", "*");
+            while (_isRunning)
+            {
+                try
+                {
+                    if (!_wsClients.IsEmpty)
+                    {
+                        string json = GetDynamicSnapshotJson();
+                        byte[] frame = EncodeWebSocketFrame(json);
 
+                        foreach (var client in _wsClients.Keys)
+                        {
+                            try
+                            {
+                                if (!client.Connected) 
+                                {
+                                    _wsClients.TryRemove(client, out _);
+                                    continue;
+                                }
+                                var stream = client.GetStream();
+                                await stream.WriteAsync(frame, 0, frame.Length);
+                            }
+                            catch 
+                            { 
+                                // 发送失败移除客户端
+                                _wsClients.TryRemove(client, out _);
+                                try { client.Close(); } catch { }
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                // 每秒推送一次
+                await Task.Delay(1000);
+            }
+        }
+
+        private void HandleClient(TcpClient client)
+        {
+            // 注意：这里不要用 using(client)，因为如果是 WebSocket 连接，我们需要保持它存活
+            // 只有 HTTP 请求处理完后才关闭
             try
             {
-                if (context.Request.Url?.AbsolutePath == "/api/snapshot")
-                {
-                    contentType = "application/json";
-                    responseString = GetDynamicSnapshotJson();
-                }
-                else
-                {
-                    contentType = "text/html; charset=utf-8";
-                    responseString = WebPageContent.IndexHtml;
-                }
+                var stream = client.GetStream();
+                byte[] buffer = new byte[4096];
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                if (bytesRead == 0) { client.Close(); return; }
 
-                byte[] buffer = Encoding.UTF8.GetBytes(responseString);
-                response.ContentLength64 = buffer.Length;
-                response.ContentType = contentType;
-                response.OutputStream.Write(buffer, 0, buffer.Length);
+                string requestStr = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                
+                // === 1. 判断是否为 WebSocket 升级请求 ===
+                if (Regex.IsMatch(requestStr, "GET", RegexOptions.IgnoreCase) && 
+                    Regex.IsMatch(requestStr, "Upgrade: websocket", RegexOptions.IgnoreCase))
+                {
+                    // 处理 WebSocket 握手
+                    if (Handshake(stream, requestStr))
+                    {
+                        // 握手成功，加入客户端列表，保持连接
+                        _wsClients.TryAdd(client, true);
+                        
+                        // ★★★ 核心修复：启动接收循环以处理 Ping/Close 和排空缓冲区 ★★★
+                        // 注意：这里不 await，让它在后台运行，HandleClient 可以退出
+                        _ = Task.Run(() => ReceiveLoop(client));
+                        
+                        return; // 退出函数，不关闭 client
+                    }
+                }
+                
+                // === 2. 普通 HTTP 请求处理 ===
+                HandleHttpRequest(stream, requestStr);
             }
-            catch { response.StatusCode = 500; }
-            finally { response.OutputStream.Close(); }
+            catch { }
+            
+            // 如果不是 WebSocket (即上面的 return 没执行)，则处理完 HTTP 后关闭连接
+            if (!_wsClients.ContainsKey(client))
+            {
+                try { client.Close(); } catch { }
+            }
+        }
+
+        // ★★★ [新增] WebSocket 接收循环 ★★★
+        private async Task ReceiveLoop(TcpClient client)
+        {
+            try
+            {
+                var stream = client.GetStream();
+                byte[] buffer = new byte[1024];
+                
+                while (client.Connected && _wsClients.ContainsKey(client))
+                {
+                    // 阻塞读取，如果断开会抛出异常或返回0
+                    int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break; // 客户端关闭连接
+
+                    // 解析帧头判断是否为 Close 帧 (OpCode = 8)
+                    // FIN(1) + RSV(3) + OpCode(4)
+                    // Byte 0: [FIN][RSV][RSV][RSV][OpCode][OpCode][OpCode][OpCode]
+                    // 0x88 = 1000 1000 = FIN + Close
+                    if ((buffer[0] & 0x0F) == 0x08)
+                    {
+                        break; // 收到关闭帧
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                _wsClients.TryRemove(client, out _);
+                try { client.Close(); } catch { }
+            }
+        }
+
+        private bool Handshake(NetworkStream stream, string request)
+        {
+            try
+            {
+                // 1. 提取 Sec-WebSocket-Key
+                var match = Regex.Match(request, "Sec-WebSocket-Key: (.*)");
+                if (!match.Success) return false;
+
+                string key = match.Groups[1].Value.Trim();
+
+                // 2. 生成 Accept Key (Magic String: 258EAFA5-E914-47DA-95CA-C5AB0DC85B11)
+                string magic = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+                byte[] hash = SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(magic));
+                string acceptKey = Convert.ToBase64String(hash);
+
+                // 3. 发送握手响应
+                var response = new StringBuilder();
+                response.Append("HTTP/1.1 101 Switching Protocols\r\n");
+                response.Append("Connection: Upgrade\r\n");
+                response.Append("Upgrade: websocket\r\n");
+                response.Append($"Sec-WebSocket-Accept: {acceptKey}\r\n");
+                response.Append("\r\n");
+
+                byte[] respBytes = Encoding.UTF8.GetBytes(response.ToString());
+                stream.Write(respBytes, 0, respBytes.Length);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private void HandleHttpRequest(NetworkStream stream, string request)
+        {
+            string[] lines = request.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) return;
+
+            string firstLine = lines[0]; // GET /path HTTP/1.1
+            string[] parts = firstLine.Split(' ');
+            if (parts.Length < 2) return;
+            string path = parts[1];
+
+            string responseBody = "";
+            string contentType = "text/html; charset=utf-8";
+            int statusCode = 200;
+
+            if (path.StartsWith("/api/snapshot"))
+            {
+                contentType = "application/json";
+                responseBody = GetDynamicSnapshotJson();
+            }
+            else if (path == "/" || path == "/index.html" || path.StartsWith("/?"))
+            {
+                responseBody = WebPageContent.IndexHtml;
+            }
+            else if (path == "/favicon.ico")
+            {
+                statusCode = 404;
+            }
+            else
+            {
+                responseBody = WebPageContent.IndexHtml;
+            }
+
+            SendHttpResponse(stream, statusCode, contentType, responseBody);
+        }
+
+        private void SendHttpResponse(NetworkStream stream, int statusCode, string contentType, string body)
+        {
+            byte[] bodyBytes = Encoding.UTF8.GetBytes(body);
+            var sb = new StringBuilder();
+            sb.Append($"HTTP/1.1 {statusCode} OK\r\n");
+            sb.Append($"Content-Type: {contentType}\r\n");
+            sb.Append($"Content-Length: {bodyBytes.Length}\r\n");
+            sb.Append("Access-Control-Allow-Origin: *\r\n");
+            sb.Append("Connection: close\r\n");
+            sb.Append("\r\n");
+
+            byte[] headerBytes = Encoding.UTF8.GetBytes(sb.ToString());
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            stream.Write(bodyBytes, 0, bodyBytes.Length);
+        }
+
+        // === WebSocket 帧编码 (只实现发送 Text Frame) ===
+        private byte[] EncodeWebSocketFrame(string message)
+        {
+            byte[] payload = Encoding.UTF8.GetBytes(message);
+            List<byte> frame = new List<byte>();
+
+            // FIN(1) + RSV(000) + OpCode(1=Text) => 10000001 => 0x81
+            frame.Add(0x81);
+
+            // Mask(0) + Length
+            if (payload.Length < 126)
+            {
+                frame.Add((byte)payload.Length);
+            }
+            else if (payload.Length <= 65535)
+            {
+                frame.Add(126);
+                frame.Add((byte)((payload.Length >> 8) & 0xFF));
+                frame.Add((byte)(payload.Length & 0xFF));
+            }
+            else
+            {
+                frame.Add(127);
+                // 64-bit length (assuming < 2GB for JSON)
+                frame.AddRange(new byte[] { 0, 0, 0, 0 }); 
+                frame.Add((byte)((payload.Length >> 24) & 0xFF));
+                frame.Add((byte)((payload.Length >> 16) & 0xFF));
+                frame.Add((byte)((payload.Length >> 8) & 0xFF));
+                frame.Add((byte)(payload.Length & 0xFF));
+            }
+
+            frame.AddRange(payload);
+            return frame.ToArray();
         }
 
         private string GetDynamicSnapshotJson()
@@ -208,45 +404,6 @@ namespace LiteMonitor.src.WebServer
             };
 
             return JsonSerializer.Serialize(payload);
-        }
-        // 添加防火墙规则，允许指定端口的入站流量
-        private void ConfigFirewall(int port)
-        {
-            string ruleName = "LiteMonitor Web Remote";
-            
-            // 注意：我们不再获取 exePath，也不再限制 program="..."
-            // 这样规则就会变成“所有符合指定条件（端口）的程序”，允许 http.sys 流量通过
-
-            try 
-            {
-                // 1. 删除旧规则
-                RunNetsh($"advfirewall firewall delete rule name=\"{ruleName}\"");
-
-                // 2. 添加新规则 (纯端口开放，不绑定特定程序)
-                // dir=in       : 入站
-                // action=allow : 允许
-                // protocol=tcp : TCP协议
-                // localport=...: 端口
-                // profile=any  : 允许 公用/专用/域 网络
-                RunNetsh($"advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol=tcp localport={port} profile=any");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine("Firewall Config Error: " + ex.Message);
-            }
-        }
-
-        // 辅助方法：执行 netsh 命令
-        private void RunNetsh(string args)
-        {
-            var psi = new ProcessStartInfo("netsh", args);
-            psi.CreateNoWindow = true;
-            psi.UseShellExecute = false;
-            psi.WindowStyle = ProcessWindowStyle.Hidden;
-            psi.Verb = "runas"; // 确保请求管理员权限(虽然主程序已经是管理员)
-            
-            var p = Process.Start(psi);
-            p.WaitForExit(1000); // 最多等1秒，防止卡死
         }
 
         public void Dispose() => Stop();

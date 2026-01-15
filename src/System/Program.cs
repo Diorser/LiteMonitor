@@ -15,52 +15,56 @@ namespace LiteMonitor
         static void Main()
         {
             // =================================================================
-            // ★★★ 1. 单实例互斥锁 (基于文件路径的版本) ★★★
+            // ★★★ 1. 单实例互斥锁 (基于文件路径的版本) - 修正版 ★★★
             // =================================================================
             bool createNew;
             string mutexName;
 
             try
             {
-                // 获取当前程序的可执行文件路径
-                string exePath = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+                // [修正] 使用 Process 获取真实路径，解决单文件发布路径为空的问题
+                string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
 
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    // 如果无法获取程序路径，使用默认的全局唯一 Key
                     mutexName = "Global\\LiteMonitor_SingleInstance_Mutex_UniqueKey";
                 }
                 else
                 {
-                    // 获取程序所在的文件夹路径
                     string appFolderPath = Path.GetDirectoryName(exePath);
 
-                    // 1. 统一转小写 (Windows路径不区分大小写，避免 C:\App 和 c:\app 被识别为不同实例)
-                    // 2. 将路径中的特殊字符（特别是反斜杠）替换为下划线，因为 Mutex 名称中不能包含 '\' (除了 Global\)
                     string sanitizedPath = appFolderPath?.ToLower()
                                                         .Replace('\\', '_')
                                                         .Replace(':', '_')
                                                         .Replace('/', '_')
                                                         .Replace(' ', '_');
 
-                    // 创建基于文件夹路径的互斥锁名称
-                    mutexName = $"Global\\LiteMonitor_SingleInstance_{sanitizedPath}_Mutex";
+                    // [建议] 增加哈希或长度截断，防止路径过长导致 Mutex 名称超过系统限制 (260字符) 从而抛出异常进入 catch
+                    // 这里简单处理：如果生成的名称太长，就取路径的 HashCode 混淆一下
+                    string baseName = $"Global\\LiteMonitor_SingleInstance_{sanitizedPath}_Mutex";
+                    if (baseName.Length > 250) 
+                    {
+                         // 如果路径太长，使用路径的哈希值来保证唯一性且不超长
+                         baseName = $"Global\\LiteMonitor_SingleInstance_{sanitizedPath.GetHashCode()}_Mutex";
+                    }
+                    
+                    mutexName = baseName;
                 }
 
-                // 尝试创建/获取锁
-                // out createNew: 如果是第一个创建的，返回 true；如果锁已存在，返回 false
                 _mutex = new Mutex(true, mutexName, out createNew);
             }
-            catch
+            catch (Exception ex)
             {
-                // 如果路径获取或处理出现异常，回退到原来的逻辑，保证程序至少能以单实例模式运行
+                // 记录一下异常（可选），方便调试为什么会创建失败
+                // LogCrash(ex, "Mutex_Creation_Failed"); 
+                
+                // 回退策略
                 mutexName = "Global\\LiteMonitor_SingleInstance_Mutex_UniqueKey";
                 _mutex = new Mutex(true, mutexName, out createNew);
             }
 
             if (!createNew)
             {
-                // 检测到程序已经在运行：直接 return 结束，不弹窗，不报错。
                 return; 
             }
 

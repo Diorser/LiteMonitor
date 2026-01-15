@@ -9,13 +9,16 @@ using System.Windows.Forms;
 using System.Net.Security;
 using LiteMonitor.src.Core;
 
+using System.IO;
+using System.IO.Compression;
+
 namespace LiteMonitor
 {
     /// <summary>
     /// LiteMonitor 自动更新模块（最终完整版）
     /// - version.json 支持国内 / GitHub 两源自动 fallback
     /// - ZIP 下载支持两源测速自动选择最快
-    /// - 完全健壮、无依赖外部逻辑
+    /// - ZIP 下载完成后，主程序抢先更新 Updater.exe，防止自更新死锁
     /// - CheckAsync() 可被右键菜单直接调用
     /// </summary>
     public static class UpdateChecker
@@ -106,12 +109,25 @@ namespace LiteMonitor
 
                 if (new Version(latest) > new Version(current))
                 {
-                    // ---- 获取最快下载源 ----
-                    string fastest = await GetFastestZipUrl(latest);
+                    // ---- 获取排序后的下载源 (最快优先) ----
+                    var sortedUrls = await GetSortedZipUrls(latest);
 
                     // ---- 加载设置并弹出更新窗口 ----
                     var settings = Settings.Load();
-                    new UpdateDialog(latest, changelog, releaseDate, fastest, settings).ShowDialog();
+                    bool isZh = settings?.Language?.ToLower() == "zh";
+
+                    var context = new DownloadContext
+                    {
+                        Title = isZh ? "发现新版本！" : "New Version!",
+                        VersionLabel = $"⚡️LiteMonitor_v{latest}",
+                        Description = $"更新日志：\n{changelog} \n更新日期：\n{releaseDate}\n\n官网：https://litemonitor.cn \nGitHub：https://github.com/Diorser/LiteMonitor",
+                        Urls = sortedUrls.ToArray(),
+                        SavePath = Path.Combine(AppContext.BaseDirectory, "resources", "update.zip"),
+                        ActionButtonText = "Update",
+                        AutoExitOnSuccess = true
+                    };
+
+                    new UpdateDialog(context, settings).ShowDialog();
                 }
                 else
                 {
@@ -205,9 +221,9 @@ namespace LiteMonitor
 
 
         // ========================================================
-        // 【5】测速获取最快 ZIP 下载源
+        // 【5】测速获取排序后的 ZIP 下载源
         // ========================================================
-        private static async Task<string> GetFastestZipUrl(string version)
+        private static async Task<List<string>> GetSortedZipUrls(string version)
         {
             var tests = new Task<(string url, long speed)>[Mirrors.Length];
 
@@ -219,14 +235,19 @@ namespace LiteMonitor
 
             var results = await Task.WhenAll(tests);
 
-            // 速度降序排序
-            var fastest = results.OrderByDescending(r => r.speed).First();
+            // 速度降序排序 (Speed > 0 的优先)
+            var sorted = results
+                .OrderByDescending(r => r.speed)
+                .Select(r => r.url)
+                .ToList();
 
-            if (fastest.speed > 0)
-                return fastest.url;
+            // 如果所有源都失败(speed=0)，至少保留默认顺序的 URL 以供重试
+            if (sorted.Count == 0 || results.All(r => r.speed == 0))
+            {
+                 return Mirrors.Select(m => string.Format(m, version)).ToList();
+            }
 
-            // 所有源失败 → 使用国内 CDN兜底
-            return string.Format(Mirrors[1], version);
+            return sorted;
         }
 
 
@@ -290,5 +311,55 @@ namespace LiteMonitor
             return version;
         }
 
+
+        // ========================================================
+        // 【8】主程序抢先更新 Updater.exe (解决自更新死锁)
+        // ========================================================
+        /// <summary>
+        /// 在启动 Updater 之前，强制从 ZIP 中解压出最新的 Updater.exe 覆盖旧版。
+        /// 这样 Updater 运行时就是最新的，无需再尝试更新自己。
+        /// </summary>
+        /// <param name="zipPath">下载好的 update.zip 路径</param>
+        public static void PreUpdateUpdater(string zipPath)
+        {
+            try
+            {
+                string baseDir = AppContext.BaseDirectory;
+                string updaterTarget = Path.Combine(baseDir, "resources", "Updater.exe");
+                string updaterDir = Path.GetDirectoryName(updaterTarget)!;
+
+                // 1. 确保 resources 目录存在
+                if (!Directory.Exists(updaterDir)) Directory.CreateDirectory(updaterDir);
+
+                // 2. 杀掉所有残留的 Updater 进程 (防止占用)
+                foreach (var p in Process.GetProcessesByName("Updater"))
+                {
+                    try { p.Kill(); } catch { }
+                }
+                
+                // 给一点时间释放句柄
+                System.Threading.Thread.Sleep(200);
+
+                // 3. 打开 ZIP 查找 Updater.exe
+                using (var archive = ZipFile.OpenRead(zipPath))
+                {
+                    // 遍历寻找以 Updater.exe 结尾的文件 (因为压缩包内可能有子目录结构)
+                    var updaterEntry = archive.Entries.FirstOrDefault(e => 
+                        e.FullName.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase));
+
+                    if (updaterEntry != null)
+                    {
+                        // 4. 强制覆盖解压
+                        updaterEntry.ExtractToFile(updaterTarget, true);
+                        Debug.WriteLine($"[UpdateChecker] Updater.exe 预更新成功: {updaterTarget}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // 即使失败也不要阻断流程，可能旧版 Updater 也能用，或者文件被严重占用
+                Debug.WriteLine($"[UpdateChecker] Updater 预更新失败: {ex.Message}");
+            }
+        }
     }
 }

@@ -188,6 +188,10 @@ namespace LiteMonitor.src.WebServer
             <div class='tag'><b>HOST</b> <span id='sys-host'>--</span></div>
             <div class='tag'><b>IP</b> <span id='sys-ip'>--</span></div>
             <div class='tag'><b>RUNTIME</b> <span id='sys-uptime'>--</span></div>
+             <div class='tag'>
+                <div id='status-dot' style='width:8px; height:8px; border-radius:50%; background:var(--text-sub); margin-right:6px;'></div>
+                <span id='status-text' style='font-weight:700; font-size:0.8rem;'>--</span>
+            </div>
         </div>
     </div>
 
@@ -197,18 +201,42 @@ namespace LiteMonitor.src.WebServer
         const board = document.getElementById('board');
         const cards = {};
 
-        function update() {
-            fetch('/api/snapshot')
-                .then(r => r.json())
-                .then(d => {
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        let ws = null;
+        let reconnectTimer = null;
+
+        function connect() {
+            if (ws) return;
+            const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+            ws = new WebSocket(protocol + location.host);
+
+            ws.onopen = () => {
+                statusDot.style.background = 'var(--c-0)';
+                statusText.innerText = 'LIVE';
+                if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const d = JSON.parse(event.data);
                     if (d.sys) {
                         document.getElementById('sys-host').innerText = d.sys.host;
                         document.getElementById('sys-ip').innerText = `${d.sys.ip}:${d.sys.port}`;
                         document.getElementById('sys-uptime').innerText = d.sys.uptime;
                     }
                     if (d.items) render(d.items);
-                })
-                .catch(e => console.error(e));
+                } catch(e) { console.error(e); }
+            };
+
+            ws.onclose = () => {
+                statusDot.style.background = 'var(--c-2)';
+                statusText.innerText = 'OFFLINE';
+                ws = null;
+                if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
+            };
+
+            ws.onerror = () => ws && ws.close();
         }
 
         function render(items) {
@@ -346,8 +374,7 @@ namespace LiteMonitor.src.WebServer
             });
         }
 
-        setInterval(update, 1000);
-        update();
+        connect();
     </script>
 </body>
 </html>";
