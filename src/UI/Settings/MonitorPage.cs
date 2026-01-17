@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text.Json; // 引入 JSON 库用于深拷贝
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using LiteMonitor.src.UI.Controls;
@@ -157,26 +158,34 @@ namespace LiteMonitor.src.UI.SettingsPage
             base.OnShow();
             if (Config == null) return;
 
-            // 初始化副本
-            _workingList = new List<MonitorItemConfig>();
-            foreach(var item in Config.MonitorItems)
+            // ★★★ Fix: Always reload working list from Config to get latest changes (e.g. newly added plugins) ★★★
+            // The previous logic (if _workingList == null) prevented new items from showing up
+            // because _workingList was cached and didn't know about the new plugin items added in PluginPage.
+            try
             {
-                _workingList.Add(new MonitorItemConfig 
-                {
-                    Key = item.Key,
-                    UserLabel = item.UserLabel,
-                    TaskbarLabel = item.TaskbarLabel,
-                    // ★★★ [新增] 同步 Unit 字段 ★★★
-                    UnitPanel = item.UnitPanel,
-                    UnitTaskbar = item.UnitTaskbar,
-                    VisibleInPanel = item.VisibleInPanel,
-                    VisibleInTaskbar = item.VisibleInTaskbar,
-                    SortIndex = item.SortIndex,
-                    TaskbarSortIndex = item.TaskbarSortIndex
-                });
+                var json = JsonSerializer.Serialize(Config.MonitorItems);
+                _workingList = JsonSerializer.Deserialize<List<MonitorItemConfig>>(json) ?? new List<MonitorItemConfig>();
+            }
+            catch
+            {
+                _workingList = new List<MonitorItemConfig>();
             }
 
-            if (!_isLoaded) SwitchTab(false);
+            // Always refresh the list UI
+            // ★★★ 性能优化与崩溃修复 ★★★
+            // 如果 _container 包含大量控件，频繁 Dispose 会很慢甚至崩溃
+            // 我们可以尝试仅 Diff 更新，或者确保 Dispose 安全
+            // 目前先保持全量刷新，但确保在主线程安全操作
+            if (this.IsHandleCreated)
+            {
+                 this.Invoke((MethodInvoker)delegate { ReloadList(); });
+            }
+            else
+            {
+                 ReloadList(); 
+            }
+            
+            _isLoaded = true;
         }
 
         private void ReloadList()

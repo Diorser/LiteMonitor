@@ -263,6 +263,14 @@ namespace LiteMonitor
             // 1. 加载历史流量数据
             TrafficLogger.Load();
 
+            // 2. 加载并启动插件系统
+            src.Core.Plugins.PluginManager.Instance.LoadPlugins(Path.Combine(AppContext.BaseDirectory, "resources", "plugins"));
+            src.Core.Plugins.PluginManager.Instance.Start();
+
+            // 3. 同步插件配置 (已由 PluginManager 自动处理，无需手动 SyncPlugins)
+            // _cfg.SyncPlugins(...); 
+
+
 
             // === 托盘图标 ===
             this.Icon = Properties.Resources.AppIcon;
@@ -273,6 +281,7 @@ namespace LiteMonitor
 
             // 将 _cfg 传递给 UIController（构造内会统一加载语言与主题，并应用宽度等）
             _ui = new UIController(_cfg, this);
+
             // ★★★ 初始化 WebServer 单例 (此时不启动，只创建对象) ★★★
             new src.WebServer.LiteWebServer(_cfg);
 

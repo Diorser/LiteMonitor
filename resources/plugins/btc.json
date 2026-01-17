@@ -1,0 +1,27 @@
+{
+  "id": "com.crypto.price",
+  "meta": {
+    "name": "数字货币价格",
+    "version": "2.1.0",
+    "author": "System",
+    "description": "从 Coindesk 获取实时价格"
+  },
+  "inputs": [],
+  "execution": {
+    "type": "api_json",
+    "interval": 60000,
+    "url": "https://api.coindesk.com/v1/bpi/currentprice.json",
+    "extract": {
+      "price": "bpi.USD.rate"
+    }
+  },
+  "outputs": [
+    {
+      "key": "price",
+      "label": "BTC价格",
+      "short_label": "BTC",
+      "format": "{{price}}",
+      "unit": "USD"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 using LiteMonitor.src.Core;
+using LiteMonitor.src.SystemServices.InfoService;
 using LiteMonitor.src.SystemServices;
 using System;
 using System.Collections.Generic;
@@ -147,6 +148,10 @@ namespace LiteMonitor
                 _layoutDirty = false;
             }
 
+            // === [关键修改] 获取布局中的看板信息 ===
+            // var dashboard = _layout.Dashboard; // 已移除
+            // ==========================================
+
             UIRenderer.Render(g, _groups, t);
         }
 
@@ -161,47 +166,22 @@ namespace LiteMonitor
             {
                 await System.Threading.Tasks.Task.Run(() => _mon.UpdateAll());
 
-                // ======================================================
-                // [优化] 只有当 IP 开启显示时，才去获取 IP
-                // ======================================================
-                bool showIpPanel = _cfg.MonitorItems.Any(x => x.Key == "NET.IP" && x.VisibleInPanel);
-                bool showIpTaskbar = _cfg.MonitorItems.Any(x => x.Key == "NET.IP" && x.VisibleInTaskbar);
-                
-                string currentIP = "";
-                
-                // 如果任意一处需要显示 IP，才调用底层的 GetNetworkIP (底层已有缓存，性能无忧)
-                if (showIpPanel || showIpTaskbar)
-                {
-                    currentIP = _mon.GetNetworkIP();
-
-                    // 检测 IP 变化 (仅在变化时触发重排)
-                    if (currentIP != _lastIP)
-                    {
-                        _lastIP = currentIP;
-                        
-                        // 1. 更新竖屏标题 (仅当面板显示开启时)
-                        if (showIpPanel)
-                        {
-                            var netGroup = _groups.FirstOrDefault(g => g.GroupName == "NET" || g.GroupName == "DATA");
-                            if (netGroup != null)
-                            {
-                                string baseTitle = LanguageManager.T(UIUtils.Intern("Groups." + netGroup.GroupName));
-                                netGroup.Label = !string.IsNullOrEmpty(currentIP) ? $"{baseTitle}  {currentIP}" : baseTitle;
-                            }
-                        }
-
-                        // 2. 标记重排 (横屏/任务栏列宽需要重算)
-                        _layoutDirty = true; 
-                    }
-                }
-                // ======================================================
-
                 // ① 更新竖屏 items
                 foreach (var g in _groups)
                     foreach (var it in g.Items)
                     {
-                        it.Value = _mon.Get(it.Key);
-                        it.TickSmooth(_cfg.AnimationSpeed);
+                        // [新增] Dashboard 实时更新
+                        if (it.Key.StartsWith("DASH."))
+                        {
+                             string dashKey = it.Key.Substring(5);
+                             string val = InfoService.Instance.GetValue(dashKey);
+                             it.TextValue = val;
+                        }
+                        else
+                        {
+                            it.Value = _mon.Get(it.Key);
+                            it.TickSmooth(_cfg.AnimationSpeed);
+                        }
                     }
 
                 // ② 更新横版 / 任务栏 (清理了冗余代码)
@@ -210,10 +190,13 @@ namespace LiteMonitor
                     void UpdateItem(MetricItem it) 
                     {
                         if (it == null) return;
-                        if (it.Key == "NET.IP") 
+                        
+                        // [新增] Dashboard 实时更新 (横版/任务栏)
+                        if (it.Key.StartsWith("DASH."))
                         {
-                            // 只有显示开启时才赋值，否则为空
-                            it.TextValue = currentIP; 
+                             string dashKey = it.Key.Substring(5);
+                             string val = InfoService.Instance.GetValue(dashKey);
+                             it.TextValue = val;
                         }
                         else 
                         {
@@ -229,6 +212,10 @@ namespace LiteMonitor
                 foreach (var col in _hxColsTaskbar) UpdateCol(col);
  
                 CheckTemperatureAlert();
+
+                // 驱动 DashboardService 更新
+                InfoService.Instance.Update();
+
                 _form.Invalidate();   
             }
             finally
@@ -243,24 +230,22 @@ namespace LiteMonitor
 
             var activeItems = _cfg.MonitorItems
                 .Where(x => x.VisibleInPanel)
-                .OrderBy(x => x.SortIndex)
+                // ★★★ 终极排序逻辑 ★★★
+                // 1. 先按 Group 分组，解决 "分裂问题" (物理聚类)
+                .GroupBy(x => x.UIGroup)
+                // 2. 组间排序：使用组内最小的 SortIndex 决定组的位置 (保留用户的整体排序意图)
+                .OrderBy(g => g.Min(x => x.SortIndex))
+                // 3. 组内排序并展平：组内按 SortIndex 排列
+                .SelectMany(g => g.OrderBy(x => x.SortIndex))
                 .ToList();
 
             if (activeItems.Count == 0) return;
-
-            // [新增] 预先获取 IP 状态
-            bool showIp = _cfg.MonitorItems.Any(x => x.Key == "NET.IP" && x.VisibleInPanel);
-            string ipSuffix = showIp ? _mon.GetNetworkIP() : "";
 
             string currentGroupKey = "";
             List<MetricItem> currentGroupList = new List<MetricItem>();
 
             foreach (var cfgItem in activeItems)
             {
-                // [新增] ★★★ 拦截 NET.IP ★★★
-                // 竖屏模式下，不创建 IP 的实体 Item，只把它作为标题后缀
-                if (cfgItem.Key == "NET.IP") continue;
-
                 string groupKey = cfgItem.UIGroup;
 
                 if (groupKey != currentGroupKey && currentGroupList.Count > 0)
@@ -269,12 +254,6 @@ namespace LiteMonitor
                     string gName = LanguageManager.T(UIUtils.Intern("Groups." + currentGroupKey));
                     if (_cfg.GroupAliases.ContainsKey(currentGroupKey)) gName = _cfg.GroupAliases[currentGroupKey];
                     
-                    // [新增] 动态拼接 IP 到上一组的标题 (如果是 NET 组)
-                    if ((currentGroupKey == "NET") && !string.IsNullOrEmpty(ipSuffix))
-                    {
-                        gName += $" {ipSuffix}";
-                    }
-
                     gr.Label = gName;
                     _groups.Add(gr);
                     currentGroupList = new List<MetricItem>();
@@ -286,13 +265,33 @@ namespace LiteMonitor
                 var item = new MetricItem 
                 { 
                     Key = cfgItem.Key, 
-                    Label = label 
+                    BoundConfig = cfgItem 
                 };
-                item.ShortLabel = LanguageManager.T(UIUtils.Intern("Short." + cfgItem.Key));
                 
-                float? val = _mon.Get(item.Key);
-                item.Value = val;
-                if (val.HasValue) item.DisplayValue = val.Value;
+                // [修复] 初始化默认 Label (作为 Fallback)
+                // 如果 BoundConfig.UserLabel 有值，Getter 会优先返回它
+                item.Label = label;
+
+                string defShort = LanguageManager.T(UIUtils.Intern("Short." + cfgItem.Key));
+                item.ShortLabel = defShort;
+
+                
+                // ★★★ [新增] Dashboard 数据源绑定 ★★★
+                if (cfgItem.Key.StartsWith("DASH."))
+                {
+                     string dashKey = cfgItem.Key.Substring(5); // DASH.HOST -> HOST
+                     
+                     // 直接从服务获取值，不再依赖 WidgetItem 对象
+                     string val = InfoService.Instance.GetValue(dashKey);
+                     item.TextValue = val;
+                     item.Value = null; // Dashboard 项没有数值，只有文本
+                }
+                else
+                {
+                    float? val = _mon.Get(item.Key);
+                    item.Value = val;
+                    if (val.HasValue) item.DisplayValue = val.Value;
+                }
 
                 currentGroupList.Add(item);
             }
@@ -303,12 +302,6 @@ namespace LiteMonitor
                 string gName = LanguageManager.T(UIUtils.Intern("Groups." + currentGroupKey));
                  if (_cfg.GroupAliases.ContainsKey(currentGroupKey)) gName = _cfg.GroupAliases[currentGroupKey];
                 
-                // [新增] 同样处理最后一组
-                if ((currentGroupKey == "NET") && !string.IsNullOrEmpty(ipSuffix))
-                {
-                    gName += $" {ipSuffix}";
-                }
-
                 gr.Label = gName;
                 _groups.Add(gr);
             }
@@ -340,9 +333,6 @@ namespace LiteMonitor
             // [新增] 二次过滤：横条模式不显示 IP
             foreach (var item in items)
             {
-                // 如果不是任务栏模式（即横屏桌面模式），且是 IP，则跳过
-                if (!forTaskbar && item.Key == "NET.IP") continue;
-                
                 validItems.Add(item);
             }
 
@@ -368,22 +358,43 @@ namespace LiteMonitor
         {
             var item = new MetricItem 
             { 
-                Key = cfg.Key 
+                Key = cfg.Key,
+                BoundConfig = cfg // [核心修复] 绑定 Config
             };
             
-            // [新增] 针对 NET.IP 特殊处理
-            if (cfg.Key == "NET.IP")
+            // Standard initialization
+            // 优先使用用户自定义的 Label/ShortLabel
+            // 如果用户未定义 (null/empty)，则使用语言包中的默认值
+            // 如果用户定义了 " " (空格)，则保留空格 (意味着隐藏标签)
+            
+            string defLabel = LanguageManager.T(UIUtils.Intern("Items." + cfg.Key));
+            item.Label = defLabel; // 设为默认值，BoundConfig 会负责处理覆盖
+
+            string defShort = LanguageManager.T(UIUtils.Intern("Short." + cfg.Key));
+            item.ShortLabel = defShort;
+
+
+            // [新增] Dashboard 数据源绑定
+            if (cfg.Key.StartsWith("DASH."))
             {
-                item.Label = " ";      // 抹除长标签
-                item.ShortLabel = " "; // 抹除短标签
-                // 立即填充值，防止刚启动时为空
-                item.TextValue = _mon.GetNetworkIP(); 
-                item.Style = MetricRenderStyle.TextOnly;
+                 string dashKey = cfg.Key.Substring(5);
+                 // 立即尝试获取一次，如果是 Loading 且 NetworkManager 有缓存，则直接更新
+                 // 避免异步等待导致的 "?"
+                 if (dashKey == "IP")
+                 {
+                      string cachedIP = HardwareMonitor.Instance?.GetNetworkIP();
+                      if (!string.IsNullOrEmpty(cachedIP) && cachedIP != "?")
+                      {
+                           InfoService.Instance.InjectIP(cachedIP);
+                      }
+                 }
+                 
+                 string val = InfoService.Instance.GetValue(dashKey);   
+                 item.TextValue = val;
+                 item.Value = null;
             }
             else
             {
-                item.Label = LanguageManager.T(UIUtils.Intern("Items." + cfg.Key));
-                item.ShortLabel = LanguageManager.T(UIUtils.Intern("Short." + cfg.Key));
                 InitMetricValue(item);
             }
             

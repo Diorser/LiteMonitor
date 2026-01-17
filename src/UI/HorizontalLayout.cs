@@ -87,11 +87,13 @@ namespace LiteMonitor
                     {
                         if (item == null) return 0;
 
-                        // [特殊逻辑] 如果是 IP，按纯文本计算
-                        if (item.Key == "NET.IP")
+                        // [通用逻辑] 如果隐藏标签 (ShortLabel==" ")，则只计算文本宽
+                        if (item.ShortLabel == " ")
                         {
-                            string valText = item.TextValue;
-                            if (string.IsNullOrEmpty(valText)) return 0;// 最小占位
+                            // 对于 Dashboard/IP 类，直接使用当前文本作为测量依据
+                            // 注意：这里不再用 MaxValueSample，因为这种文本长度是不固定的
+                            string valText = item.TextValue ?? item.GetFormattedText(true);
+                            if (string.IsNullOrEmpty(valText)) return 0;
 
                             Font valFont = (_mode == LayoutMode.Taskbar) 
                                 ? new Font(s.Font, s.Size, s.Bold ? FontStyle.Bold : FontStyle.Regular) 
@@ -102,7 +104,9 @@ namespace LiteMonitor
                                 TextFormatFlags.NoPadding).Width;
 
                             if (_mode == LayoutMode.Taskbar) valFont.Dispose();
-                            return w; // IP 不需要额外 padding，直接返回文本宽
+                            
+                            // 纯文本项建议稍微加一点点左右 padding，防止紧贴
+                            return w + 4; 
                         }
                         else
                         {
@@ -125,8 +129,19 @@ namespace LiteMonitor
                             int wLabel = TextRenderer.MeasureText(g, label, labelFont, 
                                 new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
 
-                            // 2. Value (使用样本值估算)
-                            string sample = GetMaxValueSample(col, isTop); // 注意：这里样本可能不准，但普通项差异不大
+                            // 2. Value (使用样本值估算 或 真实值)
+                            // ★★★ 修复：如果是 DASH/IP 等纯文本类 (TextValue有值)，直接测量真实文本 ★★★
+                            // 否则对于 IP 这种长文本，使用默认样本(100°C)会导致列宽过窄
+                            string sample;
+                            if (!string.IsNullOrEmpty(item.TextValue))
+                            {
+                                sample = item.TextValue;
+                            }
+                            else
+                            {
+                                sample = GetMaxValueSample(col, isTop); // 注意：这里样本可能不准，但普通项差异不大
+                            }
+
                             int wValue = TextRenderer.MeasureText(g, sample, valueFont, 
                                 new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
 

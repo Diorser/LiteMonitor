@@ -75,33 +75,84 @@ namespace LiteMonitor.src.SystemServices
                 return _staticIPCache;
             }
 
+            string foundIP = null;
+
+            // 2. 策略A：直接从当前锁定的硬件中获取 (这是最直接的方式)
             try 
             {
-                // 2. 直接从当前锁定的硬件中获取 (这是最直接的方式，和你读取网卡流量是同一个源)
-                if (_cachedNetHw != null && _netStates.TryGetValue(_cachedNetHw, out var state))
+                // ★★★ 核心修复：即使 _cachedNetHw 为空（还没锁定网卡），也要尝试从 _netStates 中寻找已匹配 NativeAdapter 的网卡 ★★★
+                // 之前的 bug 是：网速跳动说明 MatchNativeNetworkAdapter 成功了，_netStates 里有 NativeAdapter，
+                // 但 _cachedNetHw 还没来得及更新，导致这里直接跳过。
+                
+                // 如果已锁定，优先用锁定的
+                if (_cachedNetHw != null && _netStates.TryGetValue(_cachedNetHw, out var state) && state.NativeAdapter != null)
                 {
-                    if (state.NativeAdapter != null)
+                     foundIP = GetIPv4FromAdapter(state.NativeAdapter);
+                }
+                
+                // 如果没锁定（或锁定的没取到），遍历所有已知状态的网卡 (这些网卡都是有流量活动的)
+                if (string.IsNullOrEmpty(foundIP))
+                {
+                    foreach (var kv in _netStates)
                     {
-                        var props = state.NativeAdapter.GetIPProperties();
-                        foreach (var ip in props.UnicastAddresses)
+                        if (kv.Value.NativeAdapter != null)
                         {
-                            if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                            string ip = GetIPv4FromAdapter(kv.Value.NativeAdapter);
+                            if (!string.IsNullOrEmpty(ip))
                             {
-                                string newIP = ip.Address.ToString();
-                                
-                                // 只有拿到了真正的 IP，才更新缓存和时间
-                                _staticIPCache = newIP;
-                                _lastIPCheckTime = DateTime.Now; 
-                                return newIP;
+                                foundIP = ip;
+                                break;
                             }
                         }
                     }
                 }
             }
             catch { }
+
+            // 3. 策略B (兜底)：如果上面没拿到，才主动遍历系统网卡 (只跑一次)
+            if (string.IsNullOrEmpty(foundIP))
+            {
+                try
+                {
+                    var nics = NetworkInterface.GetAllNetworkInterfaces();
+                    foreach (var nic in nics)
+                    {
+                        if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                        if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                        if (IsVirtualNetwork(nic.Description) || IsVirtualNetwork(nic.Name)) continue; // 仅兜底物理网卡
+
+                        foundIP = GetIPv4FromAdapter(nic);
+                        if (!string.IsNullOrEmpty(foundIP)) break;
+                    }
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrEmpty(foundIP))
+            {
+                _staticIPCache = foundIP;
+                _lastIPCheckTime = DateTime.Now;
+                return foundIP;
+            }
             
-            // 如果没拿到，返回旧缓存（如果是空的，下一秒会继续尝试，不再傻等30秒）
             return _staticIPCache; 
+        }
+
+        private string GetIPv4FromAdapter(NetworkInterface nic)
+        {
+            try
+            {
+                var props = nic.GetIPProperties();
+                foreach (var ip in props.UnicastAddresses)
+                {
+                    if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        return ip.Address.ToString();
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         // ===========================================================

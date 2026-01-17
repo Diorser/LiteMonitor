@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using LiteMonitor.src.UI;
 using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.WebServer; // ★★★ 引用 WebServer 命名空间 ★★★
+using LiteMonitor.src.Core.Plugins;
 
 namespace LiteMonitor.src.Core
 {
@@ -37,7 +38,10 @@ namespace LiteMonitor.src.Core
             // ★★★ 5. [新增] 应用网页服务设置 (重启服务以应用端口变更) ★★★
             ApplyWebServer(cfg);
 
-            // 6. 可见性 (最后执行，避免闪烁)
+            // 6. 应用插件设置 (重载实例并清除缓存)
+            PluginManager.Instance.Reload(cfg);
+
+            // 7. 可见性 (最后执行，避免闪烁)
             ApplyVisibility(cfg, mainForm);
         }
 

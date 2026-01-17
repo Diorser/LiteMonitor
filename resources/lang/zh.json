@@ -1,6 +1,7 @@
 {
   "Title": "⚡️LiteMonitor",
   "Groups": {
+    "DASH": "ℹ️看板",
     "CPU": "💻CPU",
     "GPU": "🎮GPU",
     "HOST": "🖥️主机",
@@ -9,6 +10,10 @@
     "DATA": "📈流量统计"
   },
   "Items": {
+    "DASH.HOST": "主机名",
+    "DASH.Time": "时间",
+    "DASH.IP": "内网IP",
+    "DASH.Uptime": "已运行",
     "CPU.Load": "CPU使用率",
     "CPU.Temp": "CPU温度",
     "CPU.Clock": "CPU频率",
@@ -34,6 +39,10 @@
     "DATA.DayDown": "今日下载"
   },
   "Short": {
+    "DASH.HOST": " ",
+    "DASH.Time": " ",
+    "DASH.IP": " ",
+    "DASH.Uptime": " ",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",
@@ -89,6 +98,8 @@
     "ActionTrafficHistory": "打开历史流量统计",
     "WebServer": "网页版显示",
     "WebServerPort": "网页端口",
+    "Plugins": "🧩插件管理",
+    "Plugin.MonitorHint": "如需修改显示名称、单位或排序，请前往 [监控项显示] 页面",
     "OpenWeb": "打开网页",
     "WebServerTip": "⚠️说明：开启网页版显示后，手机和电脑可通过“内网IP:端口”打开网页查看监控数据。",
 

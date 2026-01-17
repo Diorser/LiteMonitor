@@ -126,6 +126,7 @@ namespace LiteMonitor
 
         public Dictionary<string, string> GroupAliases { get; set; } = new Dictionary<string, string>();
         public List<MonitorItemConfig> MonitorItems { get; set; } = new List<MonitorItemConfig>();
+        public List<PluginInstanceConfig> PluginInstances { get; set; } = new List<PluginInstanceConfig>();
 
         /// <param name="keyPrefix">监控项类别前缀（如 "CPU", "GPU"）</param>
         /// <returns>如果有任何匹配的启用项则返回true，否则返回false</returns>
@@ -237,7 +238,13 @@ namespace LiteMonitor
             {
                 s.InitDefaultItems();
                 // 确保 TaskbarSortIndex 有初始值
-                foreach (var item in s.MonitorItems) item.TaskbarSortIndex = item.SortIndex;
+                foreach (var item in s.MonitorItems)
+                {
+                    // ★★★ 修复：只有当 TaskbarSortIndex 未设置(0)时才使用 SortIndex 填充 ★★★
+                    // 避免覆盖 DASH.HOST 等已手动指定 TaskbarSortIndex=100 的项
+                    if (item.TaskbarSortIndex == 0)
+                        item.TaskbarSortIndex = item.SortIndex;
+                }
             }
             else
             {
@@ -261,6 +268,7 @@ namespace LiteMonitor
             }
 
             s.SyncToLanguage();
+            
             // ★★★ 新增：深度字符串去重 (Deep Intern) ★★★
             s.InternAllStrings();
             
@@ -325,6 +333,9 @@ namespace LiteMonitor
                     stdItem.VisibleInTaskbar = userOldItem.VisibleInTaskbar;
                     stdItem.UserLabel = userOldItem.UserLabel;
                     stdItem.TaskbarLabel = userOldItem.TaskbarLabel;
+                    // ★★★ 修复：同步 Unit 配置 ★★★
+                    stdItem.UnitPanel = userOldItem.UnitPanel;
+                    stdItem.UnitTaskbar = userOldItem.UnitTaskbar;
                     
                     // 注意：这里我们故意【不继承】userOldItem.SortIndex
                     // 这样就能强行纠正旧版本的排序，让 CPU.Fan 自动插到 CPU 组里，而不是排到最后
@@ -376,22 +387,30 @@ namespace LiteMonitor
                 // ==================================================
                 int targetTaskbarIndex = 0;
 
-                // 1. 尝试找到这位新人在主面板里的“大哥”（前一个邻居）
-                // 比如 FPS(21) 的大哥可能是 MEM.Load(20)
-                var predecessor = MonitorItems
-                    .Where(x => x.SortIndex < newItem.SortIndex) // 找排在它前面的
-                    .OrderByDescending(x => x.SortIndex)         // 离它最近的那个
-                    .FirstOrDefault();
-
-                if (predecessor != null)
+                // ★★★ 优先使用预设的 TaskbarSortIndex (如果有明确指定) ★★★
+                if (newItem.TaskbarSortIndex != 0)
                 {
-                    // 2. 如果找到了大哥，就插在大哥后面
-                    targetTaskbarIndex = predecessor.TaskbarSortIndex + 1;
+                    targetTaskbarIndex = newItem.TaskbarSortIndex;
                 }
                 else
                 {
-                    // 3. 如果没大哥（说明它是新列表的老大），那就插在最前面 (0)
-                    targetTaskbarIndex = 0;
+                    // 1. 尝试找到这位新人在主面板里的“大哥”（前一个邻居）
+                    // 比如 FPS(21) 的大哥可能是 MEM.Load(20)
+                    var predecessor = MonitorItems
+                        .Where(x => x.SortIndex < newItem.SortIndex) // 找排在它前面的
+                        .OrderByDescending(x => x.SortIndex)         // 离它最近的那个
+                        .FirstOrDefault();
+
+                    if (predecessor != null)
+                    {
+                        // 2. 如果找到了大哥，就插在大哥后面
+                        targetTaskbarIndex = predecessor.TaskbarSortIndex + 1;
+                    }
+                    else
+                    {
+                        // 3. 如果没大哥（说明它是新列表的老大），那就插在最前面 (0)
+                        targetTaskbarIndex = 0;
+                    }
                 }
 
                 // 4. 让任务栏里挡路的人也统统后移
@@ -429,10 +448,16 @@ namespace LiteMonitor
             catch { }
         }
 
-        private void InitDefaultItems()
+        public void InitDefaultItems()
         {
             MonitorItems = new List<MonitorItemConfig>
             {
+                // ★★★ [新增] Dashboard Items (默认排在最前) ★★★
+                // 默认将 TaskbarLabel 设为空格，以隐藏标签
+                new MonitorItemConfig { Key = "DASH.HOST", SortIndex = -10, TaskbarSortIndex = 100, VisibleInPanel = true, TaskbarLabel = " " },
+                new MonitorItemConfig { Key = "DASH.Time", SortIndex = -9, TaskbarSortIndex = 200, VisibleInPanel = true, TaskbarLabel = " " },
+                new MonitorItemConfig { Key = "DASH.IP",   SortIndex = -8, TaskbarSortIndex = 300, VisibleInPanel = true, TaskbarLabel = " " },
+                new MonitorItemConfig { Key = "DASH.Uptime", SortIndex = -7, TaskbarSortIndex = 310, VisibleInPanel = true, TaskbarLabel = " " },
                 new MonitorItemConfig { Key = "CPU.Load",  SortIndex = 0, VisibleInPanel = true, VisibleInTaskbar = true },
                 new MonitorItemConfig { Key = "CPU.Temp",  SortIndex = 1, VisibleInPanel = true, VisibleInTaskbar = true },
                 new MonitorItemConfig { Key = "CPU.Clock", SortIndex = 2, VisibleInPanel = false },
@@ -460,7 +485,6 @@ namespace LiteMonitor
 
                 new MonitorItemConfig { Key = "NET.Up",    SortIndex = 40, VisibleInPanel = true, VisibleInTaskbar = true },
                 new MonitorItemConfig { Key = "NET.Down",  SortIndex = 41, VisibleInPanel = true, VisibleInTaskbar = true },
-                new MonitorItemConfig { Key = "NET.IP", SortIndex = 100, TaskbarSortIndex = 100, VisibleInPanel = true, VisibleInTaskbar = false, UserLabel = "IP",TaskbarLabel = "IP" },
 
                 new MonitorItemConfig { Key = "DATA.DayUp",  SortIndex = 50, VisibleInPanel = true },
                 new MonitorItemConfig { Key = "DATA.DayDown",SortIndex = 51, VisibleInPanel = true },
@@ -487,9 +511,12 @@ namespace LiteMonitor
         public string UnitTaskbar { get; set; } = null;
         public bool VisibleInPanel { get; set; } = true;
         public bool VisibleInTaskbar { get; set; } = false;
+        
         public int SortIndex { get; set; } = 0;
         // ★★★ 新增：任务栏独立排序索引 ★★★
         public int TaskbarSortIndex { get; set; } = 0;
+       
+
         // ★★★ 新增：统一的分组属性 ★★★
         // 所有界面（主界面、设置页、菜单）都统一调用这个属性来决定它属于哪个组
         // 从而避免了在 UI 代码里到处写 if else
@@ -498,20 +525,28 @@ namespace LiteMonitor
         {
             get 
             {
-                // 定义哪些 Key 属于 HOST 组
-                if (Key == "MEM.Load" || 
-                    Key == "MOBO.Temp" || 
-                    Key == "DISK.Temp" || 
-                    Key == "CASE.Fan"||
-                    Key == "FPS")
-                {
-                    return "HOST";
-                }
-                
-                // 默认逻辑：取前缀 (例如 CPU.Load -> CPU)
-                return Key.Split('.')[0];
+                // 定义哪些 Key 属于 HOST 组 
+                 if (Key == "MEM.Load" || 
+                     Key == "MOBO.Temp" || 
+                     Key == "DISK.Temp" || 
+                     Key == "CASE.Fan"|| 
+                     Key == "FPS") 
+                 { 
+                     return "HOST"; 
+                 } 
+                 
+                 // 特殊处理 DASH 组：所有以 DASH. 开头的 Key 都属于 DASH 组
+                 if (Key.StartsWith("DASH."))
+                 {
+                     return "DASH";
+                 }
+
+                 // 默认逻辑：取前缀 (例如 CPU.Load -> CPU) 
+                 return Key.Split('.')[0]; 
             }
         }
+        
+        
     }
 
     public class ThresholdsSet
@@ -529,5 +564,20 @@ namespace LiteMonitor
     {
         public double Warn { get; set; } = 0;
         public double Crit { get; set; } = 0;
+    }
+
+    public class PluginInstanceConfig
+    {
+        public string Id { get; set; } = "";
+        public string TemplateId { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+        public int CustomInterval { get; set; } = 0; // 自定义刷新频率 (0 = 使用模版默认)
+        
+        // 全局参数 (Scope="global")
+        public Dictionary<string, string> InputValues { get; set; } = new Dictionary<string, string>();
+        
+        // 目标列表 (Scope="target")
+        // 每个元素是一个 Dictionary，存储该目标的所有 target 参数
+        public List<Dictionary<string, string>> Targets { get; set; } = new List<Dictionary<string, string>>();
     }
 }

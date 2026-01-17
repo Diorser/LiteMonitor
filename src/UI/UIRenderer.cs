@@ -1,5 +1,8 @@
 using LiteMonitor.src.Core;
+using System;
+using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Windows.Forms;
 
 namespace LiteMonitor
 {
@@ -36,12 +39,15 @@ namespace LiteMonitor
                 DrawGroupBackground(g, gr, t);
                 
                 // 遍历子项绘制 (不再区分 NET/DISK，统一由 Item.Style 决定)
-                foreach (var it in gr.Items)
+                for (int i = 0; i < gr.Items.Count; i++)
                 {
+                    var it = gr.Items[i];
+                    bool isLast = (i == gr.Items.Count - 1);
+
                     if (it.Style == MetricRenderStyle.TwoColumn)
                         DrawTwoColumnItem(g, it, t);
                     else if (it.Style == MetricRenderStyle.TextOnly) // [新增]
-                        DrawTextItem(g, it, t);
+                        DrawTextItem(g, it, t, isLast);
                     else
                         DrawStandardItem(g, it, t);
                 }
@@ -151,7 +157,7 @@ namespace LiteMonitor
         }
 
         // [新增] 绘制纯文本项方法
-        private static void DrawTextItem(Graphics g, MetricItem it, Theme t)
+        private static void DrawTextItem(Graphics g, MetricItem it, Theme t, bool isLast)
         {
             if (it.Bounds == Rectangle.Empty) return;
 
@@ -162,16 +168,27 @@ namespace LiteMonitor
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
             // 2. 绘制右侧数值 (192.168.x.x)
-            // 利用 Bounds 的宽度，或者借用进度条的位置来显示长文本
-            // 这里我们直接用整个行宽的右侧区域
-            var valueRect = new Rectangle(it.ValueRect.X, it.Bounds.Y, it.Bounds.Width - 10, it.Bounds.Height);
-
-            // 优先读取 TextValue
-            string text = it.TextValue ?? "";
+            // ★★★ 修复：直接使用布局计算好的 ValueRect (已修正为全宽) ★★★
+            // 优先调用 GetFormattedText 以支持单位显示
+            string text = it.GetFormattedText(false);
             
-            TextRenderer.DrawText(g, text, t.FontValue, valueRect,
-                ThemeManager.ParseColor(t.Color.ValueSafe), // 或者用 TextPrimary
+            // ★★★ 修改：字体使用 FontItem (与标签一致)，颜色保持 ValueSafe ★★★
+            TextRenderer.DrawText(g, text, t.FontItem, it.ValueRect,
+                ThemeManager.ParseColor(t.Color.ValueSafe), 
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+            // ★★★ 修复：补充分割线 (最后一行不画) ★★★
+            if (!isLast)
+            {
+                // 使用半透明的 BarBackground 作为分割线
+                Color divColor = Color.FromArgb(100, ThemeManager.ParseColor(t.Color.BarBackground));
+                using (var pen = new Pen(divColor, 1))
+                {
+                    // 线条稍微缩进一点，更美观
+                    int lineY = it.Bounds.Bottom - 1;
+                    g.DrawLine(pen, it.Bounds.Left + 5, lineY, it.Bounds.Right - 5, lineY);
+                }
+            }
         }
 
     }

@@ -1,0 +1,141 @@
+{
+  "id": "weather_sojson",
+  "meta": {
+    "name": "自动天气 (SoJson)",
+    "version": "1.0.0",
+    "author": "System",
+    "description": "基于IP定位，使用SoJson接口获取高精度天气数据"
+  },
+  "inputs": [
+    {
+      "key": "city",
+      "label": "城市名称",
+      "type": "text",
+      "default": "",
+      "placeholder": "留空则根据IP自动定位",
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 1800000,
+    "steps": [
+      {
+        "id": "step1_ip",
+        "url": "http://whois.pconline.com.cn/ipJson.jsp?json=true",
+        "response_encoding": "gbk",
+        "cache_minutes": -1,
+        "extract": {
+          "auto_city": "city"
+        },
+        "process": [
+          {
+            "var": "auto_city",
+            "function": "regex_replace",
+            "pattern": "(市|区|县|省)$",
+            "to": ""
+          },
+          {
+            "var": "city",
+            "source": "city",
+            "function": "regex_replace",
+            "pattern": "^$",
+            "to": "{{auto_city}}" 
+          }
+        ]
+      },
+      {
+        "id": "step2_code",
+        "url": "http://toy1.weather.com.cn/search?cityname={{city}}",
+        "headers": {
+            "Referer": "http://www.weather.com.cn/"
+        },
+        "response_format": "jsonp",
+        "cache_minutes": -1,
+        "extract": {
+          "city_ref": "[0].ref"
+        },
+        "process": [
+          {
+            "var": "city_code",
+            "source": "city_ref",
+            "function": "regex_replace",
+            "pattern": "^(\\d+)~.*",
+            "to": "$1"
+          }
+        ]
+      },
+      {
+        "id": "step3_weather",
+        "url": "http://t.weather.itboy.net/api/weather/city/{{city_code}}",
+        "extract": {
+          "temp": "data.wendu",
+          "type": "data.forecast[0].type",
+          "high": "data.forecast[0].high",
+          "low": "data.forecast[0].low"
+        },
+        "process": [
+          {
+            "var": "weather_text",
+            "source": "type",
+            "function": "map",
+            "map": {
+              "晴": "☀️ 晴",
+              "多云": "⛅ 多云",
+              "阴": "☁️ 阴",
+              "小雨": "🌧️ 小雨",
+              "中雨": "🌧️ 中雨",
+              "大雨": "🌧️ 大雨",
+              "暴雨": "🌧️ 暴雨",
+              "阵雨": "🌧️ 阵雨",
+              "雷阵雨": "⛈️ 雷阵雨",
+              "雷阵雨伴有冰雹": "⛈️ 冰雹",
+              "雨夹雪": "🌧️ 雨夹雪",
+              "小雪": "❄️ 小雪",
+              "中雪": "❄️ 中雪",
+              "大雪": "❄️ 大雪",
+              "暴雪": "❄️ 暴雪",
+              "阵雪": "❄️ 阵雪",
+              "雾": "🌫️ 雾",
+              "霾": "🌫️ 霾",
+              "扬沙": "🌫️ 扬沙",
+              "浮尘": "🌫️ 浮尘",
+              "沙尘暴": "🌫️ 沙尘暴",
+              "强沙尘暴": "🌫️ 强沙尘暴"
+            }
+          },
+          {
+            "var": "high_clean",
+            "source": "high",
+            "function": "regex_replace",
+            "pattern": "高温 ",
+            "to": ""
+          },
+          {
+            "var": "low_clean",
+            "source": "low",
+            "function": "regex_replace",
+            "pattern": "低温 ",
+            "to": ""
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "temp",
+      "label": "{{city}}气温",
+      "short_label": "{{city}}",
+      "format": "{{weather_text}} {{temp}}℃",
+      "unit": ""
+    },
+    {
+      "key": "range",
+      "label": "{{city}}温差",
+      "short_label": "温差",
+      "format": "{{low_clean}}~{{high_clean}}",
+      "unit": ""
+    }
+  ]
+}

@@ -144,7 +144,9 @@ namespace LiteMonitor.src.UI
             // 5. 系统硬件 (System) -> ⚙️
             AddNav("System", "⚙️ " + LanguageManager.T("Menu.SystemHardwar"), new SystemHardwarPage());
             
-            
+            // 6. 插件管理 (Plugins) -> 🧩
+            AddNav("Plugins", LanguageManager.T("Menu.Plugins"), new PluginPage());
+
             // 强制刷新一次布局，防止按钮不可见
             _pnlNavContainer.PerformLayout();
             

@@ -1,0 +1,33 @@
+{
+  "id": "com.network.ip",
+  "meta": {
+    "name": "公网IP",
+    "version": "2.1.0",
+    "author": "System",
+    "description": "获取当前网络的公网IPv4地址"
+  },
+  "inputs": [],
+  "execution": {
+    "type": "chain",
+    "interval": 600000,
+    "steps": [
+      {
+        "id": "get_ip",
+        "url": "http://whois.pconline.com.cn/ipJson.jsp?json=true",
+        "response_encoding": "gbk",
+        "extract": {
+          "ip": "ip"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "addr",
+      "label": "公网IP",
+      "short_label": "IP",
+      "format": "{{ip}}",
+      "unit": ""
+    }
+  ]
+}

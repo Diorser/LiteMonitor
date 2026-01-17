@@ -35,6 +35,7 @@ namespace LiteMonitor.src.UI.Controls
     public class LiteSettingsGroup : Panel
     {
         private TableLayoutPanel _layout;
+        private Panel _header; // ★★★ 提升为成员变量
         private int _colTracker = 0;
 
         public LiteSettingsGroup(string title)
@@ -49,15 +50,15 @@ namespace LiteMonitor.src.UI.Controls
             var inner = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, AutoSize = true };
             
             // ★★★ 修改：Height 缩放
-            var header = new Panel { Dock = DockStyle.Top, Height = UIUtils.S(40), BackColor = UIColors.GroupHeader };
+            _header = new Panel { Dock = DockStyle.Top, Height = UIUtils.S(40), BackColor = UIColors.GroupHeader, Padding = new Padding(0, 0, UIUtils.S(10), 0) }; // 增加右侧Padding
             // ★★★ 修改：Location 缩放
             var lbl = new Label { 
                 Text = title, Location = new Point(UIUtils.S(15), UIUtils.S(10)), AutoSize = true, 
                 Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold), ForeColor = UIColors.TextMain 
             };
-            header.Controls.Add(lbl);
+            _header.Controls.Add(lbl);
             // ★★★ 修改：绘图线坐标动态化 (header.Height - 1)
-            header.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, header.Height - 1, header.Width, header.Height - 1);
+            _header.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, _header.Height - 1, _header.Width, _header.Height - 1);
 
             _layout = new TableLayoutPanel
             {
@@ -69,8 +70,34 @@ namespace LiteMonitor.src.UI.Controls
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 
             inner.Controls.Add(_layout);
-            inner.Controls.Add(header);
+            inner.Controls.Add(_header);
             this.Controls.Add(inner);
+        }
+
+        public void AddHeaderAction(Control action)
+        {
+            // 动作按钮靠右对齐
+            // 为了垂直居中，我们可以把 action 放在一个容器里，或者手动计算位置
+            // 这里简单处理：使用 Dock=Right，并设置 Padding/Margin
+            
+            // 创建一个包装容器来控制垂直位置和边距
+            var wrapper = new Panel 
+            { 
+                Dock = DockStyle.Right, 
+                Width = action.Width + UIUtils.S(10), // 额外间距
+                Padding = new Padding(0)
+            };
+            
+            // 手动垂直居中
+            action.Location = new Point(0, (_header.Height - action.Height) / 2);
+            // action.Dock = DockStyle.None; // 默认就是 None
+            
+            wrapper.Controls.Add(action);
+            _header.Controls.Add(wrapper);
+            
+            // 确保 Label 不会被遮挡 (Label 是 absolute positioning，Wrapper 是 Dock Right)
+            // Dock Right 会占据右侧空间，Label 在左侧，应该没事。
+            wrapper.BringToFront(); // 确保在最右侧
         }
 
         public void AddItem(Control item)

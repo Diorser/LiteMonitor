@@ -193,13 +193,58 @@ namespace LiteMonitor.src.UI.Controls
 
         public void SyncToConfig()
         {
-            string valName = _inputName.Inner.Text.Trim();
+            // Name
+            string valName = _inputName.Inner.Text; // 不使用 Trim，允许用户输入空格隐藏
             string originalName = LanguageManager.GetOriginal(UIUtils.Intern("Items." + Config.Key));
-            Config.UserLabel = string.Equals(valName, originalName, StringComparison.OrdinalIgnoreCase) ? "" : valName;
+            
+            // 规范化：如果是纯空格，则转为一个空格
+            if (valName.Length > 0 && string.IsNullOrWhiteSpace(valName))
+            {
+                 valName = " ";
+                 // 即时反馈
+                 if (_inputName.Inner.Text != valName) _inputName.Inner.Text = valName;
+            }
+            else
+            {
+                // 否则去掉首尾空格
+                string trimmed = valName.Trim();
+                if (trimmed != valName) 
+                {
+                    valName = trimmed;
+                    _inputName.Inner.Text = valName;
+                }
+            }
 
-            string valShort = _inputShort.Inner.Text.Trim();
+            // 如果等于默认值，且不是特殊空格，则存为空字符串 (表示使用默认)
+            if (valName != " " && string.Equals(valName, originalName, StringComparison.OrdinalIgnoreCase))
+                Config.UserLabel = "";
+            else
+                Config.UserLabel = valName;
+
+            // Short (TaskbarLabel)
+            // ★★★ 修复：允许用户输入空格 (" ") 来隐藏标签 ★★★
+            string rawShort = _inputShort.Inner.Text;
+            string valShort;
+            
+            // 如果全是空格且不为空，则保留为一个空格
+            if (rawShort.Length > 0 && string.IsNullOrWhiteSpace(rawShort))
+                valShort = " ";
+            else
+                valShort = rawShort.Trim();
+
+            // 更新输入框显示，实现"所见即所得" (例如用户输入多个空格自动变一个，或者首尾去空格)
+            if (rawShort != valShort)
+            {
+                _inputShort.Inner.Text = valShort;
+            }
+
             string originalShort = LanguageManager.GetOriginal(UIUtils.Intern("Short." + Config.Key));
-            Config.TaskbarLabel = string.Equals(valShort, originalShort, StringComparison.OrdinalIgnoreCase) ? "" : valShort;
+            
+            // 如果等于默认值，且不是特殊空格，则存为空字符串 (表示使用默认)
+            if (valShort != " " && string.Equals(valShort, originalShort, StringComparison.OrdinalIgnoreCase))
+                Config.TaskbarLabel = "";
+            else
+                Config.TaskbarLabel = valShort;
 
             // ★★★ 核心修改：保存单位逻辑 ★★★
             string rawUnit = _inputUnit.Inner.Text; // 【关键】不使用 Trim()，保留用户输入的空格

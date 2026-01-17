@@ -9,6 +9,10 @@
     "DATA": "📈Traffic"
   },
   "Items": {
+    "DASH.HOST": "Hostname",
+    "DASH.Time": "Time",
+    "DASH.IP": "Local IP",
+    "DASH.Uptime": "Uptime",
     "CPU.Load": "CPU Usage",
     "CPU.Temp": "CPU Temp",
     "CPU.Clock": "CPU Clock",
@@ -34,6 +38,10 @@
     "DATA.DayDown": "Day Down"
   },
   "Short": {
+    "DASH.HOST": " ",
+    "DASH.Time": " ",
+    "DASH.IP": " ",
+    "DASH.Uptime": " ",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",

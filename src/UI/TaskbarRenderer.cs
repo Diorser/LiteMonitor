@@ -97,8 +97,18 @@ namespace LiteMonitor
         private static void DrawItem(Graphics g, MetricItem item, Rectangle rc, bool light)
         {
             // ★★★ 优化：直接使用缓存的 ShortLabel，避免每帧生成 Key 和查询字典 ★★★
-            string label = !string.IsNullOrEmpty(item.ShortLabel) ? item.ShortLabel : item.Label;
-            if (string.IsNullOrEmpty(label)) label = item.Key;
+            string label = item.ShortLabel;
+
+            // ★★★ 修复：如果 ShortLabel 被显式设为空格，则视为隐藏标签 ★★★
+            // 适用于 IP/Dashboard 文本，直接绘制 Value (左对齐)
+            bool hideLabel = (label == " ");
+
+            // 如果不是隐藏，且为空，则回退到 Label 或 Key
+            if (!hideLabel)
+            {
+                if (string.IsNullOrEmpty(label)) label = item.Label;
+                if (string.IsNullOrEmpty(label)) label = item.Key;
+            }
 
             string value = item.GetFormattedText(true);
 
@@ -120,6 +130,20 @@ namespace LiteMonitor
                 labelColor = light ? LABEL_LIGHT : LABEL_DARK;
                 valueColor = GetStateColor(item.CachedColorState, light);
             }
+
+            // ★★★ 修复：如果开启了隐藏标签 (如 IP/Dashboard)，则仅绘制 Value (左对齐) ★★★
+            if (hideLabel)
+            {
+                TextRenderer.DrawText(
+                    g, value, font, rc, valueColor,
+                    TextFormatFlags.Left |
+                    TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.NoPadding |
+                    TextFormatFlags.NoClipping
+                );
+                return;
+            }
+
             // Label 左对齐
             TextRenderer.DrawText(
                 g, label, font, rc, labelColor,

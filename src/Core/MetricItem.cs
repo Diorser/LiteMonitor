@@ -14,6 +14,9 @@ namespace LiteMonitor
 
     public class MetricItem
     {
+        // [新增] 绑定原始配置对象，实现动态 Label
+        public MonitorItemConfig BoundConfig { get; set; }
+
         private string _key = "";
         public string Key 
         { 
@@ -24,14 +27,30 @@ namespace LiteMonitor
         private string _label = "";
         public string Label 
         {
-            get => _label;
+            get 
+            {
+                // [核心逻辑] 如果绑定了 Config，优先读取 Config 中的 UserLabel
+                // 这样插件更新 UserLabel 后，这里无需任何操作即可读到最新值
+                if (BoundConfig != null && !string.IsNullOrEmpty(BoundConfig.UserLabel))
+                {
+                    return BoundConfig.UserLabel;
+                }
+                return _label;
+            }
             set => _label = UIUtils.Intern(value);
         }
         
         private string _shortLabel = "";
         public string ShortLabel 
         {
-            get => _shortLabel;
+            get 
+            {
+                if (BoundConfig != null && !string.IsNullOrEmpty(BoundConfig.TaskbarLabel))
+                {
+                    return BoundConfig.TaskbarLabel;
+                }
+                return _shortLabel;
+            }
             set => _shortLabel = UIUtils.Intern(value);
         }
         
@@ -51,6 +70,7 @@ namespace LiteMonitor
         public string CachedUnitText { get; private set; } = "";
         public bool HasCustomUnit { get; private set; } = false; // 标记是否使用了自定义单位
 
+
         public int CachedColorState { get; private set; } = 0;
         public double CachedPercent { get; private set; } = 0.0;
 
@@ -61,35 +81,41 @@ namespace LiteMonitor
 
         public string GetFormattedText(bool isHorizontal)
         {
-            if (TextValue != null) return TextValue;
+            // 1. 获取用户配置 (注意：这里需要快速查找，Settings是单例)
+            var cfg = Settings.Load().MonitorItems.FirstOrDefault(x => x.Key == Key);
+            
+            // 2. 确定使用哪个单位配置
+            string userFormat = isHorizontal ? cfg?.UnitTaskbar : cfg?.UnitPanel;
+            HasCustomUnit = !string.IsNullOrEmpty(userFormat) && userFormat != "Auto";
+
+            if (TextValue != null) 
+            {
+                // 对于插件/Dashboard项，如果有单位配置，则附加单位
+                if (HasCustomUnit)
+                {
+                    // 防止重复单位
+                    if (!TextValue.EndsWith(userFormat))
+                        return TextValue + userFormat;
+                }
+                return TextValue;
+            }
 
             // 只有数值变化时才重新计算字符串
             if (Math.Abs(DisplayValue - _cachedDisplayValue) > 0.05f)
             {
                 _cachedDisplayValue = DisplayValue;
 
-                // 1. 获取基础数值和原始单位 (如 "10.5", "MB")
+                // 3. 获取基础数值和原始单位 (如 "10.5", "MB")
                 var (valStr, rawUnit) = UIUtils.FormatValueParts(Key, DisplayValue);
                 CachedValueText = valStr;
-
-                // 2. 获取用户配置 (注意：这里需要快速查找，Settings是单例)
-                // 考虑到性能，这里不建议每帧 Linq 查找，但由于 _cachedDisplayValue 过滤了大部分调用，
-                // 且 Item 数量很少(20个)，所以 FirstOrDefault 开销可忽略。
-                var cfg = Settings.Load().MonitorItems.FirstOrDefault(x => x.Key == Key);
-
-                // 3. 确定使用哪个单位配置
-                // 如果是横屏/任务栏模式 -> 用 UnitTaskbar，否则用 UnitPanel
-                string userFormat = isHorizontal ? cfg?.UnitTaskbar : cfg?.UnitPanel;
-                HasCustomUnit = !string.IsNullOrEmpty(userFormat) && userFormat != "Auto";
 
                 // 4. 生成最终单位
                 CachedUnitText = UIUtils.GetDisplayUnit(Key, rawUnit, userFormat);
 
-                // 5. 组合缓存 (为了兼容旧渲染器)
+                // 5. 组合缓存
                 _cachedNormalText = CachedValueText + CachedUnitText;
 
                 // 6. 生成横屏文本
-                // 如果用户自定义了单位，我们直接使用组合文本，不进行 "去单位" 处理
                 if (HasCustomUnit)
                 {
                     _cachedHorizontalText = _cachedNormalText;
