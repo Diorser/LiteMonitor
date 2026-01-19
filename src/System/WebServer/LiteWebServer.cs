@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using LiteMonitor.src.Core;
 using LiteMonitor.src.SystemServices;
+using LiteMonitor.src.SystemServices.InfoService;
 
 namespace LiteMonitor.src.WebServer
 {
@@ -222,6 +223,27 @@ namespace LiteMonitor.src.WebServer
             catch { return false; }
         }
 
+        // ★★★ 优化：缓存 Favicon Base64，避免每次重复转换 ★★★
+        private static string _cachedFaviconBase64 = null;
+
+        private static string GetAppIconBase64()
+        {
+            if (_cachedFaviconBase64 != null) return _cachedFaviconBase64;
+            try
+            {
+                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
+                if (icon != null)
+                {
+                    using var ms = new System.IO.MemoryStream();
+                    icon.ToBitmap().Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    _cachedFaviconBase64 = Convert.ToBase64String(ms.ToArray());
+                    return _cachedFaviconBase64;
+                }
+            }
+            catch { }
+            return ""; // Fallback
+        }
+
         private void HandleHttpRequest(NetworkStream stream, string request)
         {
             string[] lines = request.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
@@ -235,6 +257,8 @@ namespace LiteMonitor.src.WebServer
             string responseBody = "";
             string contentType = "text/html; charset=utf-8";
             int statusCode = 200;
+            bool isBinary = false;
+            byte[] binaryBody = null;
 
             if (path.StartsWith("/api/snapshot"))
             {
@@ -243,15 +267,25 @@ namespace LiteMonitor.src.WebServer
             }
             else if (path == "/" || path == "/index.html" || path.StartsWith("/?"))
             {
-                responseBody = WebPageContent.IndexHtml;
+                // ★★★ 动态注入 Favicon Base64 ★★★
+                string iconBase64 = GetAppIconBase64();
+                responseBody = WebPageContent.IndexHtml.Replace("{{FAVICON}}", 
+                    !string.IsNullOrEmpty(iconBase64) 
+                    ? $"<link rel='icon' type='image/png' href='data:image/png;base64,{iconBase64}'>" 
+                    : "");
             }
             else if (path == "/favicon.ico")
             {
-                statusCode = 404;
+                // 如果浏览器请求 favicon.ico，也可以尝试返回二进制流 (可选)
+                statusCode = 404; // 暂时保持 404，因为我们已经用了 Base64 内嵌
             }
             else
             {
-                responseBody = WebPageContent.IndexHtml;
+                string iconBase64 = GetAppIconBase64();
+                responseBody = WebPageContent.IndexHtml.Replace("{{FAVICON}}", 
+                     !string.IsNullOrEmpty(iconBase64) 
+                     ? $"<link rel='icon' type='image/png' href='data:image/png;base64,{iconBase64}'>" 
+                     : "");
             }
 
             SendHttpResponse(stream, statusCode, contentType, responseBody);
@@ -320,65 +354,91 @@ namespace LiteMonitor.src.WebServer
             List<MonitorItemConfig> itemsCopy;
             lock (_cfg.MonitorItems)
             {
-                itemsCopy = [.. _cfg.MonitorItems];// 复制列表，防止遍历时修改
+                // ★★★ 修复：应用与主界面一致的排序逻辑 (Group分组 -> Group排序 -> Item排序) ★★★
+                itemsCopy = _cfg.MonitorItems
+                    .GroupBy(x => x.UIGroup)
+                    .OrderBy(g => g.Min(x => x.SortIndex))
+                    .SelectMany(g => g.OrderBy(x => x.SortIndex))
+                    .ToList();
             }
 
             foreach (var item in itemsCopy)
             {
                 if (item.Key == "NET.IP") continue; 
 
-                float? val = hw.Get(item.Key);
-                if (val == null) continue;
-
-                string displayName = !string.IsNullOrEmpty(item.UserLabel) 
-                    ? item.UserLabel 
+                // ★★★ 修复：优先显示 DisplayLabel (包含 DynamicLabel)，解决插件名称不显示问题 ★★★
+                string displayName = !string.IsNullOrEmpty(item.DisplayLabel)
+                    ? item.DisplayLabel
                     : LanguageManager.T("Items." + item.Key);
                 
                 string groupId = item.UIGroup.ToUpper();
                 string groupDisplay = LanguageManager.T("Groups." + item.UIGroup);
 
-                // 格式化
-                var parts = UIUtils.FormatValueParts(item.Key, val.Value);
-                string valStr = parts.valStr;
-                string unit = parts.unitStr;
-
-                bool isRate = (item.Key.StartsWith("NET") || item.Key.StartsWith("DISK")) && !item.Key.Contains("Temp");
-                if (isRate && !string.IsNullOrEmpty(unit)) unit += "/s";
-
-                // 计算百分比
+                string valStr = "";
+                string unit = "";
                 double pct = 0;
-                if (item.Key.Contains("Clock") || item.Key.Contains("Power") || 
-                    item.Key.Contains("Fan") || item.Key.Contains("Pump") || item.Key.Contains("FPS"))
-                {
-                    pct = UIUtils.GetAdaptivePercentage(item.Key, val.Value) * 100;
-                }
-                else if (item.Key.Contains("Load") || unit.Contains("%"))
-                {
-                    pct = val.Value;
-                }
-                else if (item.Key.Contains("Temp"))
-                {
-                    pct = val.Value; 
-                }
-                else if (isRate)
-                {
-                    pct = Math.Min((val.Value / (100 * 1024 * 1024)) * 100, 100);
-                }
-
-                int status = UIUtils.GetColorResult(item.Key, val.Value);
-
-                // 【核心修复】哪些指标能决定大卡片的颜色 (Primary)
-                // 1. 流量/磁盘/数据：必须算 Primary，否则流量红了卡片不红
-                // 2. 负载/温度/内存：算 Primary
-                // 3. 排除：风扇、频率、功耗 (这些红了只在列表里红，不影响卡片框)
+                int status = 0;
                 bool isPrimary = false;
-                
-                if (groupId == "NET" || groupId == "DISK" || groupId == "DATA") 
-                    isPrimary = true;
-                else if (item.Key.StartsWith("NET") || item.Key.StartsWith("DISK") || item.Key.StartsWith("DATA"))
-                    isPrimary = true;
-                else if (item.Key.Contains("Load") || item.Key.Contains("Temp") || groupId == "MEM")
-                    isPrimary = true;
+
+                if (item.Key.StartsWith("DASH."))
+                {
+                    // 特殊处理 DASH.HOST 等纯信息项 (以及插件项)
+                    string dashKey = item.Key.Substring(5);
+                    valStr = InfoService.Instance.GetValue(dashKey);
+                    
+                    // ★★★ 修复：读取插件写入的颜色状态 (.Color) ★★★
+                    string colorStr = InfoService.Instance.GetValue(dashKey + ".Color");
+                    if (int.TryParse(colorStr, out int cVal)) status = cVal;
+
+                    // 读取插件写入的单位 (.Unit)
+                    string unitStr = InfoService.Instance.GetValue(dashKey + ".Unit");
+                    if (!string.IsNullOrEmpty(unitStr)) unit = unitStr;
+                }
+                else 
+                {
+                    // 普通监控项 (包括非DASH前缀的插件项，如果有的话)
+                    float? val = hw.Get(item.Key);
+                    if (val != null)
+                    {
+                        var parts = UIUtils.FormatValueParts(item.Key, val.Value);
+                        valStr = parts.valStr;
+                        unit = parts.unitStr;
+
+                        bool isRate = (item.Key.StartsWith("NET") || item.Key.StartsWith("DISK")) && !item.Key.Contains("Temp");
+                        if (isRate && !string.IsNullOrEmpty(unit)) unit += "/s";
+
+                        // 计算百分比
+                        if (item.Key.Contains("Clock") || item.Key.Contains("Power") || 
+                            item.Key.Contains("Fan") || item.Key.Contains("Pump") || item.Key.Contains("FPS"))
+                        {
+                            pct = UIUtils.GetAdaptivePercentage(item.Key, val.Value) * 100;
+                        }
+                        else if (item.Key.Contains("Load") || unit.Contains("%"))
+                        {
+                            pct = val.Value;
+                        }
+                        else if (item.Key.Contains("Temp"))
+                        {
+                            pct = val.Value; 
+                        }
+                        else if (isRate)
+                        {
+                            pct = Math.Min((val.Value / (100 * 1024 * 1024)) * 100, 100);
+                        }
+
+                        status = UIUtils.GetColorResult(item.Key, val.Value);
+                    }
+
+                    // Primary Logic
+                     if (groupId == "NET" || groupId == "DISK" || groupId == "DATA") 
+                         isPrimary = true;
+                     else if (item.Key.StartsWith("NET") || item.Key.StartsWith("DISK") || item.Key.StartsWith("DATA"))
+                         isPrimary = true;
+                     else if (item.Key.Contains("Load") || item.Key.Contains("Temp") || groupId == "MEM")
+                         isPrimary = true;
+                }
+
+                if (string.IsNullOrEmpty(valStr)) valStr = "--";
 
                 dataList.Add(new {
                     k = item.Key,

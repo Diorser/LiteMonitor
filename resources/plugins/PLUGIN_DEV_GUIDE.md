@@ -119,29 +119,32 @@ LiteMonitor 的插件是一个 **`.json` 文本文件**，存放在 `resources/p
 *   `"global"`: 全局共享。例如：API Key，通常所有监控项都用同一个 Key，填一次就行了。
 
 ### 4.3 Execution (获取数据)
-定义如何联网获取数据。目前使用标准的 `chain` (链式) 模式。
+定义如何联网获取数据。
+
+**1. `api_json` (简单请求)**
+最常用的模式，请求一个 URL 并解析 JSON。
+
+```json
+"execution": {
+  "type": "api_json",
+  "url": "https://api.weather.com/v1/current",
+  "method": "GET"
+}
+```
+
+**2. `chain` (链式请求 / 高级模式)**
+支持分步执行，适合复杂场景（如需要代理、需要先获取Token、或多次请求）。
 
 ```json
 "execution": {
   "type": "chain",
-  "interval": 300, // 刷新间隔 (秒)。建议不要太频繁，以免被 API 封禁。
+  "interval": 60,
   "steps": [
     {
-      "id": "step_weather",
-      // URL 模板：使用 {{变量名}} 插入用户输入的内容
-      "url": "https://api.example.com/weather?q={{city}}&apikey=123456",
-      "method": "GET",          // GET 或 POST
-      
-      // 响应格式：
-      // "json": 标准 JSON (默认)
-      // "jsonp": JSONP 格式 (自动去除 callback( ... ))
-      // "text": 纯文本 (配合 regex_replace 使用)
-      "response_format": "json",
-      
-      "cache_minutes": 10, // 缓存时间 (分钟)。在10分钟内再次请求相同 URL，直接用缓存，不联网。
-      "skip_if_set": "stop_flag", // 条件跳过：如果变量 stop_flag 有值，则不执行此步骤。
-      
-      "extract": { ... }        // 见下一节
+      "id": "step1",
+      "url": "https://google.com",
+      "proxy": "{{proxy_server}}", // (可选) 支持代理，如 "127.0.0.1:7890"
+      "cache_minutes": 0            // (可选) 缓存时间
     }
   ]
 }
@@ -199,7 +202,20 @@ LiteMonitor 的插件是一个 **`.json` 文本文件**，存放在 `resources/p
 }
 ```
 
-**2. `threshold_switch` (阈值颜色开关)**
+**2. `regex_match` (正则匹配)**
+*   用途：从文本中提取匹配的内容（通常用于 `response_format: "text"`）。
+*   示例：从 HTML 中提取 IP 地址。
+```json
+{
+  "var": "ip",
+  "source": "raw_html",
+  "function": "regex_match",
+  "pattern": "Current IP Address: (\\d+\\.\\d+\\.\\d+\\.\\d+)",
+  "to": "1" // 提取第1个捕获组
+}
+```
+
+**3. `threshold_switch` (阈值颜色开关)**
 *   用途：根据数值大小，决定显示颜色（绿/黄/红）。
 *   **颜色代码**：`"0"`=绿色(安全), `"1"`=黄色(警告), `"2"`=红色(危险)。
 ```json
@@ -259,10 +275,36 @@ LiteMonitor 的插件是一个 **`.json` 文本文件**，存放在 `resources/p
 ]
 ```
 
-**💡 小技巧：Fallback (兜底) 语法**
-如果 API 还没返回数据，`{{city_name}}` 可能是空的。你可以这样写：
-`{{city_name ?? city ?? "Loading..."}}`
-意思是：优先显示 API 返回的城市名；如果没有，显示用户输入的城市名；如果还没输入，显示 "Loading..."。
+**💡 小技巧：高级模版语法**
+
+LiteMonitor 支持更丰富的模版逻辑，让你的插件更智能。
+
+**1. Fallback (兜底) 语法 `??`**
+如果变量为空，则使用备用值。支持多级回退和字符串常量。
+*   `{{city_name ?? city ?? 'Loading...'}}`
+    *   含义：优先用 API 返回的 `city_name`；如果没有，用用户输入的 `city`；如果还没输入，显示文本 "Loading..."。
+*   `{{target_url ?? 'http://default.com'}}`
+
+**2. Ternary (三元) 语法 `? :`**
+根据条件显示不同内容。
+*   `{{is_running ? 'Running' : 'Stopped'}}`
+    *   含义：如果变量 `is_running` 存在且不为空，显示 "Running"，否则显示 "Stopped"。
+*   `{{proxy ? proxy_ip : 'Direct'}}`
+    *   注意：支持返回字符串常量（带引号）或变量值（不带引号），暂不支持复杂表达式拼接。
+    *   含义：如果用户未配置 `target_url`，则使用默认的 URL 字符串。
+
+**3. 内置变量**
+系统会在执行过程中自动注入一些特殊变量：
+*   `__latency__`: 请求往返耗时 (ms)。可用于显示延迟或根据延迟改变颜色。
+
+**2. 三元运算符 `? :`**
+根据条件显示不同的内容。
+*   `{{proxy_server ? '代理模式' : '直连模式'}}`
+    *   含义：如果 `proxy_server` 变量有值（非空），显示 "代理模式"；否则显示 "直连模式"。
+*   `{{is_error ? error_msg : '✅'}}`
+    *   含义：如果发生错误（`is_error` 有值），显示 `error_msg` 变量的内容；否则显示图标 "✅"。
+
+**注意**：字符串常量建议使用单引号 `'` 包裹。
 
 ---
 
@@ -373,13 +415,13 @@ LiteMonitor 的插件是一个 **`.json` 文本文件**，存放在 `resources/p
 
 ## 6. 常见问题 (FAQ)
 
-**Q: 为什么显示 "Err"?**
+**Q: 为什么显示 "❌" (Error)?**
 A: 通常是网络请求失败。请检查 URL 是否正确，或者 API 是否需要翻墙。
 
-**Q: 为什么显示 "?"**
+**Q: 为什么显示 "❓" (Unknown)?**
 A: JSON 解析失败。说明你 `extract` 里的路径写错了，或者 API 返回的结构变了。
 
-**Q: 为什么显示 "[Empty]"**
+**Q: 为什么显示 "⛔" (Empty)**
 A: 变量提取成功了，但是那个字段的值是空的。
 
 **Q: 修改了 json 没生效？**

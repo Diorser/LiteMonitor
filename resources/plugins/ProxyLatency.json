@@ -1,0 +1,61 @@
+{
+  "id": "ProxyLatency",
+  "meta": {
+    "name": "科学节点延迟测试",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "一般Clash代理地址为：127.0.0.1:7890 (默认端口，一般无需修改)，如测试本地延迟则全部留空"
+  },
+  "inputs": [
+    {
+      "key": "proxy_server",
+      "label": "本地代理地址",
+      "default": "127.0.0.1:7890",
+      "type": "text",
+      "placeholder": "留空则本地直连",
+      "scope": "target"
+    },
+    {
+      "key": "target_url",
+      "label": "测试服务器",
+      "default": "http://www.gstatic.com/generate_204",
+      "type": "text",
+      "placeholder": "留空则国内服务器",
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 5,
+    "steps": [
+      {
+        "id": "ping",
+        "url": "{{target_url ?? 'http://connect.rom.miui.com/generate_204'}}",
+        "proxy": "{{proxy_server}}",
+        "cache_minutes": 0,
+        "process": [
+          {
+             "var": "latency_color",
+             "source": "__latency__",
+             "function": "threshold_switch",
+             "value_map": {
+                 "0": "0",
+                 "200": "1",
+                 "500": "2"
+             }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "ms",
+      "label": "{{proxy_server ? '代理延迟' : '直连延迟'}}",
+      "short_label": "Ping",
+      "format_val": "{{__latency__}}",
+      "unit": " ms",
+      "color": "{{latency_color}}"
+    }
+  ]
+}

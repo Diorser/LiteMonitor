@@ -148,6 +148,9 @@ namespace LiteMonitor.src.Plugins
 
         [JsonPropertyName("skip_if_set")]
         public string SkipIfSet { get; set; } = ""; // If context[SkipIfSet] is present & not empty, skip this step
+
+        [JsonPropertyName("proxy")]
+        public string Proxy { get; set; } = ""; // Optional: "host:port" for proxy
     }
 
     public class PluginTransform

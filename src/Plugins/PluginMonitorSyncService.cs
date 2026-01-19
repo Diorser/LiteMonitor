@@ -89,13 +89,17 @@ namespace LiteMonitor.src.Plugins
                                 string safeLabel = !string.IsNullOrEmpty(finalName) ? finalName : (tmpl.Meta.Name + " " + output.Key);
                                 string safeShort = !string.IsNullOrEmpty(finalShort) ? finalShort : output.Key;
 
-                                // [Optimization] Smart Insert: Follow last sibling or append to end
-                                var lastPeer = settings.MonitorItems.LastOrDefault(x => x.Key.StartsWith(PluginConstants.DASH_PREFIX + inst.Id + "."));
+                                // [Optimization] Smart Insert: Follow last sibling based on SortIndex
+                                string prefix = PluginConstants.DASH_PREFIX + inst.Id + ".";
+                                var siblings = settings.MonitorItems.Where(x => x.Key.StartsWith(prefix)).ToList();
                                 
-                                int nextSort = (lastPeer?.SortIndex ?? (settings.MonitorItems.Any() ? settings.MonitorItems.Max(x => x.SortIndex) : 0)) + 1;
-                                int nextTbSort = (lastPeer?.TaskbarSortIndex ?? (settings.MonitorItems.Any() ? settings.MonitorItems.Max(x => x.TaskbarSortIndex) : 0)) + 1;
+                                var lastSortPeer = siblings.OrderByDescending(x => x.SortIndex).FirstOrDefault();
+                                var lastTbSortPeer = siblings.OrderByDescending(x => x.TaskbarSortIndex).FirstOrDefault();
+                                
+                                int nextSort = (lastSortPeer?.SortIndex ?? (settings.MonitorItems.Any() ? settings.MonitorItems.Max(x => x.SortIndex) : 0)) + 1;
+                                int nextTbSort = (lastTbSortPeer?.TaskbarSortIndex ?? (settings.MonitorItems.Any() ? settings.MonitorItems.Max(x => x.TaskbarSortIndex) : 0)) + 1;
 
-                                // Shift others to make room (Only needed if we are inserting, but safe to run always)
+                                // Shift others to make room
                                 foreach (var m in settings.MonitorItems)
                                 {
                                     if (m.SortIndex >= nextSort) m.SortIndex++;
@@ -110,6 +114,7 @@ namespace LiteMonitor.src.Plugins
                                     TaskbarLabel = "", // Auto mode
                                     DynamicTaskbarLabel = safeShort,
                                     UnitPanel = output.Unit,
+                                    UnitTaskbar = output.Unit, // [Fix] Sync Unit to Taskbar as well
                                     VisibleInPanel = true,
                                     SortIndex = nextSort,
                                     TaskbarSortIndex = nextTbSort,
@@ -127,6 +132,7 @@ namespace LiteMonitor.src.Plugins
                                 if (string.IsNullOrEmpty(item.DynamicTaskbarLabel)) item.DynamicTaskbarLabel = safeShort;
 
                                 if (item.UnitPanel != output.Unit) { item.UnitPanel = output.Unit; changed = true; }
+                                if (item.UnitTaskbar != output.Unit) { item.UnitTaskbar = output.Unit; changed = true; } // [Fix] Sync Unit to Taskbar as well
                             }
                         }
                     }

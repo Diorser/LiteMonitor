@@ -191,12 +191,20 @@ namespace LiteMonitor.src.Plugins
             }
         }
         
-        public void RestartInstance(string instanceId)
+        public void RestartInstance(string instanceId, PluginInstanceConfig configOverride = null)
         {
             StopInstance(instanceId);
             
-            var settings = Settings.Load();
-            var inst = settings.PluginInstances.FirstOrDefault(x => x.Id == instanceId);
+            PluginInstanceConfig inst;
+            if (configOverride != null)
+            {
+                inst = configOverride;
+            }
+            else
+            {
+                var settings = Settings.Load();
+                inst = settings.PluginInstances.FirstOrDefault(x => x.Id == instanceId);
+            }
             
             if (inst == null || !inst.Enabled)
             {

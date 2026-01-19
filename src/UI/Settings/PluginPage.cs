@@ -15,6 +15,8 @@ namespace LiteMonitor.src.UI.SettingsPage
     {
         private Panel _container;
         private Dictionary<string, LiteCheck> _toggles = new Dictionary<string, LiteCheck>();
+        // Track modified instances for batch restart on Save
+        private HashSet<string> _modifiedInstanceIds = new HashSet<string>();
 
         public PluginPage()
         {
@@ -29,6 +31,26 @@ namespace LiteMonitor.src.UI.SettingsPage
                 Padding = new Padding(20) // 增加内间距
             };
             this.Controls.Add(_container);
+        }
+
+        public override void Save()
+        {
+            base.Save();
+            
+            // Restart only modified plugins
+            if (_modifiedInstanceIds.Count > 0)
+            {
+                // Use Config property to access the latest in-memory state
+                var instances = Config?.PluginInstances ?? Settings.Load().PluginInstances;
+
+                foreach (var id in _modifiedInstanceIds)
+                {
+                    var inst = instances.FirstOrDefault(x => x.Id == id);
+                    // Pass the in-memory instance to avoid reading stale config from disk
+                    PluginManager.Instance.RestartInstance(id, inst);
+                }
+                _modifiedInstanceIds.Clear();
+            }
         }
 
         public override void OnShow()
@@ -176,7 +198,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 v => {
                     if (inst.Enabled != v) {
                         inst.Enabled = v;
-                        SaveAndRestart(inst);
+                        _modifiedInstanceIds.Add(inst.Id);
                     }
                 }
             );
@@ -193,7 +215,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 v => {
                     if (inst.CustomInterval != v) {
                         inst.CustomInterval = v;
-                        SaveAndRestart(inst);
+                        _modifiedInstanceIds.Add(inst.Id);
                     }
                 }
             );
@@ -205,17 +227,23 @@ namespace LiteMonitor.src.UI.SettingsPage
             // 4. Global Inputs
             foreach (var input in globalInputs)
             {
-                group.AddInput(this, input.Label, 
-                    () => inst.InputValues.ContainsKey(input.Key) ? inst.InputValues[input.Key] : input.DefaultValue,
-                    v => {
-                        string old = inst.InputValues.ContainsKey(input.Key) ? inst.InputValues[input.Key] : input.DefaultValue;
-                        if (old != v) {
-                            inst.InputValues[input.Key] = v;
-                            SaveAndRestart(inst);
-                        }
-                    }, 
-                    input.Placeholder
+                var inputCtrl = new LiteUnderlineInput(
+                    inst.InputValues.ContainsKey(input.Key) ? inst.InputValues[input.Key] : input.DefaultValue, 
+                    "", "", 100, null, HorizontalAlignment.Left
                 );
+                if (!string.IsNullOrEmpty(input.Placeholder)) inputCtrl.Placeholder = input.Placeholder;
+
+                // Direct Binding: Update Model Immediately on Change (Memory Only)
+                inputCtrl.Inner.TextChanged += (s, e) => {
+                    inst.InputValues[input.Key] = inputCtrl.Inner.Text;
+                    _modifiedInstanceIds.Add(inst.Id);
+                };
+                // Initial refresh for display (if needed, but constructor sets initial value)
+                // this.RegisterRefresh(() => inputCtrl.Inner.Text = inst.InputValues.ContainsKey(input.Key) ? inst.InputValues[input.Key] : input.DefaultValue);
+
+                var item = new LiteSettingsItem(input.Label, inputCtrl);
+                group.AddItem(item);
+                targetVisibles.Add(item);
             }
 
             // 5. Targets Section
@@ -242,7 +270,8 @@ namespace LiteMonitor.src.UI.SettingsPage
                     // Remove Action
                     var linkRem = new LiteLink(LanguageManager.T("Menu.PluginRemoveTarget"), () => {
                         inst.Targets.RemoveAt(index);
-                        SaveAndRestart(inst);
+                        // SaveAndRestart(inst); // <-- Removed auto-save on delete
+                        _modifiedInstanceIds.Add(inst.Id);
                         RebuildUI();
                     });
                     linkRem.SetColor(Color.IndianRed, Color.Red);
@@ -285,14 +314,11 @@ namespace LiteMonitor.src.UI.SettingsPage
 
                             cmb.SelectValue(targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue);
                             
-                            this.RegisterDelaySave(() => {
-                                string old = targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue;
-                                if (old != cmb.SelectedValue) {
-                                    targetVals[input.Key] = cmb.SelectedValue;
-                                    SaveAndRestart(inst);
-                                }
-                            });
-                            this.RegisterRefresh(() => cmb.SelectValue(targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue));
+                            // Direct Binding: Update Model Immediately on Change (Memory Only)
+                            cmb.Inner.SelectedIndexChanged += (s, e) => {
+                                targetVals[input.Key] = cmb.SelectedValue;
+                                _modifiedInstanceIds.Add(inst.Id);
+                            };
                             
                             // AttachAutoWidth logic inline
                             cmb.Inner.DropDown += (s, e) => {
@@ -315,18 +341,15 @@ namespace LiteMonitor.src.UI.SettingsPage
                             // Manual AddInput to capture item
                             var inputCtrl = new LiteUnderlineInput(
                                 targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue, 
-                                "", "", 100, null, HorizontalAlignment.Center
+                                "", "", 120, null, HorizontalAlignment.Center
                             );
                             if (!string.IsNullOrEmpty(input.Placeholder)) inputCtrl.Placeholder = input.Placeholder;
 
-                            this.RegisterDelaySave(() => {
-                                string old = targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue;
-                                if (old != inputCtrl.Inner.Text) {
-                                    targetVals[input.Key] = inputCtrl.Inner.Text;
-                                    SaveAndRestart(inst);
-                                }
-                            });
-                            this.RegisterRefresh(() => inputCtrl.Inner.Text = targetVals.ContainsKey(input.Key) ? targetVals[input.Key] : input.DefaultValue);
+                            // Direct Binding: Update Model Immediately on Change (Memory Only)
+                            inputCtrl.Inner.TextChanged += (s, e) => {
+                                targetVals[input.Key] = inputCtrl.Inner.Text;
+                                _modifiedInstanceIds.Add(inst.Id);
+                            };
 
                             var item = new LiteSettingsItem("  " + input.Label, inputCtrl);
                             group.AddItem(item);
@@ -343,10 +366,19 @@ namespace LiteMonitor.src.UI.SettingsPage
                     {
                         foreach(var input in targetInputs)
                         {
-                            newTarget[input.Key] = input.DefaultValue;
+                            // [Requirement 1] Empty for new text targets, but keep DefaultValue for selects
+                            if (input.Type == "select")
+                            {
+                                newTarget[input.Key] = input.DefaultValue;
+                            }
+                            else
+                            {
+                                newTarget[input.Key] = ""; 
+                            }
                         }
                     }
                     inst.Targets.Add(newTarget);
+                    _modifiedInstanceIds.Add(inst.Id);
                     RebuildUI();
                 };
                 

@@ -20,9 +20,6 @@ namespace LiteMonitor
         private bool _layoutDirty = true;
         private bool _dragging = false;
 
-        // [新增] 缓存上一次的 IP，避免重复刷新 UI
-        private string _lastIP = "init";
-
         private List<GroupLayoutInfo> _groups = new();
         private List<Column> _hxColsHorizontal = new();
         private List<Column> _hxColsTaskbar = new();

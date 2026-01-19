@@ -8,6 +8,7 @@ namespace LiteMonitor.src.WebServer
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    {{FAVICON}}
     <title>LiteMonitor WebServer</title>
     <style>
         :root {
@@ -147,6 +148,43 @@ namespace LiteMonitor.src.WebServer
         .big-val { font-size: 2.6rem; font-weight: 900; line-height: 1.1; font-family: 'Consolas', monospace; color: var(--item-color, #fff); }
         .big-unit { font-size: 1.1rem; color: var(--item-color, var(--text-sub)); font-weight: 700; opacity: 0.8; }
 
+        /* --- Layout Dash (Info) --- */
+        .full-width { grid-column: 1 / -1; }
+        .layout-dash { 
+            display: grid; 
+            /* PC端优化：增加最小宽度到 200px，防止内容挤压换行 */
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px; 
+            align-items: stretch;
+        }
+        .dash-item {
+            display: flex; flex-direction: column; 
+            background: rgba(255,255,255,0.03); 
+            padding: 12px 15px; border-radius: 10px;
+            /* 移除固定宽度，交给 Grid 控制 */
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .dash-lbl { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dash-val { 
+            /* 字体大小自适应：最小 0.9rem，最大 1.2rem */
+            font-size: clamp(0.9rem, 3.5vw, 1.2rem); 
+            color: var(--text-main); font-weight: 600; 
+            /* ★★★ 修复：DASH 值包含中文，使用微软雅黑优化显示 ★★★ */
+            font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+            /* ★★★ 修复：防止数字/单词被强制截断，允许在必要时换行 ★★★ */
+            white-space: pre-wrap; 
+            word-break: break-word; /* 单词完整时不拆分 */
+            overflow-wrap: anywhere; /* 只有长字符串（如IP）放不下才强制拆分 */
+            line-height: 1.2;
+        }
+        /* ★★★ 修复：DASH 监控项变色 (同步主界面) ★★★ */
+         .dash-val.is-0 { color: var(--c-0); } /* Normal (Green) */
+         .dash-val.is-1 { color: var(--c-1); }
+         .dash-val.is-2 { color: var(--c-2); }
+         
+         /* --- Color Definitions --- */
+
         /* --- Color Definitions --- */
         /* Card Status (Top Bar Color) */
         .cs-0 { --card-color: var(--c-0); }
@@ -177,6 +215,17 @@ namespace LiteMonitor.src.WebServer
             .rd-val { font-size: 1.5rem; }
             .rd-name { font-size: 0.9rem; margin-top: 5px; }
             .ring-container { flex-shrink: 0; }
+
+            /* ★★★ DASH 手机端优化：强制双列 ★★★ */
+            .layout-dash {
+                /* 强制一行两列，平分宽度，确保至少显示两个 */
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            .dash-item {
+                padding: 8px 10px; /* 减小内边距 */
+            }
+            .dash-lbl { font-size: 0.75rem; } /* 稍微缩小标签字体 */
         }
     </style>
 </head>
@@ -262,15 +311,26 @@ namespace LiteMonitor.src.WebServer
                 }
             });
 
+            // ★★★ 核心修复：确保 DASH 组始终在最上方 ★★★
+            const dashIdx = orderList.indexOf('DASH');
+            if (dashIdx > -1) {
+                orderList.splice(dashIdx, 1);
+                orderList.unshift('DASH');
+            }
+
             orderList.forEach(gid => {
                 const grp = groups[gid];
                 const isBig = ['NET', 'DISK', 'DATA'].includes(gid);
+                const isDash = gid === 'DASH'; // 识别 DASH 组
 
                 if (!cards[gid]) {
                     const div = document.createElement('div');
                     
                     let content = '';
-                    if (isBig) {
+                    if (isDash) {
+                        // DASH 布局
+                        content = `<div class='layout-dash' id='dash-${gid}'></div>`;
+                    } else if (isBig) {
                         content = `<div class='layout-big' id='big-${gid}'></div>`;
                     } else {
                         let ringHtml = '';
@@ -295,9 +355,13 @@ namespace LiteMonitor.src.WebServer
 
                     div.innerHTML = `<div class='card-head'>${grp.name}</div>${content}`;
                     board.appendChild(div);
+                    
+                    // ★★★ DASH 全宽显示 ★★★
+                    if (isDash) div.className = 'card full-width';
+
                     cards[gid] = { 
-                        el: div, isBig,
-                        cont: isBig ? div.querySelector(`#big-${gid}`) : div.querySelector(`#list-${gid}`),
+                        el: div, isBig, isDash,
+                        cont: isDash ? div.querySelector(`#dash-${gid}`) : (isBig ? div.querySelector(`#big-${gid}`) : div.querySelector(`#list-${gid}`)),
                         rows: {},
                         core: grp.core ? { 
                             wrap: div.querySelector(`#rw-${gid}`),
@@ -309,10 +373,41 @@ namespace LiteMonitor.src.WebServer
                     };
                 }
 
-                cards[gid].el.className = `card cs-${grp.maxSts}`;
+                // 更新样式
+                if (!isDash) cards[gid].el.className = `card cs-${grp.maxSts}`;
+                
                 const cObj = cards[gid];
 
-                if (isBig) {
+                if (isDash) {
+                     grp.subs.forEach(item => {
+                        let r = cObj.rows[item.k];
+                        if (!r) {
+                            const el = document.createElement('div');
+                            el.className = 'dash-item';
+                            el.innerHTML = `
+                                <div class='dash-lbl'>${item.n}</div>
+                                <div class='dash-val'>--</div>
+                            `;
+                            cObj.cont.appendChild(el);
+                            cObj.rows[item.k] = { 
+                                el, 
+                                v: el.querySelector('.dash-val')
+                            };
+                            r = cObj.rows[item.k];
+                        }
+                        // 更新数值
+                        let valStr = item.v;
+                        if (item.u && item.u !== '') valStr += ' ' + item.u;
+                        if (r.v.innerText !== valStr) r.v.innerText = valStr;
+                        
+                        // ★★★ 修复：应用颜色状态 (is-0, is-1, is-2) ★★★
+                        // 先移除旧的状态类
+                        r.v.classList.remove('is-0', 'is-1', 'is-2');
+                        // 添加新的状态类 (如果 sts >= 0)
+                        if (item.sts >= 0) r.v.classList.add(`is-${item.sts}`);
+
+                     });
+                } else if (isBig) {
                     grp.subs.forEach((item, idx) => {
                         if (idx > 1) return; 
                         let r = cObj.rows[item.k];

@@ -12,7 +12,7 @@
       "label": "币种代码",
       "type": "text",
       "default": "BTC",
-      "placeholder": "BTC, ETH, SOL, DOGE",
+      "placeholder": "ETH, SOL, DOGE",
       "scope": "target"
     },
     {

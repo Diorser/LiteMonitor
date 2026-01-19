@@ -125,7 +125,10 @@ namespace LiteMonitor.src.Plugins
 
                     // Direct fetch (no caching logic for legacy root level yet, or use step logic?)
                     // For simplicity and backward compatibility, we execute directly here but reuse Fetch helper
-                    resultRaw = await FetchRawAsync(step.Method, url, body, step.Headers, null, token);
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    resultRaw = await FetchRawAsync(step.Method, url, body, step.Headers, step.ResponseEncoding, token);
+                    sw.Stop();
+                    inputs["__latency__"] = sw.ElapsedMilliseconds.ToString();
                 }
 
                 if (tmpl.Execution.Type == "api_json" || tmpl.Execution.Type == "chain")
@@ -212,8 +215,14 @@ namespace LiteMonitor.src.Plugins
 
                 if (!hit)
                 {
+                    string proxy = step.Proxy;
+                    if (!string.IsNullOrEmpty(proxy) && proxy.Contains("{{"))
+                    {
+                         proxy = PluginProcessor.ResolveTemplate(proxy, context);
+                    }
+
                     // Request Coalescing
-                    var task = _inflightRequests.GetOrAdd(cacheKey, _ => FetchRawAsync(step.Method, url, body, step.Headers, step.ResponseEncoding, CancellationToken.None));
+                    var task = _inflightRequests.GetOrAdd(cacheKey, _ => FetchRawAsync(step.Method, url, body, step.Headers, step.ResponseEncoding, CancellationToken.None, proxy));
                     
                     try 
                     {
@@ -221,9 +230,12 @@ namespace LiteMonitor.src.Plugins
                         var tcs = new TaskCompletionSource<string>();
                         using (token.Register(() => tcs.TrySetCanceled()))
                         {
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
                             var finishedTask = await Task.WhenAny(task, tcs.Task);
                             if (finishedTask == tcs.Task) throw new OperationCanceledException(token);
                             resultRaw = await task;
+                            sw.Stop();
+                            context["__latency__"] = sw.ElapsedMilliseconds.ToString();
                         }
 
                         // Update Cache
@@ -268,7 +280,27 @@ namespace LiteMonitor.src.Plugins
             }
         }
 
-        private async Task<string> FetchRawAsync(string methodStr, string url, string body, Dictionary<string, string> headers, string encoding, System.Threading.CancellationToken token)
+        // Proxy Client Cache: Key = "host:port" or "http://host:port"
+        private readonly ConcurrentDictionary<string, HttpClient> _proxyClients = new();
+
+        private HttpClient GetClient(string proxy)
+        {
+            if (string.IsNullOrEmpty(proxy)) return _http;
+
+            return _proxyClients.GetOrAdd(proxy, p => 
+            {
+                var handler = new HttpClientHandler();
+                handler.Proxy = new System.Net.WebProxy(p);
+                handler.UseProxy = true;
+                
+                var client = new HttpClient(handler);
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor/1.0");
+                return client;
+            });
+        }
+
+        private async Task<string> FetchRawAsync(string methodStr, string url, string body, Dictionary<string, string> headers, string encoding, System.Threading.CancellationToken token, string proxy = null)
         {
             var method = (methodStr?.ToUpper() == "POST") ? HttpMethod.Post : HttpMethod.Get;
             var request = new HttpRequestMessage(method, url);
@@ -281,7 +313,8 @@ namespace LiteMonitor.src.Plugins
                 foreach (var h in headers) request.Headers.TryAddWithoutValidation(h.Key, h.Value);
             }
 
-            var response = await _http.SendAsync(request, token);
+            var client = GetClient(proxy);
+            var response = await client.SendAsync(request, token);
             byte[] bytes = await response.Content.ReadAsByteArrayAsync(token);
             
             if (encoding?.ToLower() == "gbk")
@@ -344,13 +377,19 @@ namespace LiteMonitor.src.Plugins
                     string val = PluginProcessor.ResolveTemplate(output.Format, inputs);
                     string injectKey = inst.Id + keySuffix + "." + output.Key;
                     
-                    if (string.IsNullOrEmpty(val)) val = "[Empty]";
+                    if (string.IsNullOrEmpty(val)) val = PluginConstants.STATUS_EMPTY;
                     InfoService.Instance.InjectValue(injectKey, val);
 
                     if (!string.IsNullOrEmpty(output.Color))
                     {
                         string colorState = PluginProcessor.ResolveTemplate(output.Color, inputs);
                         InfoService.Instance.InjectValue(injectKey + ".Color", colorState);
+                    }
+
+                    // Inject Unit
+                    if (!string.IsNullOrEmpty(output.Unit))
+                    {
+                        InfoService.Instance.InjectValue(injectKey + ".Unit", output.Unit);
                     }
 
                     // Dynamic Label Update Logic

@@ -28,7 +28,7 @@ namespace LiteMonitor.src.Plugins
                 {
                     if (current.ValueKind == JsonValueKind.Object && current.TryGetProperty(path, out var prop))
                         return JsonElementToString(prop);
-                    return "?";
+                    return PluginConstants.STATUS_UNKNOWN;
                 }
 
                 var parts = path.Split('.');
@@ -42,20 +42,20 @@ namespace LiteMonitor.src.Plugins
                         string name = part.Substring(0, idxStart);
                         
                         // Parse index (fast span-like logic not available in .NET Framework / Standard 2.0 easily, keep substring)
-                        if (!int.TryParse(part.Substring(idxStart + 1, part.Length - idxStart - 2), out int index)) return "?";
+                        if (!int.TryParse(part.Substring(idxStart + 1, part.Length - idxStart - 2), out int index)) return PluginConstants.STATUS_UNKNOWN;
 
                         if (!string.IsNullOrEmpty(name))
                         {
-                            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(name, out current)) return "?";
+                            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(name, out current)) return PluginConstants.STATUS_UNKNOWN;
                         }
                         
-                        if (current.ValueKind != JsonValueKind.Array || index >= current.GetArrayLength()) return "?";
+                        if (current.ValueKind != JsonValueKind.Array || index >= current.GetArrayLength()) return PluginConstants.STATUS_UNKNOWN;
                         current = current[index];
                     }
                     else
                     {
                         // Handle Object Property
-                        if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current)) return "?";
+                        if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current)) return PluginConstants.STATUS_UNKNOWN;
                     }
                 }
 
@@ -63,7 +63,7 @@ namespace LiteMonitor.src.Plugins
             }
             catch
             {
-                return "?";
+                return PluginConstants.STATUS_UNKNOWN;
             }
         }
 
@@ -200,6 +200,28 @@ namespace LiteMonitor.src.Plugins
             {
                 string content = m.Groups[1].Value.Trim();
                 
+                // Handle Ternary Syntax: "cond ? trueVal : falseVal"
+                int qIdx = content.IndexOf('?');
+                int cIdx = content.LastIndexOf(':');
+                if (qIdx > 0 && cIdx > qIdx && (qIdx + 1 >= content.Length || content[qIdx + 1] != '?'))
+                {
+                    string condKey = content.Substring(0, qIdx).Trim();
+                    string truePart = content.Substring(qIdx + 1, cIdx - (qIdx + 1)).Trim();
+                    string falsePart = content.Substring(cIdx + 1).Trim();
+
+                    bool isTrue = context.TryGetValue(condKey, out string val) && !string.IsNullOrEmpty(val);
+                    string target = isTrue ? truePart : falsePart;
+
+                    // Remove quotes if present
+                    if (target.Length >= 2 && ((target.StartsWith("\"") && target.EndsWith("\"")) || (target.StartsWith("'") && target.EndsWith("'"))))
+                    {
+                        return target.Substring(1, target.Length - 2);
+                    }
+
+                    // Treat as variable if not quoted
+                    return context.TryGetValue(target, out string tVal) ? tVal : "";
+                }
+
                 // Handle Fallback Syntax: "var ?? fallback"
                 if (content.Contains("??"))
                 {
@@ -207,6 +229,13 @@ namespace LiteMonitor.src.Plugins
                     foreach (var part in parts)
                     {
                         string key = part.Trim();
+
+                        // Check for string literal
+                        if (key.Length >= 2 && ((key.StartsWith("\"") && key.EndsWith("\"")) || (key.StartsWith("'") && key.EndsWith("'"))))
+                        {
+                            return key.Substring(1, key.Length - 2);
+                        }
+
                         if (context.TryGetValue(key, out string val) && !string.IsNullOrEmpty(val))
                         {
                             return val;
