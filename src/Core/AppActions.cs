@@ -92,6 +92,9 @@ namespace LiteMonitor.src.Core
             // 透明度
             if (Math.Abs(form.Opacity - cfg.Opacity) > 0.01)
                 form.Opacity = Math.Clamp(cfg.Opacity, 0.1, 1.0);
+
+            // 5. 刷新菜单 (确保透明度、置顶等勾选状态同步更新)
+            form.RebuildMenus();
         }
 
         // =============================================================
@@ -186,15 +189,29 @@ namespace LiteMonitor.src.Core
             var server = LiteWebServer.Instance;
             if (server != null)
             {
-                // 1. 无论端口是否变化，先强制停止 (释放旧端口)
-                // Stop 方法内部处理了 null 和异常，是安全的
-                server.Stop();
-                
-                // 2. 如果开关是开启的，则重新启动 
-                // (Start 方法内部会读取 cfg.WebServerPort 的最新值)
-                if (cfg.WebServerEnabled)
+                bool shouldRun = cfg.WebServerEnabled;
+                bool isRunning = server.IsRunning;
+                int targetPort = cfg.WebServerPort;
+                int currentPort = server.CurrentRunningPort;
+
+                // 只有状态不一致时才进行操作
+                if (shouldRun)
                 {
-                    server.Start();
+                    // 如果需要运行，但当前没运行，或者端口变了 -> 重启/启动
+                    if (!isRunning || targetPort != currentPort)
+                    {
+                        server.Stop();
+                        server.Start();
+                    }
+                    // else: 已经在运行且端口没变，保持现状，不要断开连接
+                }
+                else
+                {
+                    // 如果需要关闭，且当前正在运行 -> 关闭
+                    if (isRunning)
+                    {
+                        server.Stop();
+                    }
                 }
             }
         }

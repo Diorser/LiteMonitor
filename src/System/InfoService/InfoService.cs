@@ -27,12 +27,11 @@ namespace LiteMonitor.src.SystemServices.InfoService
 
         // Default Values (User Friendly)
         private const string DEFAULT_IP   = "0.0.0.0";
-        private const string DEFAULT_TIME = "00:00:00";
 
 
-        // Update Intervals
-        private const int INTERVAL_SLOW = 60000; // 1 min (Stable state)
-        private const int INTERVAL_FAST = 2000;  // 2 sec (Retry state)
+        // Update Intervals (For IP/Host only, NOT for Uptime/Time)
+        private const int INTERVAL_SLOW = 60000; // 1 min (Stable state: IP found)
+        private const int INTERVAL_FAST = 2000;  // 2 sec (Retry state: IP missing)
 
         // === State ===
         private readonly Dictionary<string, string> _data = new();
@@ -117,10 +116,23 @@ namespace LiteMonitor.src.SystemServices.InfoService
             // Uptime
             TimeSpan ts = TimeSpan.FromMilliseconds(Environment.TickCount64);
             
-            // Format: 3d 5h 12m (Auto Switch EN/ZH)
-            string upStr = LanguageManager.CurrentLang == "zh"
-                ? $"{(int)ts.TotalDays}天 {ts.Hours}时 {ts.Minutes}分"
-                : $"{(int)ts.TotalDays}d {ts.Hours}h {ts.Minutes}m";
+            // Format: 
+            // < 1 Day: 5h 12m 30s (5时 12分 30秒)
+            // > 1 Day: 3d 5h 12m  (3天 5时 12分)
+            string upStr;
+            
+            if (ts.TotalDays < 1)
+            {
+                upStr = LanguageManager.CurrentLang == "zh"
+                    ? $"{ts.Hours}时 {ts.Minutes}分 {ts.Seconds}秒"
+                    : $"{ts.Hours}h {ts.Minutes}m {ts.Seconds}s";
+            }
+            else
+            {
+                upStr = LanguageManager.CurrentLang == "zh"
+                    ? $"{(int)ts.TotalDays}天 {ts.Hours}时 {ts.Minutes}分"
+                    : $"{(int)ts.TotalDays}d {ts.Hours}h {ts.Minutes}m";
+            }
 
             SetData(KEY_UPTIME, upStr);
         }

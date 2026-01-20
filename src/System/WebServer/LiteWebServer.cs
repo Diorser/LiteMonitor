@@ -20,11 +20,15 @@ namespace LiteMonitor.src.WebServer
     {
         private TcpListener? _listener;
         private volatile bool _isRunning = false;
+        private int _currentRunningPort = -1;
         private readonly Settings _cfg;
         // 存储所有活跃的 WebSocket 客户端
         private readonly ConcurrentDictionary<TcpClient, bool> _wsClients = new();
 
         public static LiteWebServer? Instance { get; private set; }
+
+        public bool IsRunning => _isRunning;
+        public int CurrentRunningPort => _isRunning ? _currentRunningPort : -1;
 
         public LiteWebServer(Settings cfg)
         {
@@ -39,9 +43,11 @@ namespace LiteMonitor.src.WebServer
 
             try
             {
-                _listener = new TcpListener(IPAddress.Any, _cfg.WebServerPort);
+                int port = _cfg.WebServerPort;
+                _listener = new TcpListener(IPAddress.Any, port);
                 _listener.Start();
                 _isRunning = true;
+                _currentRunningPort = port;
 
                 // 1. 启动监听连接的循环
                 Task.Run(ListenLoop);
@@ -58,6 +64,7 @@ namespace LiteMonitor.src.WebServer
         public void Stop()
         {
             _isRunning = false;
+            _currentRunningPort = -1;
             try { _listener?.Stop(); } catch { }
             // 关闭所有客户端
             foreach (var client in _wsClients.Keys) try { client.Close(); } catch { }
