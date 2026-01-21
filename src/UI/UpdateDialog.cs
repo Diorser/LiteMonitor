@@ -361,21 +361,40 @@ namespace LiteMonitor
 
         private void StartUpdater()
         {
-            string updater = Path.Combine(AppContext.BaseDirectory, "resources", "Updater.exe");
+            string resourcesDir = Path.Combine(AppContext.BaseDirectory, "resources");
+            string updater = "";
 
-            if (!File.Exists(updater))
+            // ★★★ 1. 主程序抢先更新 Updater.exe ★★★
+            // 防止 Updater 运行时无法自我覆盖
+            // 返回解压后的 Updater 路径 (优先取 ZIP 里的新版)
+            string? preparedPath = UpdateChecker.PreUpdateUpdater(_context.SavePath);
+
+            // ★★★ 2. 决策使用哪个 Updater ★★★
+            if (!string.IsNullOrEmpty(preparedPath) && File.Exists(preparedPath))
+            {
+                // A. 预更新成功，直接使用刚解压出来的最新版
+                updater = preparedPath;
+            }
+            else
+            {
+                // B. 预更新失败 (ZIP异常?)，尝试回退到现有文件
+                string newUpdater = Path.Combine(resourcesDir, "LiteMonitor.Updater.exe");
+                string oldUpdater = Path.Combine(resourcesDir, "Updater.exe");
+
+                if (File.Exists(newUpdater)) updater = newUpdater;
+                else if (File.Exists(oldUpdater)) updater = oldUpdater;
+            }
+
+            // ★★★ 3. 最终检查 ★★★
+            if (string.IsNullOrEmpty(updater) || !File.Exists(updater))
             {
                 bool isZh = _settings?.Language?.ToLower() == "zh";
-                string msg = isZh ? $"找不到更新程序：\n{updater}\n请尝试重新安装软件。" : $"Updater not found:\n{updater}\nPlease reinstall the software.";
+                string msg = isZh ? $"找不到更新程序，请尝试重新安装。\nSearch Path: {resourcesDir}" : $"Updater not found, please reinstall.\nSearch Path: {resourcesDir}";
                 string title = isZh ? "文件丢失" : "File Missing";
                 
                 MessageBox.Show(msg, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-
-            // ★★★ 新增：主程序抢先更新 Updater.exe ★★★
-            // 防止 Updater 运行时无法自我覆盖
-            UpdateChecker.PreUpdateUpdater(_context.SavePath);
 
             var psi = new ProcessStartInfo
             {

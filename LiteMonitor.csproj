@@ -41,7 +41,7 @@
         </Content>
     </ItemGroup>
 	<ItemGroup>
-		<Content Include="resources\Updater.exe">
+		<Content Include="resources\LiteMonitor.Updater.exe">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
     <Content Include="使用说明(必读).txt">

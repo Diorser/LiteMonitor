@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -78,10 +78,12 @@ namespace LiteMonitor.Updater
                     string destPath = Path.Combine(baseDir, rel);
 
                     // ★★★ [恢复] Updater 跳过自我更新 ★★★
-                    // 逻辑：主程序 (PreUpdateUpdater) 已经在 Updater 启动前完成了 Updater.exe 的更新。
+                    // 逻辑：主程序 (PreUpdateUpdater) 已经在 Updater 启动前完成了 Updater 的更新。
                     // 因此，Updater 运行时，它自己已经是最新版，无需再次覆盖。
                     // 直接跳过，避免“文件正在使用”错误。
-                    if (rel.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase))
+                    // 兼容旧版 Updater.exe 和新版 LiteMonitor.Updater.exe
+                    if (rel.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase) || 
+                        rel.EndsWith("LiteMonitor.Updater.exe", StringComparison.OrdinalIgnoreCase))
                     {
                         continue; 
                     }
@@ -166,6 +168,7 @@ namespace LiteMonitor.Updater
             {
                 try
                 {
+                    // 简单粗暴：直接覆盖
                     File.Copy(src, dest, true);
                     return true; 
                 }
@@ -251,15 +254,40 @@ namespace LiteMonitor.Updater
 
         private static void WaitExit(string name)
         {
-            // 等待最多 10 秒
-            for (int i = 0; i < 50; i++)
+            // 阶段 1: 礼貌等待 (3秒)
+            // 大多数情况下，主程序在启动 Updater 后会立即调用 Application.Exit()
+            for (int i = 0; i < 15; i++)
+            {
+                var processes = Process.GetProcessesByName(name);
+                if (processes.Length == 0) return;
+                Thread.Sleep(200);
+            }
+
+            // 阶段 2: 请求关闭 (尝试 CloseMainWindow)
+            try 
+            {
+                var processes = Process.GetProcessesByName(name);
+                foreach (var p in processes)
+                {
+                    if (!p.HasExited) p.CloseMainWindow();
+                }
+            }
+            catch { }
+
+            // 阶段 3: 最终强制清理 (如果还不行，只能 Kill)
+            // 等待最多 5 秒
+            for (int i = 0; i < 25; i++)
             {
                 var processes = Process.GetProcessesByName(name);
                 if (processes.Length == 0) return;
                 
-                foreach (var p in processes) 
+                // 只有在超时严重时才尝试 Kill，且增加间隔
+                if (i > 10) 
                 {
-                    try { if (!p.HasExited) p.Kill(); } catch { }
+                    foreach (var p in processes) 
+                    {
+                        try { if (!p.HasExited) p.Kill(); } catch { }
+                    }
                 }
                 Thread.Sleep(200);
             }

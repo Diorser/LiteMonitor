@@ -320,55 +320,76 @@ namespace LiteMonitor
         /// 这样 Updater 运行时就是最新的，无需再尝试更新自己。
         /// </summary>
         /// <param name="zipPath">下载好的 update.zip 路径</param>
-        public static void PreUpdateUpdater(string zipPath)
+        /// <returns>返回成功解压的 Updater 路径，失败则返回 null</returns>
+        public static string? PreUpdateUpdater(string zipPath)
         {
             try
             {
                 string baseDir = AppContext.BaseDirectory;
-                string updaterTarget = Path.Combine(baseDir, "resources", "Updater.exe");
-                string updaterDir = Path.GetDirectoryName(updaterTarget)!;
+                string resourcesDir = Path.Combine(baseDir, "resources");
 
                 // 1. 确保 resources 目录存在
-                if (!Directory.Exists(updaterDir)) Directory.CreateDirectory(updaterDir);
+                if (!Directory.Exists(resourcesDir)) Directory.CreateDirectory(resourcesDir);
 
                 // 2. 杀掉所有残留的 Updater 进程 (防止占用)
-                foreach (var p in Process.GetProcessesByName("Updater"))
+                // 涵盖新旧两个名字
+                string[] updaterNames = { "Updater", "LiteMonitor.Updater" };
+                foreach (var name in updaterNames)
                 {
-                    try 
+                    foreach (var p in Process.GetProcessesByName(name))
                     {
-                        // 优化：检查进程路径是否匹配，防止误杀其他软件的 Updater
-                        if (p.MainModule != null && 
-                            string.Equals(p.MainModule.FileName, updaterTarget, StringComparison.OrdinalIgnoreCase))
+                        try 
                         {
-                            p.Kill(); 
-                        }
-                    } 
-                    catch { }
+                            // 优化：检查进程路径是否匹配
+                             if (p.MainModule != null && 
+                                 p.MainModule.FileName.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase))
+                            {
+                                p.Kill(); 
+                            }
+                        } 
+                        catch { }
+                    }
                 }
                 
                 // 给一点时间释放句柄
                 System.Threading.Thread.Sleep(200);
 
-                // 3. 打开 ZIP 查找 Updater.exe
+                // 3. 打开 ZIP 查找 Updater
                 using (var archive = ZipFile.OpenRead(zipPath))
                 {
-                    // 遍历寻找以 Updater.exe 结尾的文件 (因为压缩包内可能有子目录结构)
-                    var updaterEntry = archive.Entries.FirstOrDefault(e => 
-                        e.FullName.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase));
-
-                    if (updaterEntry != null)
+                    // 优先找新版
+                    var entry = archive.Entries.FirstOrDefault(e => 
+                        e.FullName.EndsWith("LiteMonitor.Updater.exe", StringComparison.OrdinalIgnoreCase));
+                    
+                    // 没找到则找旧版
+                    if (entry == null)
                     {
-                        // 4. 强制覆盖解压
-                        updaterEntry.ExtractToFile(updaterTarget, true);
-                        Debug.WriteLine($"[UpdateChecker] Updater.exe 预更新成功: {updaterTarget}");
+                        entry = archive.Entries.FirstOrDefault(e => 
+                            e.FullName.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (entry != null)
+                    {
+                        // 确定解压目标路径 (保持文件名一致)
+                        string fileName = Path.GetFileName(entry.FullName);
+                        string targetPath = Path.Combine(resourcesDir, fileName);
+
+                        // 4. 解压新文件 (覆盖)
+                        entry.ExtractToFile(targetPath, true);
+                        
+                        Debug.WriteLine($"[UpdateChecker] Updater 预更新成功: {targetPath}");
+                        
+                        return targetPath;
                     }
                 }
             }
             catch (Exception ex)
             {
-                // 即使失败也不要阻断流程，可能旧版 Updater 也能用，或者文件被严重占用
+                // 即使失败也不要阻断流程
                 Debug.WriteLine($"[UpdateChecker] Updater 预更新失败: {ex.Message}");
             }
+            
+            return null;
         }
     }
 }

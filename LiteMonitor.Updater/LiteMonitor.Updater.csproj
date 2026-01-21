@@ -14,8 +14,15 @@
 		<DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 
-		<!-- 最重要：生成 Updater.exe 而不是 LiteMonitor.Updater.exe -->
-		<AssemblyName>Updater</AssemblyName>
+		<!-- 改名以减少误报 -->
+		<AssemblyName>LiteMonitor.Updater</AssemblyName>
+		<!-- 程序集元数据 (增加可信度) -->
+		<Company>LiteMonitor</Company>
+		<Product>LiteMonitor Auto Updater</Product>
+		<Description>Automatic update component for LiteMonitor system monitoring tool.</Description>
+		<Copyright>Copyright © 2025-2026 LiteMonitor Team</Copyright>
+		<FileVersion>1.2.5.0</FileVersion>
+		<AssemblyVersion>1.2.5.0</AssemblyVersion>
 
 		<!-- 禁用顶级语句 -->
 		<UseMaui>false</UseMaui>
