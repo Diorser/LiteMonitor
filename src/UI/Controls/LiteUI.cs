@@ -686,8 +686,7 @@ namespace LiteMonitor.src.UI.Controls
             get
             {
                 CreateParams cp = base.CreateParams;
-                // WS_EX_COMPOSITED (0x02000000): 让所有子控件在离屏缓冲区合成后一次性显示
-                cp.ExStyle |= 0x02000000; 
+                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED
                 return cp;
             }
         }

@@ -493,65 +493,74 @@ namespace LiteMonitor
 
         private void ToggleLayoutMode()
         {
-            // 1. 记录切换前的窗口中心点位置
-            Point oldCenter = new Point(Left + Width / 2, Top + Height / 2);
-            
-            // 2. 切换横竖屏模式
-            _cfg.HorizontalMode = !_cfg.HorizontalMode;
-            _cfg.Save();
-            
-            // 3. 应用新主题和布局
-            _ui.ApplyTheme(_cfg.Skin);
-            RebuildMenus();
-            
-            // 4. 强制触发一次重绘和圆角计算
-            this.Invalidate();
-            ApplyRoundedCorners();
-            
-            // 5. 强制更新窗口尺寸
-            this.Update();
-            
-            // 6. 计算新的窗口位置，保持中心点不变
-            int newLeft = oldCenter.X - Width / 2;
-            int newTop = oldCenter.Y - Height / 2;
-            
-            // 7. 确保新位置在当前屏幕的可视区域内
-            var screen = Screen.FromPoint(oldCenter);
-            var workingArea = screen.WorkingArea;
-            
-            // 调整水平位置，确保不超出屏幕边界
-            if (newLeft < workingArea.Left)
-                newLeft = workingArea.Left;
-            if (newLeft + Width > workingArea.Right)
-                newLeft = workingArea.Right - Width;
-            
-            // 调整垂直位置，确保不超出屏幕边界
-            if (newTop < workingArea.Top)
-                newTop = workingArea.Top;
-            if (newTop + Height > workingArea.Bottom)
-                newTop = workingArea.Bottom - Height;
-            
-            // 8. 防止切换时触发自动隐藏
-            // 直接使用类级别的配置，保持统一
-            int safeMargin = _hideThreshold + 1; // 阈值 + 1像素安全区
+             // 0. 挂起布局，防止中间状态绘制导致闪烁
+            this.SuspendLayout();
 
-            // 确保窗口不靠近左边缘
-            if (newLeft <= workingArea.Left + _hideThreshold)
-                newLeft = workingArea.Left + safeMargin;
+            try
+            {
+                // 1. 记录切换前的窗口中心点位置
+                Point oldCenter = new Point(Left + Width / 2, Top + Height / 2);
+                
+                // 2. 切换横竖屏模式
+                _cfg.HorizontalMode = !_cfg.HorizontalMode;
+                _cfg.Save();
+                
+                // 3. 应用新主题和布局
+                _ui.ApplyTheme(_cfg.Skin);
+                RebuildMenus();
+                
+                // 4. 强制触发一次重绘和圆角计算
+                ApplyRoundedCorners();
+                
+                // 5. [已移除] 移除多余的 Invalidate/Update，统一由 ResumeLayout 处理
+                
+                // 6. 计算新的窗口位置，保持中心点不变
+                int newLeft = oldCenter.X - Width / 2;
+                int newTop = oldCenter.Y - Height / 2;
+                
+                // 7. 确保新位置在当前屏幕的可视区域内
+                var screen = Screen.FromPoint(oldCenter);
+                var workingArea = screen.WorkingArea;
+                
+                // 调整水平位置，确保不超出屏幕边界
+                if (newLeft < workingArea.Left)
+                    newLeft = workingArea.Left;
+                if (newLeft + Width > workingArea.Right)
+                    newLeft = workingArea.Right - Width;
+                
+                // 调整垂直位置，确保不超出屏幕边界
+                if (newTop < workingArea.Top)
+                    newTop = workingArea.Top;
+                if (newTop + Height > workingArea.Bottom)
+                    newTop = workingArea.Bottom - Height;
+                
+                // 8. 防止切换时触发自动隐藏
+                // 直接使用类级别的配置，保持统一
+                int safeMargin = _hideThreshold + 1; // 阈值 + 1像素安全区
 
-            // 确保窗口不靠近右边缘
-            if (workingArea.Right - (newLeft + Width) <= _hideThreshold)
-                newLeft = workingArea.Right - Width - safeMargin;
+                // 确保窗口不靠近左边缘
+                if (newLeft <= workingArea.Left + _hideThreshold)
+                    newLeft = workingArea.Left + safeMargin;
 
-            // 确保窗口不靠近上边缘
-            if (newTop <= workingArea.Top + _hideThreshold)
-                newTop = workingArea.Top + safeMargin;
-            
-            // 9. 设置新位置
-            Location = new Point(newLeft, newTop);
-            
-            // 10. 保存新的位置信息
-            SavePos();
+                // 确保窗口不靠近右边缘
+                if (workingArea.Right - (newLeft + Width) <= _hideThreshold)
+                    newLeft = workingArea.Right - Width - safeMargin;
+
+                // 确保窗口不靠近上边缘
+                if (newTop <= workingArea.Top + _hideThreshold)
+                    newTop = workingArea.Top + safeMargin;
+                
+                // 9. 设置新位置
+                Location = new Point(newLeft, newTop);
+                
+                // 10. 保存新的位置信息
+                SavePos();
+            }
+            finally
+            {
+                // 恢复布局并强制重绘一次
+                this.ResumeLayout(true);
+            }
         }
 
         public void ShowMainWindow()

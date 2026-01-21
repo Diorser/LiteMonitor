@@ -119,6 +119,16 @@ namespace LiteMonitor
                 
                 // 3. 刷新“打开网页”按钮的可用状态
                 itemWebOpen.Enabled = cfg.WebServerEnabled;
+
+                // 4. [新增] 开启时弹窗引导
+                if (cfg.WebServerEnabled)
+                {
+                    string msg = LanguageManager.T("Menu.WebServerTip");
+                    if (MessageBox.Show(msg, "LiteMonitor", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) == DialogResult.OK)
+                    {
+                        itemWebOpen.PerformClick();
+                    }
+                }
             };
 
             // 事件：打开网页
@@ -361,33 +371,24 @@ namespace LiteMonitor
                 
                 foreach (var itemConfig in sortedItems)
                 {
-                    // ★★★ [Fix] 优先使用 DynamicLabel (插件名)，如果为空尝试自救 ★★★
-                    if (string.IsNullOrEmpty(itemConfig.DisplayLabel) && itemConfig.Key.StartsWith("DASH."))
-                    {
-                         var rescue = LiteMonitor.src.Plugins.PluginManager.Instance.TryGetSmartLabel(itemConfig.Key);
-                         if (!string.IsNullOrEmpty(rescue)) itemConfig.DynamicLabel = rescue;
-                    }
-                    if (string.IsNullOrEmpty(itemConfig.DisplayTaskbarLabel) && itemConfig.Key.StartsWith("DASH."))
-                    {
-                         var rescueShort = LiteMonitor.src.Plugins.PluginManager.Instance.TryGetSmartLabel(itemConfig.Key, "short_label");
-                         if (!string.IsNullOrEmpty(rescueShort)) itemConfig.DynamicTaskbarLabel = rescueShort;
-                    }
+                    // ★★★ [Fix] 同步运行时动态标签 (InfoService -> Config) ★★★
+                    string dynLabel = InfoService.Instance.GetValue("PROP.Label." + itemConfig.Key);
+                    if (!string.IsNullOrEmpty(dynLabel)) itemConfig.DynamicLabel = dynLabel;
+
+                    string dynShort = InfoService.Instance.GetValue("PROP.ShortLabel." + itemConfig.Key);
+                    if (!string.IsNullOrEmpty(dynShort)) itemConfig.DynamicTaskbarLabel = dynShort;
 
                     // 1. 拼接名称
                     // Full Name: DisplayLabel > Loc(Items.Key) > Key
-                    // [Refactor] 优先读取 InfoService 动态 Label
-                    string dynLabel = InfoService.Instance.GetValue("PROP.Label." + itemConfig.Key);
-                    if (string.IsNullOrEmpty(dynLabel)) dynLabel = itemConfig.DynamicLabel; // Fallback
-
-                    string full = !string.IsNullOrEmpty(itemConfig.UserLabel) ? itemConfig.UserLabel : (!string.IsNullOrEmpty(dynLabel) ? dynLabel : LanguageManager.T(UIUtils.Intern("Items." + itemConfig.Key)));
-                    if (full.StartsWith("Items.")) full = itemConfig.Key;
+                    string full = itemConfig.DisplayLabel;
+                    if (string.IsNullOrEmpty(full))
+                    {
+                        full = LanguageManager.T(UIUtils.Intern("Items." + itemConfig.Key));
+                        if (full.StartsWith("Items.")) full = itemConfig.Key;
+                    }
                     
                     // Short Name: DisplayTaskbarLabel > Loc(Short.Key) > Key
-                    // Note: TaskbarLabel might be " " (hidden), so we check DisplayTaskbarLabel carefully
-                    string dynShort = InfoService.Instance.GetValue("PROP.ShortLabel." + itemConfig.Key);
-                    if (string.IsNullOrEmpty(dynShort)) dynShort = itemConfig.DynamicTaskbarLabel; // Fallback
-                    
-                    string shortName = !string.IsNullOrEmpty(itemConfig.TaskbarLabel) ? itemConfig.TaskbarLabel : dynShort; // User > Dynamic
+                    string shortName = itemConfig.DisplayTaskbarLabel;
                     
                     if (string.IsNullOrEmpty(shortName) || shortName == " ")
                     {
@@ -397,9 +398,6 @@ namespace LiteMonitor
                     }
 
                     // 2. 构造菜单显示文本
-                    // Logic: "{Short} ({Full})" e.g. "Up (Upload Speed)"
-                    // If user set TaskbarLabel to " " (Hidden), we still want to show meaningful text in the MENU.
-                    // So we use the calculated 'shortName' (fallback to default) + 'full'.
                     string label = $"{full} ({shortName})";
 
                     // 2. 创建菜单
@@ -450,13 +448,13 @@ namespace LiteMonitor
 
                     foreach (var itemConfig in g)
                     {
-                        // ★★★ [Fix] 优先使用 DynamicLabel (插件名)，如果为空尝试自救 ★★★
-                        if (string.IsNullOrEmpty(itemConfig.DisplayLabel) && itemConfig.Key.StartsWith("DASH."))
-                        {
-                             var rescue = LiteMonitor.src.Plugins.PluginManager.Instance.TryGetSmartLabel(itemConfig.Key);
-                             if (!string.IsNullOrEmpty(rescue)) itemConfig.DynamicLabel = rescue;
-                        }
+                        // ★★★ [Fix] 同步运行时动态标签 (InfoService -> Config) ★★★
+                        string dynLabel = LiteMonitor.src.SystemServices.InfoService.InfoService.Instance.GetValue("PROP.Label." + itemConfig.Key);
+                        if (!string.IsNullOrEmpty(dynLabel)) itemConfig.DynamicLabel = dynLabel;
 
+                        string dynShort = LiteMonitor.src.SystemServices.InfoService.InfoService.Instance.GetValue("PROP.ShortLabel." + itemConfig.Key);
+                        if (!string.IsNullOrEmpty(dynShort)) itemConfig.DynamicTaskbarLabel = dynShort;
+                        
                         // Label: DisplayLabel > Loc(Items.Key) > Key
                         string def = LanguageManager.T(UIUtils.Intern("Items." + itemConfig.Key));
                         if (def.StartsWith("Items.")) def = itemConfig.Key;

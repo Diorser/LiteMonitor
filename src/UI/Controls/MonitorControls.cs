@@ -72,25 +72,12 @@ namespace LiteMonitor.src.UI.Controls
             };
 
             // 2. Name Label (任务栏模式)
-            // [Fix] 优先使用 DisplayLabel (UserLabel ?? DynamicLabel)
-            string defName = LanguageManager.T(UIUtils.Intern("Items." + item.Key));
-            
-            // ★★★ [自救逻辑] 如果 DisplayLabel 为空，尝试从 PluginManager 抢救一下 ★★★
-            if (string.IsNullOrEmpty(item.DisplayLabel) && item.Key.StartsWith("DASH."))
-            {
-                // 尝试自救
-                var rescue = LiteMonitor.src.Plugins.PluginManager.Instance.TryGetSmartLabel(item.Key);
-                if (!string.IsNullOrEmpty(rescue)) 
-                {
-                    item.DynamicLabel = rescue; // 立即修正内存 (Legacy Fallback)
-                }
-            }
-            
-            // [Refactor] Calculate Display Label using InfoService
+            // [Fix] 同步运行时动态标签 (InfoService -> Config)
             string dynLabel = InfoService.Instance.GetValue("PROP.Label." + item.Key);
-            if (string.IsNullOrEmpty(dynLabel)) dynLabel = item.DynamicLabel; // Fallback to legacy
+            if (!string.IsNullOrEmpty(dynLabel)) item.DynamicLabel = dynLabel;
             
-            string valName = !string.IsNullOrEmpty(item.UserLabel) ? item.UserLabel : (!string.IsNullOrEmpty(dynLabel) ? dynLabel : defName);
+            string defName = LanguageManager.T(UIUtils.Intern("Items." + item.Key));
+            string valName = !string.IsNullOrEmpty(item.DisplayLabel) ? item.DisplayLabel : defName;
             
             _lblName = new Label
             {
@@ -109,25 +96,15 @@ namespace LiteMonitor.src.UI.Controls
             { Location = new Point(MonitorLayout.X_COL2, UIUtils.S(8)) };
 
             // 4. Short Input
+            // [Fix] 同步运行时动态标签 (InfoService -> Config)
+            string dynShort = InfoService.Instance.GetValue("PROP.ShortLabel." + item.Key);
+            if (!string.IsNullOrEmpty(dynShort)) item.DynamicTaskbarLabel = dynShort;
+
             string defShortKey = UIUtils.Intern("Short." + item.Key);
             string defShort = LanguageManager.T(defShortKey);
             if (defShort.StartsWith("Short.")) defShort = item.Key.Split('.')[1]; 
             
-            // ★★★ [自救逻辑] 如果 DisplayTaskbarLabel 为空，尝试从 PluginManager 抢救一下 ★★★
-            if (string.IsNullOrEmpty(item.DisplayTaskbarLabel) && item.Key.StartsWith("DASH."))
-            {
-                var rescueShort = LiteMonitor.src.Plugins.PluginManager.Instance.TryGetSmartLabel(item.Key, "short_label");
-                if (!string.IsNullOrEmpty(rescueShort)) 
-                {
-                    item.DynamicTaskbarLabel = rescueShort; // 立即修正内存
-                }
-            }
-
-            // [Refactor] Calculate Display Short Label using InfoService
-            string dynShort = InfoService.Instance.GetValue("PROP.ShortLabel." + item.Key);
-            if (string.IsNullOrEmpty(dynShort)) dynShort = item.DynamicTaskbarLabel; // Fallback
-            
-            string valShort = !string.IsNullOrEmpty(item.TaskbarLabel) ? item.TaskbarLabel : (!string.IsNullOrEmpty(dynShort) ? dynShort : defShort);
+            string valShort = !string.IsNullOrEmpty(item.DisplayTaskbarLabel) ? item.DisplayTaskbarLabel : defShort;
             
             _inputShort = new LiteUnderlineInput(valShort, "", "", 80, UIColors.TextMain) 
             { Location = new Point(MonitorLayout.X_COL2, UIUtils.S(8)), Visible = false };

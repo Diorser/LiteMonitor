@@ -51,9 +51,15 @@
 	
 	
 <ItemGroup>
+  <Compile Remove="LiteMonitor-1.2.4\**" />
   <Compile Remove="LiteMonitor.Updater\**" />
+  <Compile Remove="LiteMonitor.Wpf\**" />
+  <EmbeddedResource Remove="LiteMonitor-1.2.4\**" />
   <EmbeddedResource Remove="LiteMonitor.Updater\**" />
+  <EmbeddedResource Remove="LiteMonitor.Wpf\**" />
+  <None Remove="LiteMonitor-1.2.4\**" />
   <None Remove="LiteMonitor.Updater\**" />
+  <None Remove="LiteMonitor.Wpf\**" />
 </ItemGroup>
 	
 <!-- 引入文件资源管理 -->

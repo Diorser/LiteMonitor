@@ -113,7 +113,14 @@ namespace LiteMonitor.src.UI.SettingsPage
                     return (!Config.TaskbarFontBold && Math.Abs(Config.TaskbarFontSize - 9f) < 0.1f) ? 1 : 0;
                 },
                 idx => {
-                    if (Config != null && !Config.TaskbarCustomLayout) {
+                    // ★★★ 修复：移除对 Config.TaskbarCustomLayout 的检查 ★★★
+                    // 原因：当用户在 UI 上取消勾选"自定义布局"并同时切换大小字模式时，
+                    // 由于保存顺序原因，Config.TaskbarCustomLayout 可能此时还是 true，导致这里的值没有被写入。
+                    // 而实际上，只要用户能在 UI 上操作这个 Combo，说明他已经关闭了自定义布局（或打算关闭），
+                    // 所以我们应该无条件写入这两个值。
+                    // 即使在开启自定义布局的情况下写入也没关系，因为自定义布局的控件稍后会覆盖这两个值（如果有变动），
+                    // 或者自定义布局会直接使用这两个值作为基准。
+                    if (Config != null) {
                         if (idx == 1) { Config.TaskbarFontSize = 9f; Config.TaskbarFontBold = false; } 
                         else { Config.TaskbarFontSize = 10f; Config.TaskbarFontBold = true; } 
                     }

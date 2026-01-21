@@ -114,7 +114,7 @@ namespace LiteMonitor.src.WebServer
         }
         .rd-name { 
             font-size: 0.9rem; color: var(--text-sub); margin-top: 8px; 
-            font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+            font-weight: 600; letter-spacing: 1px;
             text-align: center;
         }
         .rd-val { font-size: 2.2rem; font-weight: 800; line-height: 1; margin-top: 10px;}
@@ -144,7 +144,7 @@ namespace LiteMonitor.src.WebServer
         .big-item:first-child::after {
             content: ''; position: absolute; right: 0; top: 10%; bottom: 10%; width: 1px; background: var(--border);
         }
-        .big-lbl { font-size: 1rem; color: var(--text-sub); font-weight: 600; text-transform: uppercase; }
+        .big-lbl { font-size: 1rem; color: var(--text-sub); font-weight: 600; }
         .big-val { font-size: 2.6rem; font-weight: 900; line-height: 1.1; font-family: 'Consolas', monospace; color: var(--item-color, #fff); }
         .big-unit { font-size: 1.1rem; color: var(--item-color, var(--text-sub)); font-weight: 700; opacity: 0.8; }
 
@@ -165,7 +165,7 @@ namespace LiteMonitor.src.WebServer
             border: 1px solid var(--border);
             overflow: hidden;
         }
-        .dash-lbl { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dash-lbl { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 6px; letter-spacing: 0.5px; }
         .dash-val { 
             /* 字体大小自适应：最小 0.9rem，最大 1.2rem */
             font-size: clamp(0.9rem, 3.5vw, 1.2rem); 

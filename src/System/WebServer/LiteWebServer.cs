@@ -406,6 +406,11 @@ namespace LiteMonitor.src.WebServer
                 {
                     // 普通监控项 (包括非DASH前缀的插件项，如果有的话)
                     float? val = hw.Get(item.Key);
+
+                    // 如果是电池相关且没有读到值（例如台式机），则直接跳过不显示
+                    if (val == null && item.Key.StartsWith("BAT", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     if (val != null)
                     {
                         var parts = MetricUtils.FormatValueParts(item.Key, val.Value);
@@ -428,8 +433,7 @@ namespace LiteMonitor.src.WebServer
                         }
                          // Case B: 已知最大值的类型 (Clock/Power/Fan/Pump/FPS/Battery)
                          else if (item.Key.Contains("Clock") || item.Key.Contains("Power") || 
-                            item.Key.Contains("Fan") || item.Key.Contains("Pump") || item.Key.Contains("FPS") ||
-                            item.Key.StartsWith("BAT."))
+                            item.Key.Contains("Fan") || item.Key.Contains("Pump") || item.Key.Contains("FPS") || item.Key.Contains("Voltage")) 
                         {
                             rawPct = MetricUtils.GetAdaptivePercentage(item.Key, val.Value);
                         }

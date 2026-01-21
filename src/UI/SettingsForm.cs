@@ -22,7 +22,7 @@ namespace LiteMonitor.src.UI
         private Dictionary<string, SettingsPageBase> _pages = new Dictionary<string, SettingsPageBase>();
         private string _currentKey = "";
 
-        // 可选：给主窗体也开启防闪烁（如果 BufferedPanel 够用可以不加，但加上更保险）
+        // 恢复 WS_EX_COMPOSITED 以防止闪烁，同时配合页面卸载机制解决卡顿
         protected override CreateParams CreateParams
         {
             get
@@ -31,6 +31,18 @@ namespace LiteMonitor.src.UI
                 cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED
                 return cp;
             }
+        }
+
+        protected override void OnResizeBegin(EventArgs e)
+        {
+            this.SuspendLayout();
+            base.OnResizeBegin(e);
+        }
+
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            this.ResumeLayout(true);
         }
 
         public SettingsForm(Settings cfg, UIController ui, MainForm mainForm)
@@ -131,27 +143,6 @@ namespace LiteMonitor.src.UI
             AddNav("System", "⚙️ " + LanguageManager.T("Menu.SystemHardwar"), new SystemHardwarPage());
             AddNav("Plugins", "🧩 " + LanguageManager.T("Menu.Plugins"), new PluginPage());
 
-            // ★★★ 核心修复：挂起布局 + 强制句柄创建 ★★★
-            _pnlContent.SuspendLayout();
-            
-            foreach(var page in _pages.Values)
-            {
-                // 1. 先把页面加进去
-                page.Dock = DockStyle.Fill;
-                page.Visible = false; // 先隐藏
-                _pnlContent.Controls.Add(page);
-
-                // 2. ★★★ 暴力强制创建句柄 (Force Handle Creation) ★★★
-                // 这一步会将 UI 创建的开销从“点击时”转移到“初始化时”。
-                // 此时所有的 Label, ComboBox 的底层 Win32 窗口都会被创建。
-                if (!page.IsHandleCreated)
-                {
-                    var dummy = page.Handle; 
-                }
-            }
-            
-            _pnlContent.ResumeLayout();
-
             _pnlNavContainer.PerformLayout();
             SwitchPage("MainPanel");
         }
@@ -180,30 +171,31 @@ namespace LiteMonitor.src.UI
 
             if (_pages.ContainsKey(key))
             {
-                var targetPage = _pages[key];
-
-                // ★★★ 关键点 3：只切换 Visible，绝不 Clear/Add ★★★
-                // BufferedPanel 会处理这里的双缓冲，因为只是属性变化，没有句柄销毁，所以非常丝滑
-                _pnlContent.SuspendLayout();
+                // ★★★ 核心修复开始 ★★★
                 
-                foreach(var p in _pages.Values)
+                // 1. 挂起父容器布局：告诉系统“在我操作完之前，千万不要重绘”
+                _pnlContent.SuspendLayout(); 
+                
+                try 
                 {
-                    if (p == targetPage)
-                    {
-                        p.Visible = true;
-                        p.BringToFront(); // 确保显示在最上层
-                    }
-                    else
-                    {
-                        p.Visible = false;
-                    }
+                    _pnlContent.Controls.Clear();
+                    var targetPage = _pages[key];
+                    
+                    // 2. 关键技：手动预设尺寸
+                    // 在 Dock 生效前，先强制把它设为和父容器一样大。
+                    // 这样即使 Layout 有微小延迟，肉眼看到的也是填满的状态。
+                    targetPage.Size = _pnlContent.ClientSize; 
+                    targetPage.Dock = DockStyle.Fill; // 双保险
+
+                    targetPage.OnShow();
+                    _pnlContent.Controls.Add(targetPage);
                 }
-                
-                _pnlContent.ResumeLayout();
-                
-                // 通知页面 "我显示了"，用于执行一些必须在显示时刷新的逻辑（如数据更新）
-                // 但不要在这里重建 UI
-                targetPage.OnShow(); 
+                finally
+                {
+                    // 3. 恢复布局：此时控件大小已正确，系统一次性绘制最终画面
+                    _pnlContent.ResumeLayout(); 
+                }
+                // ★★★ 核心修复结束 ★★★
             }
         }
 

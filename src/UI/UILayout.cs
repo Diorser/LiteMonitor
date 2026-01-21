@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using LiteMonitor.src.Core;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using LiteMonitor.src.Core;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -88,6 +88,13 @@ namespace LiteMonitor
 
                 // 计算起始 Y
                 int itemY = y + groupPadding;
+
+                // [Fix] 1.2.4 兼容：双列模式下，起始位置下移半个 Gap，以获得更多呼吸感并保持上下对称
+                if (isTwoColumnGroup) 
+                {
+                    itemY += _t.Layout.ItemGap / 2;
+                }
+
                 int startItemY = itemY; // 记录起始位置用于计算总高度
 
                 // 2. 混合布局算法 (支持 TextOnly / TwoColumn / StandardBar 混排)
@@ -162,7 +169,7 @@ namespace LiteMonitor
                         it.LabelRect = topRect;
                         it.ValueRect = topRect;
 
-                        int barH = Math.Max(barMinH, (int)(inner.Height * 0.22));
+                        int barH = Math.Max(barMinH, (int)(inner.Height * 0.23));
                         int barY = inner.Bottom - barH - barBotGap;
                         it.BarRect = new Rectangle(inner.X, barY, inner.Width, barH);
 
@@ -173,9 +180,14 @@ namespace LiteMonitor
 
                 // 计算内容总高度
                 contentHeight = itemY - startItemY;
-                // 如果最后是标准条目，可能多加了一个 ItemGap，可以去掉但不影响大局
-                // 为美观，如果 contentHeight > 0 且最后一步加了 gap，可以回退
-                // 但为了简单起见，保留微小间距也无妨
+
+                // [Fix] 移除最后一个条目多加的 ItemGap (仅针对非 Dashboard 组)
+                // 恢复 1.2.4 版本的紧凑布局： Padding - Items... - Padding
+                // 注意：双列模式(isTwoColumnGroup) 1.2.4 原本就保留了 Gap，这里也不移除
+                if (!isDashboard && !isTwoColumnGroup && contentHeight > 0)
+                {
+                    contentHeight -= _t.Layout.ItemGap;
+                }
 
                 // 3. 结算组高度
                 int groupHeight = groupPadding * 2 + contentHeight;

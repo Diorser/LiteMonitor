@@ -1,0 +1,44 @@
+{
+  "id": "Bilibili",
+  "meta": {
+    "name": "B站粉丝监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "监控 Bilibili UP主粉丝数，自动获取UP主名称"
+  },
+  "inputs": [
+    {
+      "key": "vmid",
+      "label": "UP主UID",
+      "type": "text",
+      "default": "946974",
+      "placeholder": "数字UID",
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 300,
+    "steps": [
+      {
+        "id": "fetch_card",
+        "url": "https://api.bilibili.com/x/web-interface/card?mid={{vmid}}",
+        "method": "GET",
+        "response_format": "json",
+        "extract": {
+          "follower": "data.card.fans",
+          "up_name": "data.card.name"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "fans",
+      "label": "{{up_name}}",
+      "short_label": "B站",
+      "format_val": "👤{{follower}}",
+      "unit": ""
+    }
+  ]
+}

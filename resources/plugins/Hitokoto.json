@@ -1,0 +1,53 @@
+{
+  "id": "Hitokoto",
+  "meta": {
+    "name": "一言 (每分钟一句)",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "每分钟一句随机显示一句诗词、文学或动画名言"
+  },
+  "inputs": [
+    {
+      "key": "category",
+      "label": "句子类型",
+      "type": "select",
+      "default": "a",
+      "scope": "target",
+      "options": [
+        { "label": "动画 (Anime)", "value": "a" },
+        { "label": "漫画 (Comic)", "value": "b" },
+        { "label": "游戏 (Game)", "value": "c" },
+        { "label": "文学 (Literature)", "value": "d" },
+        { "label": "原创 (Original)", "value": "e" },
+        { "label": "网络 (Internet)", "value": "f" },
+        { "label": "哲学 (Philosophy)", "value": "k" },
+        { "label": "诗词 (Poetry)", "value": "i" }
+      ]
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 60,
+    "steps": [
+      {
+        "id": "fetch_quote",
+        "url": "https://v1.hitokoto.cn/?c={{category}}&encode=json",
+        "method": "GET",
+        "response_format": "json",
+        "extract": {
+          "hitokoto": "hitokoto",
+          "from": "from"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "quote",
+      "label": "一言",
+      "short_label": "📖",
+      "format_val": "{{hitokoto}}",
+      "unit": ""
+    }
+  ]
+}

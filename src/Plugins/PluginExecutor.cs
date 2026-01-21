@@ -126,7 +126,8 @@ namespace LiteMonitor.src.Plugins
                     // Direct fetch (no caching logic for legacy root level yet, or use step logic?)
                     // For simplicity and backward compatibility, we execute directly here but reuse Fetch helper
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    resultRaw = await FetchRawAsync(step.Method, url, body, step.Headers, step.ResponseEncoding, token);
+                    var resolvedHeaders = ResolveHeaders(step.Headers, inputs);
+                    resultRaw = await FetchRawAsync(step.Method, url, body, resolvedHeaders, step.ResponseEncoding, token);
                     sw.Stop();
                     inputs["__latency__"] = sw.ElapsedMilliseconds.ToString();
                 }
@@ -389,7 +390,8 @@ namespace LiteMonitor.src.Plugins
                     // Inject Unit
                     if (!string.IsNullOrEmpty(output.Unit))
                     {
-                        InfoService.Instance.InjectValue(injectKey + ".Unit", output.Unit);
+                        string resolvedUnit = PluginProcessor.ResolveTemplate(output.Unit, inputs);
+                        InfoService.Instance.InjectValue(injectKey + ".Unit", resolvedUnit);
                     }
 
                     // Dynamic Label Update Logic
@@ -443,6 +445,17 @@ namespace LiteMonitor.src.Plugins
                 }
             }
             System.Diagnostics.Debug.WriteLine($"Plugin exec error ({inst.Id}): {ex.Message}");
+        }
+
+        private Dictionary<string, string> ResolveHeaders(Dictionary<string, string> headers, Dictionary<string, string> context)
+        {
+            if (headers == null || headers.Count == 0) return null;
+            var resolved = new Dictionary<string, string>();
+            foreach (var kv in headers)
+            {
+                resolved[kv.Key] = PluginProcessor.ResolveTemplate(kv.Value, context);
+            }
+            return resolved;
         }
     }
 }

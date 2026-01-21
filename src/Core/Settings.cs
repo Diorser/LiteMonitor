@@ -153,27 +153,7 @@ namespace LiteMonitor
             return _instance;
         }
 
-        // ★★★ [New] Helper method to get taskbar style ★★★
-        public TBStyle GetStyle()
-        {
-            if (TaskbarCustomLayout)
-            {
-                return new TBStyle 
-                {
-                    Font = TaskbarFontFamily, Size = TaskbarFontSize, Bold = TaskbarFontBold,
-                    Gap = MetricUtils.ParseInt(TaskbarItemSpacing.ToString()), 
-                    Inner = MetricUtils.ParseInt(TaskbarInnerSpacing.ToString()), 
-                    VOff = MetricUtils.ParseInt(TaskbarVerticalPadding.ToString())
-                };
-            }
-            // ... (Default logic if needed, but for now custom is main path or use UIUtils if logic was there)
-            // For now, let's assume this was moved from somewhere or just return default
-             return new TBStyle 
-            {
-                Font = "Microsoft YaHei UI", Size = 10f, Bold = true,
-                Gap = 6, Inner = 8, VOff = 3
-            };
-        }
+        // Helper method to get taskbar style moved to SettingsHelper
     }
 
     public class MonitorItemConfig

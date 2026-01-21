@@ -378,9 +378,31 @@ namespace LiteMonitor
             int y = 0;
             foreach (var col in _cols)
             {
-                // ... (Top/Bottom 计算) ...
-                if (col.Top != null) { /*...*/ y += itemHeight; }
-                if (col.Bottom != null) { /*...*/ y += itemHeight; }
+                // 清除可能存在的水平布局遗留数据
+                col.Bounds = Rectangle.Empty;
+                col.BoundsTop = Rectangle.Empty;
+                col.BoundsBottom = Rectangle.Empty;
+
+                // 1. 处理 Top Item
+                if (col.Top != null)
+                {
+                    // 定义矩形区域：整行宽度
+                    col.BoundsTop = new Rectangle(margin, y, contentWidth, itemHeight);
+                    y += itemHeight;
+                }
+
+                // 2. 处理 Bottom Item
+                if (col.Bottom != null)
+                {
+                    col.BoundsBottom = new Rectangle(margin, y, contentWidth, itemHeight);
+                    y += itemHeight;
+                }
+
+                // 如果只有一个 Item，为了兼容 TaskbarRenderer 的特殊逻辑（Top != null && Bottom == null），设置 Bounds
+                if (col.Top != null && col.Bottom == null)
+                {
+                    col.Bounds = col.BoundsTop;
+                }
 
                 y += s.VOff; // ★ 3. 使用 s.VOff 控制行间距
             }
