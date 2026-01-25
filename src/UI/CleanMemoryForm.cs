@@ -131,41 +131,46 @@ namespace LiteMonitor.src.UI
 
         public async Task StartCleaningAsync()
         {
-            this.Show();
-            this.Refresh();
-
-            // 异步执行真实清理
-            await Task.Run(() => 
+            try
             {
-                // 限频变量：避免过于频繁刷新 UI 导致卡顿
-                long lastTick = 0;
+                this.Show();
+                this.Refresh();
 
-                HardwareMonitor.Instance?.CleanMemory(progress => 
+                // 异步执行真实清理
+                await Task.Run(() => 
                 {
-                    long now = DateTime.Now.Ticks;
-                    // 如果进度未完成且距离上次刷新不足 15ms (约 60FPS)，则跳过刷新
-                    if (progress < 100 && now - lastTick < 150000) return; 
-                    
-                    lastTick = now;
+                    // 限频变量：避免过于频繁刷新 UI 导致卡顿
+                    long lastTick = 0;
 
-                    // 必须 Invoke 到 UI 线程
-                    try 
+                    HardwareMonitor.Instance?.CleanMemory(progress => 
                     {
-                        this.Invoke(new Action(() => UpdateProgress(progress)));
-                    }
-                    catch { } // 防止窗口关闭后调用异常
+                        long now = DateTime.Now.Ticks;
+                        // 如果进度未完成且距离上次刷新不足 15ms (约 60FPS)，则跳过刷新
+                        if (progress < 100 && now - lastTick < 150000) return; 
+                        
+                        lastTick = now;
+
+                        // 必须 Invoke 到 UI 线程
+                        try 
+                        {
+                            this.Invoke(new Action(() => UpdateProgress(progress)));
+                        }
+                        catch { } // 防止窗口关闭后调用异常
+                    });
                 });
-            });
 
-            // 确保显示 100%
-            UpdateProgress(100);
+                // 确保显示 100%
+                UpdateProgress(100);
 
-            // 显示完成状态并关闭
-            _lblPercent.Text = "OK";
-            _lblTitle.Text = LanguageManager.T("Menu.CleanMemorySuccess");
-            await Task.Delay(800); // 停留0.8秒展示结果
-
-            this.Close();
+                // 显示完成状态并关闭
+                _lblPercent.Text = "OK";
+                _lblTitle.Text = LanguageManager.T("Menu.CleanMemorySuccess");
+                await Task.Delay(800); // 停留0.8秒展示结果
+            }
+            finally
+            {
+                this.Close();
+            }
         }
 
         private void UpdateProgress(int val)

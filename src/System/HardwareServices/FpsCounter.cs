@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using Microsoft.Win32; // ★★★ 新增引用 ★★★
 
 // LiteMonitor 系统服务命名空间
 namespace LiteMonitor.src.SystemServices
@@ -22,6 +23,15 @@ namespace LiteMonitor.src.SystemServices
         private bool _isRunning = false;     // FPS 计数服务运行状态
         private bool _isRestarting = false;  // 服务重启状态
         
+        // ★★★ [新增] 静态关机标志 ★★★
+        private static bool _isSystemShuttingDown = false;
+
+        static FpsCounter()
+        {
+            // 订阅系统关机事件
+            try { SystemEvents.SessionEnding += (s, e) => _isSystemShuttingDown = true; } catch { }
+        }
+
         // ★★★ [新增] 启动锁和最后 activity 时间，用于控制进程生命周期 ★★★
         private bool _isStarting = false;    // 防止重复启动的标志
         private DateTime _lastAccessTime = DateTime.MinValue; // 最后一次被 UI 请求数据的时间
@@ -487,11 +497,15 @@ namespace LiteMonitor.src.SystemServices
         /// </summary>
         public static void ForceKillZombies()
         {
+            // 如果是系统关机，跳过清理以避免 logman.exe 报错 (0xc0000142)
+            // 同时检查 CLR 是否正在关闭 (HasShutdownStarted)
+            if (_isSystemShuttingDown || Environment.HasShutdownStarted) return;
+
             try
             {
-                // 终止所有名为 PresentMon 的进程
+                // 终止所有名为 LiteMonitorFPS 的进程
                 foreach (var p in Process.GetProcessesByName("LiteMonitorFPS")) { try { p.Kill(); } catch { } }
-                // 停止 PresentMon 会话
+                // 停止 LiteMonitorFPS 会话
                 Process.Start(new ProcessStartInfo { FileName = "logman", Arguments = $"stop {SESSION_NAME} -ets", UseShellExecute = false, CreateNoWindow = true })?.WaitForExit(100);
             }
             catch { }

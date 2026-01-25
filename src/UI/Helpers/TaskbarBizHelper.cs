@@ -230,7 +230,7 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         // 交互动作
         // =================================================================
-        public void HandleDoubleClick(MainForm mainForm, UIController ui)
+        public async void HandleDoubleClick(MainForm mainForm, UIController ui)
         {
             switch (_cfg.TaskbarDoubleClickAction)
             {
@@ -244,7 +244,7 @@ namespace LiteMonitor.src.UI.Helpers
                     new TrafficHistoryForm(_cfg).Show(); 
                     break;
                 case 4: 
-                    try { using (var form = new CleanMemoryForm()) _ = form.StartCleaningAsync(); } catch { } 
+                    try { using (var form = new CleanMemoryForm()) await form.StartCleaningAsync(); } catch { } 
                     break;
                 case 0: 
                 default:
