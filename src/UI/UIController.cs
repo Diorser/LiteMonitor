@@ -48,9 +48,18 @@ namespace LiteMonitor
 
         public float GetCurrentDpiScale()
         {
-            using (Graphics g = _form.CreateGraphics())
+            // 优先使用 Form.DeviceDpi（更可靠、反映当前显示器 DPI），若不可用则回退到 CreateGraphics
+            try
             {
-                return g.DpiX / 96f;
+                int dpi = _form.DeviceDpi; // .NET WinForms 提供，PerMonitorV2 场景下会更新
+                return dpi / 96f;
+            }
+            catch
+            {
+                using (Graphics g = _form.CreateGraphics())
+                {
+                    return g.DpiX / 96f;
+                }
             }
         }
 
@@ -74,17 +83,19 @@ namespace LiteMonitor
                 oldTheme.DisposeFonts();
             }
 
-            // ... 后续缩放逻辑保持不变 ...
-            float dpiScale = GetCurrentDpiScale();   
-            float userScale = (float)_cfg.UIScale;    
+            // 使用更可靠的 DPI 获取方式（优先 Form.DeviceDpi）
+            float dpiScale = GetCurrentDpiScale();
+            float userScale = (float)_cfg.UIScale;
             float finalScale = dpiScale * userScale;
 
-            t.Scale(dpiScale, userScale); // Scale 内部现在会自动清理旧缩放字体
+            // ThemeManager/Theme 内部负责创建按 DPI 缩放的字体资源
+            t.Scale(dpiScale, userScale);
 
-            // ... 边距修复逻辑 ...
+            // 如果不是横屏模式，则按最终像素宽度计算布局宽度（PanelWidth 是逻辑宽度，按 finalScale 转为像素）
             if (!_cfg.HorizontalMode)
             {
-                t.Layout.Width = (int)(_cfg.PanelWidth * finalScale);
+                t.Layout.Width = (int)Math.Round(_cfg.PanelWidth * finalScale);
+                // 使用 ClientSize 保证是客户区像素
                 _form.ClientSize = new Size(t.Layout.Width, _form.ClientSize.Height);
             }
 
@@ -100,6 +111,11 @@ namespace LiteMonitor
             _form.BackColor = ThemeManager.ParseColor(t.Color.Background);
 
             _timer.Interval = Math.Max(80, _cfg.RefreshMs);
+
+            // 不在这里调用 Scale/PerformAutoScale，以避免与 MainForm.OnDpiChanged 的 Scale 冲突。
+            // 触发一次布局与重绘，ApplyTheme 通常会在构造或 OnDpiChanged 被调用，
+            // 而 OnDpiChanged 已负责窗体级别的缩放。
+            _form.PerformLayout();
             _form.Invalidate();
             _form.Update();
         }
@@ -123,7 +139,8 @@ namespace LiteMonitor
             // === 横屏模式 ===
             if (_cfg.HorizontalMode)
             {
-                _hxLayout ??= new HorizontalLayout(t, _form.Width, LayoutMode.Horizontal);
+                // 使用 ClientSize.Width（客户区）作为布局宽度，避免边框/缩放误差
+                _hxLayout ??= new HorizontalLayout(t, _form.ClientSize.Width, LayoutMode.Horizontal);
 
                 // [通用方案] 动态检测是否需要重新计算布局
                 // 移至 Tick() 中低频检查，避免 Render 高频调用

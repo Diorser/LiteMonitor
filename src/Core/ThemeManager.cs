@@ -161,43 +161,66 @@ namespace LiteMonitor.src.Core
             try
             {
                 var style = Font.Bold ? FontStyle.Bold : FontStyle.Regular;
-                FontTitle = new Font(Font.Family, (float)Font.Title, style);
-                FontGroup = new Font(Font.Family, (float)Font.Group, style);
-                FontItem = new Font(Font.Family, (float)Font.Item, style);
+                // 使用 Point 单位作为加载时的默认构建（加载后通常会由 Scale 调整为正确像素）
+                FontTitle = new Font(Font.Family, (float)Font.Title, style, GraphicsUnit.Point);
+                FontGroup = new Font(Font.Family, (float)Font.Group, style, GraphicsUnit.Point);
+                FontItem = new Font(Font.Family, (float)Font.Item, style, GraphicsUnit.Point);
                 
                 var valueFamily = string.IsNullOrWhiteSpace(Font.ValueFamily) ? Font.Family : Font.ValueFamily;
-                FontValue = new Font(valueFamily, (float)Font.Value, style);
+                FontValue = new Font(valueFamily, (float)Font.Value, style, GraphicsUnit.Point);
+                // 任务栏字体默认与 Value 一致
+                FontTaskbar = (FontValue != null) ? (FontValue.Clone() as Font) : FontValue;
             }
             catch
             {
-                FontTitle = FontGroup = FontItem = FontValue = SystemFonts.CaptionFont;
+                FontTitle = FontGroup = FontItem = FontValue = FontTaskbar = SystemFonts.CaptionFont;
             }
         }
+
         public void Scale(float dpiScale, float userScale)
         {
+            // Layout 按最终缩放比例（dpi * user）调整
             Layout.LayoutScale = dpiScale * userScale;
             Layout.Scale(Layout.LayoutScale);
 
             var style = Font.Bold ? FontStyle.Bold : FontStyle.Regular;
             var valueFamily = string.IsNullOrWhiteSpace(Font.ValueFamily) ? Font.Family : Font.ValueFamily;
-            float f = userScale <= 0 ? 1.0f : userScale;
+            float u = userScale <= 0 ? 1.0f : userScale;
 
             // ★★★ 关键：先销毁旧的缩放字体，防止句柄泄露 ★★★
-            DisposeFonts(); 
+            DisposeFonts();
 
-            // 创建新比例的字体
-            FontTitle = new Font(Font.Family, (float)Font.Title * f, style);
-            FontGroup = new Font(Font.Family, (float)Font.Group * f, style);
-            FontItem = new Font(Font.Family, (float)Font.Item * f, style);
-            FontValue = new Font(valueFamily, (float)Font.Value * f, style);
+            // 计算像素尺寸：
+            // DPI (dots per inch) = dpiScale * 96
+            // 点(point) 与像素的转换： pixels = points * (dpi / 72)
+            float dpi = dpiScale * 96f;
+            float pointToPixel = dpi / 72f; // = dpiScale * 96 / 72 = dpiScale * 4/3
+
+            // finalPixelSize = basePointSize * pointToPixel * userScale
+            try
+            {
+                FontTitle = new Font(Font.Family, (float)Font.Title * pointToPixel * u, style, GraphicsUnit.Pixel);
+                FontGroup = new Font(Font.Family, (float)Font.Group * pointToPixel * u, style, GraphicsUnit.Pixel);
+                FontItem = new Font(Font.Family, (float)Font.Item * pointToPixel * u, style, GraphicsUnit.Pixel);
+                FontValue = new Font(valueFamily, (float)Font.Value * pointToPixel * u, style, GraphicsUnit.Pixel);
+
+                // 任务栏字体按 Value 构建（可单独微调）
+                FontTaskbar = (FontValue != null) ? (FontValue.Clone() as Font) : null ?? FontValue;
+            }
+            catch
+            {
+                // 回退到系统字体，避免程序崩溃
+                FontTitle = FontGroup = FontItem = FontValue = FontTaskbar = SystemFonts.CaptionFont;
+            }
         }
         public void DisposeFonts()
         {
             // 只有非系统字体才需要 Dispose
-            if (FontTitle != null && !FontTitle.IsSystemFont) FontTitle.Dispose();
-            if (FontGroup != null && !FontGroup.IsSystemFont) FontGroup.Dispose();
-            if (FontItem != null && !FontItem.IsSystemFont) FontItem.Dispose();
-            if (FontValue != null && !FontValue.IsSystemFont) FontValue.Dispose();
+            if (FontTitle != null && !FontTitle.IsSystemFont) { try { FontTitle.Dispose(); } catch { } }
+            if (FontGroup != null && !FontGroup.IsSystemFont) { try { FontGroup.Dispose(); } catch { } }
+            if (FontItem != null && !FontItem.IsSystemFont) { try { FontItem.Dispose(); } catch { } }
+            if (FontValue != null && !FontValue.IsSystemFont) { try { FontValue.Dispose(); } catch { } }
+            if (FontTaskbar != null && !FontTaskbar.IsSystemFont) { try { FontTaskbar.Dispose(); } catch { } }
         }
 
     }
@@ -274,7 +297,7 @@ namespace LiteMonitor.src.Core
                         theme.Font.ValueFamily = UIUtils.Intern(theme.Font.ValueFamily);
                     }
                 }
-                // 构建运行期字体
+                // 构建运行期字体（初始为 point 单位，后续 UIController 会调用 Scale 以按 DPI 重建为像素单位）
                 theme.BuildFonts();
 
                 Current = theme;
