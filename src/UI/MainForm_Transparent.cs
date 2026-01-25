@@ -102,6 +102,10 @@ namespace LiteMonitor
         // ========== 构造函数 ==========
         public MainForm()
         {
+            // 关键：在创建任何控件或 UIController 之前，启用 WinForms 按 DPI 自动缩放
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+
             // 语言加载
             if (string.IsNullOrEmpty(_cfg.Language))
             {
@@ -247,8 +251,25 @@ namespace LiteMonitor
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
+
+            // 按新旧 DPI 比例缩放窗体及其子控件（PerMonitorV2 生效时会触发此事件）
+            try
+            {
+                float scaleFactor = e.DeviceDpiNew / (float)e.DeviceDpiOld;
+                // 使用 Scale(SizeF) 可以自动缩放子控件（等同于 PerformAutoScale 的效果）
+                this.Scale(new SizeF(scaleFactor, scaleFactor));
+            }
+            catch
+            {
+                // 若 Scale 出错则忽略，但仍然会继续应用主题与重绘
+            }
+
+            // 重新应用主题（UIController 内部会基于当前 Graphics.Dpi 重新计算字体/布局）
             _ui?.ApplyTheme(_cfg.Skin);
             _winHelper.ApplyRoundedCorners();
+
+            // 强制布局与重绘
+            this.PerformLayout();
             this.Invalidate();
         }
 
