@@ -343,7 +343,7 @@ namespace LiteMonitor.src.SystemServices
                             // 放电：正值，模拟 25W-45W 波动
                             // 充电：负值，模拟 65W-90W 快充波动
                             float power;
-                            if (isCharging)
+                            if (!isCharging)
                             {
                                 // 模拟 PD 协商震荡：-65W 到 -85W 之间波动
                                 power = -65.0f - (sec % 5) * 4.0f; 
@@ -386,18 +386,18 @@ namespace LiteMonitor.src.SystemServices
                             {
                                 float val = s.Value.Value;
 
-                                // [修改] 2. 符号修正：充电时功耗/电流应为负号，放电时为正号
+                                // [修改] 2. 符号修正：充电时功耗/电流应为正号，放电时为负号
                                 if (key == "BAT.Power" || key == "BAT.Current")
                                 {
                                     if (MetricUtils.IsBatteryCharging)
                                     {
-                                        // 充电状态：强制显示负值 (用户需求)
-                                        if (val > 0) val = -val;
+                                        // 充电状态：强制显示正值
+                                        if (val < 0) val = -val;
                                     }
                                     else
                                     {
-                                        // 放电状态：强制显示正值
-                                        if (val < 0) val = -val;
+                                        // 放电状态：强制显示负值
+                                        if (val > 0) val = -val;
                                     }
                                 }
 
