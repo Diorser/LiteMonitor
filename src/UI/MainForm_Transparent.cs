@@ -32,6 +32,13 @@ namespace LiteMonitor
                 var cp = base.CreateParams;
                 cp.ExStyle |= 0x80; // WS_EX_TOOLWINDOW
                 cp.ExStyle &= ~0x00040000; // WS_EX_APPWINDOW
+                
+                // [Fix] 启动时应用鼠标穿透配置，防止因句柄重建导致样式丢失
+                if (_cfg != null && _cfg.ClickThrough)
+                {
+                    cp.ExStyle |= 0x20; // WS_EX_TRANSPARENT
+                }
+
                 return cp;
             }
         }

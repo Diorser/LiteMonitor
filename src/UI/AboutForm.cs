@@ -17,7 +17,7 @@ namespace LiteMonitor
             bool isZh = LanguageManager.CurrentLang == "zh";
 
             string strTitle = isZh ? "关于 LiteMonitor" : "About LiteMonitor";
-            string strDesc = isZh ? "一款轻量级桌面硬件监控软件。\n© 2025 Diorser / LiteMonitor Project" 
+            string strDesc = isZh ? "一款开源的轻量级硬件监控软件。\n© 2025 Diorser / LiteMonitor Project" 
                                   : "A lightweight desktop hardware monitor.\n© 2025 Diorser / LiteMonitor Project";
             string strWebPrefix = isZh ? "官网" : "Website";
             string strUpdate = isZh ? "检查更新" : "Update?";
