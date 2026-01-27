@@ -402,9 +402,19 @@ namespace LiteMonitor.src.UI.SettingsPage
         
         private void MoveControl(Control c, int dir)
         {
-            var p = c.Parent; if (p == null) return;
-            int idx = p.Controls.GetChildIndex(c); int newIdx = idx - dir; 
+            var p = c.Parent as ScrollableControl; if (p == null) return;
+            
+            // [Fix] 防止 WinForms 自动滚动跳动
+            p.SuspendLayout();
+            var scroll = p.AutoScrollPosition;
+            
+            int idx = p.Controls.GetChildIndex(c); 
+            int newIdx = idx - dir; 
             if (newIdx >= 0 && newIdx < p.Controls.Count) p.Controls.SetChildIndex(c, newIdx);
+
+            p.AutoScrollPosition = new Point(Math.Abs(scroll.X), Math.Abs(scroll.Y));
+            p.ResumeLayout(false);
+            p.PerformLayout();
         }
 
         private void SaveToWorkingList(bool? isFilteredOverride = null)

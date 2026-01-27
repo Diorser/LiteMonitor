@@ -52,7 +52,7 @@
     {
       "key": "ms",
       "label": "{{proxy_server ? '代理延迟' : '本地延迟'}}",
-      "short_label": "Ping",
+      "short_label": "延迟",
       "format_val": "{{__latency__}}",
       "unit": " MS",
       "color": "{{latency_color}}"
