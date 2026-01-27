@@ -17,6 +17,11 @@ namespace LiteMonitor.src.UI.Helpers
     {
         private readonly Form _form;
 
+        // ★★★ 性能优化缓存 ★★★
+        private Rectangle _lastWindowRect = Rectangle.Empty;
+        private Rectangle _cachedDwmRect = Rectangle.Empty;
+        private bool _isCacheValid = false;
+
         public TaskbarWinHelper(Form form)
         {
             _form = form;
@@ -144,7 +149,38 @@ namespace LiteMonitor.src.UI.Helpers
             // 修复 #213: Surface 等二合一设备在键盘连接/断开切换时，SHAppBarMessage 可能返回错误的缓存高度，导致显示异常
             if (hTaskbar != IntPtr.Zero && GetWindowRect(hTaskbar, out RECT r))
             {
-                return Rectangle.FromLTRB(r.left, r.top, r.right, r.bottom);
+                var rectW = Rectangle.FromLTRB(r.left, r.top, r.right, r.bottom);
+
+                // ★★★ 性能优化：缓存机制 ★★★
+                // 只有当物理窗口大小/位置发生变化，或者缓存无效时，才去查询 DWM
+                if (_isCacheValid && rectW == _lastWindowRect)
+                {
+                    return _cachedDwmRect;
+                }
+
+                _lastWindowRect = rectW;
+                _cachedDwmRect = rectW; // 默认回退值
+                _isCacheValid = true;
+
+                // 修复 #231: 多显示器/DPI切换后，GetWindowRect 可能返回包含透明区域的虚高尺寸
+                // 尝试使用 DWM 获取实际视觉边界 (Extended Frame Bounds)
+                try
+                {
+                    if (DwmGetWindowAttribute(hTaskbar, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT dwmRect, Marshal.SizeOf(typeof(RECT))) == 0)
+                    {
+                        var rectD = Rectangle.FromLTRB(dwmRect.left, dwmRect.top, dwmRect.right, dwmRect.bottom);
+
+                        // 如果 DWM 返回的高度有效且更小 (说明 WindowRect 包含了虚空区域)
+                        // 且高度差异超过 2px (忽略微小误差)，优先使用 DWM 的视觉边界
+                        if (rectD.Height > 0 && rectD.Height < rectW.Height && (rectW.Height - rectD.Height > 2))
+                        {
+                            _cachedDwmRect = rectD;
+                        }
+                    }
+                }
+                catch { /* Ignore DWM errors */ }
+
+                return _cachedDwmRect;
             }
 
             // Fallback (通常不会走到这里，除非句柄无效)
@@ -247,6 +283,7 @@ namespace LiteMonitor.src.UI.Helpers
         [DllImport("shell32.dll")] private static extern uint SHAppBarMessage(uint msg, ref APPBARDATA pData);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
         public const int GWL_STYLE = -16;
         public const int GWL_EXSTYLE = -20;
@@ -259,6 +296,7 @@ namespace LiteMonitor.src.UI.Helpers
         public const uint SWP_NOZORDER = 0x0004;
         public const uint SWP_NOACTIVATE = 0x0010;
         public const int WS_EX_TRANSPARENT = 0x00000020;
+        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
         private const uint ABM_GETTASKBARPOS = 5;
 
         public struct POINT { public int X, Y; }
