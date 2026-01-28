@@ -44,6 +44,9 @@ namespace LiteMonitor.src.SystemServices
         private string _lastPrefMoboTemp = "";
         private string _lastPrefDisk = "";
         private string _lastPrefNet = "";
+        
+        // ★★★ [新增] 系统充电状态缓存 ★★★
+        private bool _isSystemCharging = false;
 
         public HardwareValueProvider(Computer c, Settings s, SensorMap map, NetworkManager net, DiskManager disk, FpsCounter fpsCounter,PerformanceCounterManager perfManager, object syncLock, Dictionary<string, float> lastValid)
         {
@@ -176,6 +179,10 @@ namespace LiteMonitor.src.SystemServices
                     {
                         var status = System.Windows.Forms.SystemInformation.PowerStatus;
                         MetricUtils.IsBatteryCharging = (status.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online);
+                        
+                        // ★★★ [Fix] 使用系统标志判断是否真的在充电 (解决 95% 以上可能还在充，或电池保护模式不充的问题)
+                        // 注意：此 API 调用被外层的 if (now - _lastPowerCheckTick > 3000) 节流，每3秒仅执行一次，无性能损耗
+                        _isSystemCharging = (status.BatteryChargeStatus & System.Windows.Forms.BatteryChargeStatus.Charging) == System.Windows.Forms.BatteryChargeStatus.Charging;
                     }
                     catch { }
                 }
@@ -478,7 +485,17 @@ namespace LiteMonitor.src.SystemServices
                             {
                                 if (MetricUtils.IsBatteryCharging)
                                 {
-                                    if (val < 0) val = -val;
+                                    // ★★★ [Fix] 逻辑修正：如果接通电源但系统报告"未在充电" (如已充满/电池保护)，强制归零
+                                    // 物理含义：此时处于"电源直供 (Bypass)" 模式，电池闲置，物理功率应为 0。
+                                    // 作用：解决硬件传感器在停止充电瞬间可能卡在历史数值(如 -12W)的问题。
+                                    if (!_isSystemCharging)
+                                    {
+                                        val = 0f;
+                                    }
+                                    else
+                                    {
+                                        if (val < 0) val = -val;
+                                    }
                                 }
                                 else
                                 {
