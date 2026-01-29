@@ -27,7 +27,8 @@
         { "label": "Emoji+温度 (☀️ 25℃)", "value": "emoji_temp" },
         { "label": "仅Emoji (☀️)", "value": "emoji_only" },
         { "label": "仅文字 (晴 25℃)", "value": "text_temp" },
-        { "label": "温差 (20~30℃)", "value": "range" }
+        { "label": "温差 (20~30℃)", "value": "range" },
+        { "label": "Emoji+温差 (☀️ 20~30℃)", "value": "emoji_range" }
       ]
     }
   ],
@@ -180,7 +181,8 @@
               "emoji_temp": "{{weather_emoji}} {{temp}}℃",
               "emoji_only": "{{weather_emoji}}",
               "text_temp": "{{type}} {{temp}}℃",
-              "range": "{{low_clean}}~{{high_clean}}"
+              "range": "{{low_clean}}~{{high_clean}}",
+              "emoji_range": "{{weather_emoji}} {{low_clean}}~{{high_clean}}"
             }
           },
           {
