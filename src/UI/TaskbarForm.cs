@@ -25,10 +25,6 @@ namespace LiteMonitor
         private DateTime _lastFindHandleTime = DateTime.MinValue;
         private string _lastLayoutSignature = "";
         
-        // [Fix] 新增字段：记录上次构建布局时使用的列表对象引用
-        // 用于检测虽然 Key 签名没变，但对象实例已重建（坐标丢失）的情况
-        private List<Column>? _lastBuiltCols = null;
-
         // 公开属性
         public string TargetDevice { get; private set; } = "";
         
@@ -74,7 +70,6 @@ namespace LiteMonitor
         {
             _layout = new HorizontalLayout(ThemeManager.Current, 300, LayoutMode.Taskbar, _cfg);
             _lastLayoutSignature = ""; // 重置签名，强制重算
-            _lastBuiltCols = null;     // 重置引用记录
             _winHelper.ApplyLayeredStyle(_bizHelper.TransparentKey, _cfg.TaskbarClickThrough);
             _bizHelper.CheckTheme(true);
 
@@ -85,9 +80,6 @@ namespace LiteMonitor
                 _layout.Build(_cols, _bizHelper.Height);
                 Width = _layout.PanelWidth;
                 _bizHelper.UpdatePlacement(Width);
-                
-                // 更新记录，避免 Tick 重复计算
-                _lastBuiltCols = _cols;
             }
             Invalidate();
         }
@@ -176,25 +168,25 @@ namespace LiteMonitor
                 // 垂直模式逻辑简单且无测量开销，直接重算即可
                 _bizHelper.BuildVerticalLayout(_cols);
                 _lastLayoutSignature = "vertical";
-                _lastBuiltCols = _cols; // 记录引用
             }
             else
             {
-                string currentSig = _layout.GetLayoutSignature(_cols) + "_" + _bizHelper.Height;
-                
-                // 核心修复：
-                // 1. 签名不同 -> 内容变了 -> 重算
-                // 2. 对象引用不同 -> UIController 生成了新对象(坐标未计算) -> 重算
-                bool needRebuild = (currentSig != _lastLayoutSignature) || (_cols != _lastBuiltCols);
+                // [优化] 智能判断更新条件
+                // 1. 必须检查：如果列表是新生成的（坐标还没算过，Bounds为空），必须重算！
+                // 这解决了“主界面显隐导致任务栏消失”的问题
+                bool isUninitialized = (_cols.Count > 0 && _cols[0].Bounds.IsEmpty);
 
-                if (needRebuild)
+                // 2. 常规检查：如果内容长度/结构变了（签名变了），也要重算
+                string currentSig = _layout.GetLayoutSignature(_cols) + "_" + _bizHelper.Height;
+                bool isContentChanged = (currentSig != _lastLayoutSignature);
+
+                if (isUninitialized || isContentChanged)
                 {
                     _layout.Build(_cols, _bizHelper.Height);
                     Width = _layout.PanelWidth;
                     Height = _bizHelper.Height;
                     
                     _lastLayoutSignature = currentSig;
-                    _lastBuiltCols = _cols; // 更新引用记录
                 }
             }
             
