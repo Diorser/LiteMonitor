@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "name": "DarkNeo_Modern v4.0",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 12,
+    "groupRadius": 10,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 11.5,
+    "group": 10.5,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#202225",
+    "textTitle": "#FFFFFF",
+    "textGroup": "#B0B0B0",
+    "textPrimary": "#EAEAEA",
+    "valueSafe": "#66FF99",
+    "valueWarn": "#FFD666",
+    "valueCrit": "#FF6666",
+    "barBackground": "#1C1C1C",
+    "barLow": "#00C853",
+    "barMid": "#FFAB00",
+    "barHigh": "#D50000",
+    "groupBackground": "#2B2D31"
+  }
+}

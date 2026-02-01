@@ -1,0 +1,36 @@
+{
+  "id": "Holiday",
+  "meta": {
+    "name": "放假倒计时",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "显示距离下一个法定节假日还有多少天（含调休计算）"
+  },
+  "inputs": [],
+  "execution": {
+    "type": "chain",
+    "interval": 14400,
+    "steps": [
+      {
+        "id": "fetch_holiday",
+        "url": "http://timor.tech/api/holiday/next",
+        "method": "GET",
+        "response_format": "json",
+        "extract": {
+          "name": "holiday.name",
+          "date": "holiday.date",
+          "rest": "holiday.rest"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "next",
+      "label": "距离{{name}}",
+      "short_label": "🏖️",
+      "format_val": "{{rest}}",
+      "unit": " 天"
+    }
+  ]
+}

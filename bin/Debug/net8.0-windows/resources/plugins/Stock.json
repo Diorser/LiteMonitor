@@ -1,0 +1,134 @@
+{
+  "id": "Stock",
+  "meta": {
+    "name": "股票行情监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "股票行情插件(A股/港股/美股)，股票代码/名称支持如：腾讯, sh000001, BABA, 600519"
+  },
+  "inputs": [
+    {
+      "key": "query",
+      "label": "股票代码/名称",
+      "type": "text",
+      "default": "上证指数",
+      "placeholder": "腾讯, sh600519, BABA",
+      "scope": "target"
+    },
+    {
+      "key": "display_mode",
+      "label": "显示内容",
+      "type": "select",
+      "default": "percent_price",
+      "options": [
+        {"label": "涨幅 + 价格", "value": "percent_price"},
+        {"label": "价格 + 涨幅", "value": "price_percent"},
+        {"label": "仅价格", "value": "price"},
+        {"label": "仅涨幅", "value": "percent"}
+      ],
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 10,
+    "steps": [
+      {
+        "id": "search_stock",
+        "url": "https://proxy.finance.qq.com/cgi/cgi-bin/smartbox/search?stockFlag=1&fundFlag=1&app=official_website&c=1&query={{query}}",
+        "method": "GET",
+        "response_format": "json",
+        "cache_minutes": 43200,
+        "extract": {
+          "code": "stock[0].code"
+        },
+        "process": [
+          {
+            "var": "code",
+            "source": "code",
+            "function": "regex_replace",
+            "pattern": "^\\?$",
+            "to": ""
+          },
+          {
+            "var": "code",
+            "source": "code",
+            "function": "regex_replace",
+            "pattern": "\\.[A-Z]+$",
+            "to": ""
+          }
+        ]
+      },
+      {
+        "id": "fetch_stock",
+        "url": "http://qt.gtimg.cn/q={{code ?? query}}",
+        "method": "GET",
+        "response_format": "text",
+        "response_encoding": "gbk",
+        "extract": {
+          "raw_data": "$"
+        },
+        "process": [
+          {
+            "var": "name",
+            "source": "raw_data",
+            "function": "regex_match",
+            "pattern": "v_.*?=\"[^~]*~(.*?)~"
+          },
+          {
+            "var": "price",
+            "source": "raw_data",
+            "function": "regex_match",
+            "pattern": "v_.*?=\"(?:[^~]*~){3}(.*?)~"
+          },
+          {
+            "var": "change_percent",
+            "source": "raw_data",
+            "function": "regex_match",
+            "pattern": "v_.*?=\"(?:[^~]*~){32}(.*?)~"
+          },
+          {
+            "var": "change_amount",
+            "source": "raw_data",
+            "function": "regex_match",
+            "pattern": "v_.*?=\"(?:[^~]*~){31}(.*?)~"
+          },
+          {
+            "var": "display_template",
+            "source": "display_mode",
+            "function": "map",
+            "map": {
+              "price": "{{price}}",
+              "percent": "{{change_percent}}%",
+              "percent_price": "{{change_percent}}% {{price}}",
+              "price_percent": "{{price}} {{change_percent}}%"
+            }
+          },
+          {
+            "var": "final_display",
+            "source": "display_template",
+            "function": "resolve_template"
+          },
+          {
+            "var": "color_state",
+            "source": "change_percent",
+            "function": "threshold_switch",
+            "value_map": {
+              "-1000": "0",
+              "0": "2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "main",
+      "label": "{{name ?? code ?? query}}",
+      "short_label": "{{name ?? code ?? query}}",
+      "format_val": "{{final_display}}",
+      "color": "{{color_state}}"
+    }
+  ]
+}

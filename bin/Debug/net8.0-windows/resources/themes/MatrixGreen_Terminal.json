@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "name": "MatrixGreen_Terminal_v3",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 10,
+    "groupRadius": 8,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 12.0,
+    "group": 11.0,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#000000",
+    "border": "#003300",
+    "shadow": "rgba(0,255,0,0.25)",
+    "textTitle": "#00FF00",
+    "textGroup": "#00AA00",
+    "textPrimary": "#00FF00",
+    "textSecondary": "#009900",
+    "valueSafe": "#00FF00",
+    "valueWarn": "#FFCC00",
+    "valueCrit": "#FF4444",
+    "barBackground": "#001100",
+    "barLow": "#00FF00",
+    "barMid": "#FFCC00",
+    "barHigh": "#FF4444",
+    "groupBackground": "#001A00"
+  }
+}

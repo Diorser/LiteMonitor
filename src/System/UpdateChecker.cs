@@ -220,10 +220,14 @@ namespace LiteMonitor
 
                     var doc = JsonDocument.Parse(json);
 
-                    string latest = doc.RootElement.GetProperty("version").GetString()!;
-                    string log = doc.RootElement.GetProperty("changelog").GetString()!;
-                    string releaseDate = doc.RootElement.GetProperty("releaseDate").GetString()!;
+                    // [Fix] 移除空抑制操作符，使用空合并运算符提供默认值
+                    string latest = doc.RootElement.GetProperty("version").GetString() ?? "";
+                    string log = doc.RootElement.GetProperty("changelog").GetString() ?? "";
+                    string releaseDate = doc.RootElement.GetProperty("releaseDate").GetString() ?? "";
                     //string downloadUrl = doc.RootElement.GetProperty("downloadUrl").GetString()!;
+                    
+                    // [Fix] 验证必需字段不为空
+                    if (string.IsNullOrEmpty(latest)) throw new Exception("Missing version field");
 
                     // ---- 成功，立即返回 ----
                     return (latest, log, releaseDate);

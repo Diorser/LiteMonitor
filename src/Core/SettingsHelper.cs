@@ -34,7 +34,11 @@ namespace LiteMonitor
                     }) ?? new Settings();
                 }
             }
-            catch { }
+            catch (Exception ex) 
+            { 
+                // [Fix] 添加错误日志，帮助诊断配置加载问题
+                System.Diagnostics.Debug.WriteLine($"[SettingsHelper] Load failed: {ex.Message}");
+            }
 
             if (s.GroupAliases == null) s.GroupAliases = new Dictionary<string, string>();
 
@@ -90,7 +94,11 @@ namespace LiteMonitor
                 var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(FilePath, json);
             }
-            catch { }
+            catch (Exception ex) 
+            { 
+                // [Fix] 添加错误日志，帮助诊断配置保存问题
+                System.Diagnostics.Debug.WriteLine($"[SettingsHelper] Save failed: {ex.Message}");
+            }
         }
 
         public static void InitDefaultItems(this Settings settings)

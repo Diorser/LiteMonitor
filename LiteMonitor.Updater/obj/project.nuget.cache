@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "dqGAW2T/p+k=",
+  "success": true,
+  "projectFilePath": "/home/runner/work/LiteMonitor/LiteMonitor/LiteMonitor.Updater/LiteMonitor.Updater.csproj",
+  "expectedPackageFiles": [
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.net.illink.tasks/8.0.23/microsoft.net.illink.tasks.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.netcore.app.ref/8.0.23/microsoft.netcore.app.ref.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.netcore.app.runtime.win-x64/8.0.23/microsoft.netcore.app.runtime.win-x64.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.windowsdesktop.app.ref/8.0.23/microsoft.windowsdesktop.app.ref.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.windowsdesktop.app.runtime.win-x64/8.0.23/microsoft.windowsdesktop.app.runtime.win-x64.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.aspnetcore.app.ref/8.0.23/microsoft.aspnetcore.app.ref.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.aspnetcore.app.runtime.win-x64/8.0.23/microsoft.aspnetcore.app.runtime.win-x64.8.0.23.nupkg.sha512",
+    "/home/runner/work/LiteMonitor/.codeql-scratch/dbs/csharp/working/packages/microsoft.netcore.app.host.win-x64/8.0.23/microsoft.netcore.app.host.win-x64.8.0.23.nupkg.sha512"
+  ],
+  "logs": []
+}

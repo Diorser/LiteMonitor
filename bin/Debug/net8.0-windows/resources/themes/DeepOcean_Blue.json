@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "name": "DeepOcean_Blue",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 12,
+    "groupRadius": 10,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 11.5,
+    "group": 10.5,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#001F3F",
+    "border": "#003366",
+    "shadow": "rgba(0,0,0,0.4)",
+    "textTitle": "#7FDBFF",
+    "textGroup": "#39CCCC",
+    "textPrimary": "#FFFFFF",
+    "textSecondary": "#AAAAAA",
+    "valueSafe": "#39CCCC",
+    "valueWarn": "#FFDC00",
+    "valueCrit": "#FF4136",
+    "barBackground": "#003366",
+    "barLow": "#39CCCC",
+    "barMid": "#FFDC00",
+    "barHigh": "#FF4136",
+    "groupBackground": "#002855"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "id": "Exchange",
+  "meta": {
+    "name": "实时汇率监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "实时汇率监控，输入货币对，如 USD, EUR, GBP, JPY"
+  },
+  "inputs": [
+    {
+      "key": "from",
+      "label": "持有货币",
+      "type": "text",
+      "default": "USD",
+      "placeholder": "USD, EUR, GBP, JPY",
+      "scope": "target"
+    },
+    {
+      "key": "to",
+      "label": "目标货币",
+      "type": "text",
+      "default": "CNY",
+      "placeholder": "CNY, USD, HKD",
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 60,
+    "steps": [
+      {
+        "id": "fetch_rate",
+        "url": "https://api.frankfurter.app/latest?from={{from}}&to={{to}}",
+        "method": "GET",
+        "response_format": "json",
+        "extract": {
+          "rate": "rates.{{to}}",
+          "date": "date"
+        },
+        "process": [
+          {
+            "var": "display_val",
+            "source": "rate",
+            "function": "resolve_template"
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "rate",
+      "label": "{{from}}/{{to}}",
+      "short_label": "{{from}}",
+      "format_val": "{{rate}}",
+      "unit": ""
+    }
+  ]
+}

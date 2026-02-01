@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "name": "Monokai_Pro",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 10,
+    "groupRadius": 8,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 11.5,
+    "group": 10.5,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#2D2A2E",
+    "border": "#403E41",
+    "shadow": "rgba(0,0,0,0.25)",
+    "textTitle": "#FFD866",
+    "textGroup": "#78DCE8",
+    "textPrimary": "#FCFCFA",
+    "textSecondary": "#AB9DF2",
+    "valueSafe": "#A9DC76",
+    "valueWarn": "#FC9867",
+    "valueCrit": "#FF6188",
+    "barBackground": "#403E41",
+    "barLow": "#A9DC76",
+    "barMid": "#FC9867",
+    "barHigh": "#FF6188",
+    "groupBackground": "#363437"
+  }
+}

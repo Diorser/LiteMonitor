@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "name": "Dracula_Vampire",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 10,
+    "groupRadius": 8,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 11.5,
+    "group": 10.5,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#282A36",
+    "border": "#44475A",
+    "shadow": "rgba(0,0,0,0.3)",
+    "textTitle": "#BD93F9",
+    "textGroup": "#6272A4",
+    "textPrimary": "#F8F8F2",
+    "textSecondary": "#6272A4",
+    "valueSafe": "#50FA7B",
+    "valueWarn": "#FFB86C",
+    "valueCrit": "#FF5555",
+    "barBackground": "#44475A",
+    "barLow": "#50FA7B",
+    "barMid": "#FFB86C",
+    "barHigh": "#FF5555",
+    "groupBackground": "#343746"
+  }
+}

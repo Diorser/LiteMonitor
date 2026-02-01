@@ -22,10 +22,11 @@ namespace LiteMonitor.src.Plugins
         public static PluginManager Instance => _instance ??= new PluginManager();
 
         private readonly List<PluginTemplate> _templates = new();
-        private readonly Dictionary<string, System.Timers.Timer> _timers = new();
-        private readonly Dictionary<string, System.Threading.CancellationTokenSource> _cts = new();
+        // [Fix] 使用 ConcurrentDictionary 替代 Dictionary，确保线程安全
+        private readonly ConcurrentDictionary<string, System.Timers.Timer> _timers = new();
+        private readonly ConcurrentDictionary<string, System.Threading.CancellationTokenSource> _cts = new();
         private readonly ConcurrentDictionary<string, int> _consecutiveFailures = new();
-        private readonly Dictionary<string, string> _configSnapshots = new();
+        private readonly ConcurrentDictionary<string, string> _configSnapshots = new();
         private readonly PluginExecutor _executor;
 
         public event Action OnPluginSchemaChanged;
@@ -141,6 +142,7 @@ namespace LiteMonitor.src.Plugins
         public void Reload(Settings cfg)
         {
             // 1. Identify active instances
+            // [Fix] 使用 Keys 的快照，ConcurrentDictionary.Keys 返回的是即时快照
             var currentIds = _timers.Keys.ToList();
             var newInstances = cfg.PluginInstances.Where(x => x.Enabled).ToDictionary(x => x.Id);
 
@@ -150,7 +152,7 @@ namespace LiteMonitor.src.Plugins
                 if (!newInstances.ContainsKey(id))
                 {
                     StopInstance(id);
-                    _configSnapshots.Remove(id);
+                    _configSnapshots.TryRemove(id, out _);
                     CleanupPluginData(id);
                 }
             }
@@ -203,18 +205,17 @@ namespace LiteMonitor.src.Plugins
 
         private void StopInstance(string instanceId)
         {
-            if (_timers.TryGetValue(instanceId, out var timer))
+            // [Fix] 使用 TryRemove 替代 TryGetValue + Remove 以确保线程安全
+            if (_timers.TryRemove(instanceId, out var timer))
             {
                 timer.Stop();
                 timer.Dispose();
-                _timers.Remove(instanceId);
             }
 
-            if (_cts.TryGetValue(instanceId, out var cts))
+            if (_cts.TryRemove(instanceId, out var cts))
             {
                 cts.Cancel();
                 cts.Dispose();
-                _cts.Remove(instanceId);
             }
 
             // Reset failure count
@@ -279,7 +280,7 @@ namespace LiteMonitor.src.Plugins
         public void RemoveInstance(string instanceId)
         {
             StopInstance(instanceId);
-            _configSnapshots.Remove(instanceId);
+            _configSnapshots.TryRemove(instanceId, out _);
             CleanupPluginData(instanceId);
 
             PluginMonitorSyncService.Instance.RemoveMonitorItems(instanceId, saveIfChanged: true);
@@ -287,19 +288,24 @@ namespace LiteMonitor.src.Plugins
 
         public void Stop()
         {
-            foreach (var t in _timers.Values)
+            // [Fix] 使用安全方式遍历并清理
+            foreach (var key in _timers.Keys.ToList())
             {
-                t.Stop();
-                t.Dispose();
+                if (_timers.TryRemove(key, out var t))
+                {
+                    t.Stop();
+                    t.Dispose();
+                }
             }
-            _timers.Clear();
 
-            foreach (var cts in _cts.Values)
+            foreach (var key in _cts.Keys.ToList())
             {
-                cts.Cancel();
-                cts.Dispose();
+                if (_cts.TryRemove(key, out var cts))
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
             }
-            _cts.Clear();
         }
 
         private bool IsPluginVisible(string instanceId)

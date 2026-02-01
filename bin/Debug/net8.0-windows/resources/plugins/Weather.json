@@ -1,0 +1,217 @@
+{
+  "id": "Weather",
+  "meta": {
+    "name": "实时天气监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "实时天气插件（国内），基于IP自动定位，获取高精度天气数据，支持多种显示方式"
+  },
+  "inputs": [
+    {
+      "key": "city",
+      "label": "城市名称",
+      "type": "text",
+      "default": "",
+      "placeholder": "留空则自动定位",
+      "scope": "target"
+    },
+    {
+      "key": "style",
+      "label": "显示内容",
+      "type": "select",
+      "default": "standard",
+      "scope": "target",
+      "options": [
+        { "label": "标准 (☀️ 晴 25℃)", "value": "standard" },
+        { "label": "仅温度 (25℃)", "value": "temp_only" },
+        { "label": "Emoji+温度 (☀️ 25℃)", "value": "emoji_temp" },
+        { "label": "仅Emoji (☀️)", "value": "emoji_only" },
+        { "label": "仅文字 (晴 25℃)", "value": "text_temp" },
+        { "label": "温差 (20~30℃)", "value": "range" },
+        { "label": "Emoji+温差 (☀️ 20~30℃)", "value": "emoji_range" }
+      ]
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 1800,
+    "steps": [
+      {
+        "id": "step1_ip",
+        "skip_if_set": "city",
+        "url": "http://whois.pconline.com.cn/ipJson.jsp?json=true",
+        "response_encoding": "gbk",
+        "cache_minutes": 43200,
+        "extract": {
+          "auto_city": "city",
+          "ip_province": "pro",
+          "ip_district": "region"
+        },
+        "process": [
+          {
+            "var": "district_raw",
+            "source": "city",
+            "function": "regex_replace",
+            "pattern": "^$",
+            "to": "{{ip_district}}"
+          },
+          {
+            "var": "province_raw",
+            "source": "city",
+            "function": "regex_replace",
+            "pattern": "^$",
+            "to": "{{ip_province}}"
+          },
+          {
+            "var": "city",
+            "source": "city",
+            "function": "regex_replace",
+            "pattern": "^$",
+            "to": "{{auto_city}}"
+          }
+        ]
+      },
+      {
+        "id": "step2_code",
+        "url": "native://citycode?district={{district_raw}}&city={{city}}&province={{province_raw}}",
+        "response_format": "json",
+        "cache_minutes": 43200,
+        "extract": {
+          "city_code": "code"
+        },
+        "process": []
+      },
+      {
+        "id": "step3_weather",
+        "url": "http://t.weather.itboy.net/api/weather/city/{{city_code}}",
+        "cache_minutes": 20,
+        "extract": {
+          "temp": "data.wendu",
+          "type": "data.forecast[0].type",
+          "high": "data.forecast[0].high",
+          "low": "data.forecast[0].low"
+        },
+        "process": [
+          {
+            "var": "city_display",
+            "source": "city",
+            "function": "regex_replace",
+            "pattern": "(市|区|县|省)$",
+            "to": ""
+          },
+          {
+            "var": "weather_text",
+            "source": "type",
+            "function": "map",
+            "map": {
+              "晴": "☀️ 晴",
+              "多云": "⛅ 多云",
+              "阴": "☁️ 阴",
+              "小雨": "🌧️ 小雨",
+              "中雨": "🌧️ 中雨",
+              "大雨": "🌧️ 大雨",
+              "暴雨": "🌧️ 暴雨",
+              "阵雨": "🌧️ 阵雨",
+              "雷阵雨": "⛈️ 雷阵雨",
+              "雷阵雨伴有冰雹": "⛈️ 冰雹",
+              "雨夹雪": "🌧️ 雨夹雪",
+              "小雪": "❄️ 小雪",
+              "中雪": "❄️ 中雪",
+              "大雪": "❄️ 大雪",
+              "暴雪": "❄️ 暴雪",
+              "阵雪": "❄️ 阵雪",
+              "雾": "🌫️ 雾",
+              "霾": "🌫️ 霾",
+              "扬沙": "🌫️ 扬沙",
+              "浮尘": "🌫️ 浮尘",
+              "沙尘暴": "🌫️ 沙尘暴",
+              "强沙尘暴": "🌫️ 强沙尘暴"
+            }
+          },
+          {
+            "var": "weather_emoji",
+            "source": "type",
+            "function": "map",
+            "map": {
+              "晴": "☀️",
+              "多云": "⛅",
+              "阴": "☁️",
+              "小雨": "🌧️",
+              "中雨": "🌧️",
+              "大雨": "🌧️",
+              "暴雨": "🌧️",
+              "阵雨": "🌧️",
+              "雷阵雨": "⛈️",
+              "雷阵雨伴有冰雹": "⛈️",
+              "雨夹雪": "🌧️",
+              "小雪": "❄️",
+              "中雪": "❄️",
+              "大雪": "❄️",
+              "暴雪": "❄️",
+              "阵雪": "❄️",
+              "雾": "🌫️",
+              "霾": "🌫️",
+              "扬沙": "🌫️",
+              "浮尘": "🌫️",
+              "沙尘暴": "🌫️",
+              "强沙尘暴": "🌫️"
+            }
+          },
+          {
+            "var": "high_clean",
+            "source": "high",
+            "function": "regex_replace",
+            "pattern": "高温 ",
+            "to": ""
+          },
+          {
+            "var": "low_clean",
+            "source": "low",
+            "function": "regex_replace",
+            "pattern": "低温 ",
+            "to": ""
+          },
+          {
+            "var": "format_pattern",
+            "source": "style",
+            "function": "map",
+            "map": {
+              "standard": "{{weather_text}} {{temp}}℃",
+              "temp_only": "{{temp}}℃",
+              "emoji_temp": "{{weather_emoji}} {{temp}}℃",
+              "emoji_only": "{{weather_emoji}}",
+              "text_temp": "{{type}} {{temp}}℃",
+              "range": "{{low_clean}}~{{high_clean}}",
+              "emoji_range": "{{weather_emoji}} {{low_clean}}~{{high_clean}}"
+            }
+          },
+          {
+            "var": "final_display",
+            "source": "format_pattern",
+            "function": "resolve_template"
+          },
+          {
+            "var": "color_state",
+            "source": "temp",
+            "function": "threshold_switch",
+            "value_map": {
+              "-100": "0",
+              "20": "1",
+              "28": "2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "temp",
+      "label": "{{city_display ?? city ?? auto_city}}天气",
+      "short_label": " ",
+      "format_val": "{{final_display}}",
+      "color": "{{color_state}}",
+      "unit": ""
+    }
+  ]
+}

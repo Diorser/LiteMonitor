@@ -123,7 +123,9 @@ namespace LiteMonitor.src.WebServer
             string[] lines = request.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return;
             
-            string path = lines[0].Split(' ').Length > 1 ? lines[0].Split(' ')[1] : "/";
+            // [Fix] 避免重复 Split() 调用，减少内存分配
+            var requestParts = lines[0].Split(' ');
+            string path = requestParts.Length > 1 ? requestParts[1] : "/";
             
             if (path.StartsWith("/api/snapshot"))
             {

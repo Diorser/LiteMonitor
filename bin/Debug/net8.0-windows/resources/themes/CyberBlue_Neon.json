@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "name": "CyberBlue_Neon",
+  "layout": {
+    "rowHeight": 40,
+    "padding": 12,
+    "cornerRadius": 12,
+    "groupRadius": 10,
+    "groupPadding": 8,
+    "groupSpacing": 30,
+    "groupBottom": 0,
+    "groupTitleOffset": 6,
+    "itemGap": 6
+  },
+  "font": {
+    "family": "Microsoft YaHei UI",
+    "valueFamily": "Consolas",
+    "title": 11.5,
+    "group": 10.5,
+    "item": 10.0,
+    "value": 14.0,
+    "bold": true,
+    "scale": 1.0
+  },
+  "color": {
+    "background": "#0A0F1C",
+    "border": "#1C2A40",
+    "shadow": "rgba(0,255,255,0.2)",
+    "textTitle": "#00E5FF",
+    "textGroup": "#00B8D4",
+    "textPrimary": "#FFFFFF",
+    "textSecondary": "#66FFFF",
+    "valueSafe": "#00E676",
+    "valueWarn": "#FFEA00",
+    "valueCrit": "#FF1744",
+    "barBackground": "#0A0F1f",
+    "barLow": "#00E5FF",
+    "barMid": "#FFC400",
+    "barHigh": "#FF1744",
+    "groupBackground": "#111C2F"
+  }
+}

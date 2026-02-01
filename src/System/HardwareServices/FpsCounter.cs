@@ -20,11 +20,14 @@ namespace LiteMonitor.src.SystemServices
     public class FpsCounter : IDisposable
     {
         // 状态标志
-        private bool _isRunning = false;     // FPS 计数服务运行状态
-        private bool _isRestarting = false;  // 服务重启状态
+        private volatile bool _isRunning = false;     // FPS 计数服务运行状态 [Fix] 添加 volatile
+        private volatile bool _isRestarting = false;  // 服务重启状态 [Fix] 添加 volatile
         
         // ★★★ [新增] 静态关机标志 ★★★
         private static bool _isSystemShuttingDown = false;
+        
+        // ★★★ [Fix] 后台任务取消令牌 ★★★
+        private readonly CancellationTokenSource _backgroundCts = new();
 
         static FpsCounter()
         {
@@ -33,7 +36,7 @@ namespace LiteMonitor.src.SystemServices
         }
 
         // ★★★ [新增] 启动锁和最后 activity 时间，用于控制进程生命周期 ★★★
-        private bool _isStarting = false;    // 防止重复启动的标志
+        private volatile bool _isStarting = false;    // 防止重复启动的标志 [Fix] 添加 volatile
         private DateTime _lastAccessTime = DateTime.MinValue; // 最后一次被 UI 请求数据的时间
         
         private Process? _presentMonProc;     // PresentMon 进程实例
@@ -114,23 +117,32 @@ namespace LiteMonitor.src.SystemServices
             try { File.Delete(LogPath); } catch { }
 
             // 500ms 刷新一次 FPS 计算（稳定版频率）
+            // [Fix] 添加取消令牌支持，确保 Dispose 时后台任务能够正确退出
             Task.Run(async () =>
             {
                 _cycleTimer.Start(); 
-                while (true)
+                while (!_backgroundCts.Token.IsCancellationRequested)
                 {
-                    await Task.Delay(500); 
-                    CalculateFps();
+                    try
+                    {
+                        await Task.Delay(500, _backgroundCts.Token);
+                        CalculateFps();
+                    }
+                    catch (OperationCanceledException) { break; }
                 }
             });
 
             // 3秒检查一次服务健康状态和生命周期
             Task.Run(async () =>
             {
-                while (true)
+                while (!_backgroundCts.Token.IsCancellationRequested)
                 {
-                    await Task.Delay(3000);
-                    CheckHealth();
+                    try
+                    {
+                        await Task.Delay(3000, _backgroundCts.Token);
+                        CheckHealth();
+                    }
+                    catch (OperationCanceledException) { break; }
                 }
             });
             
@@ -577,10 +589,16 @@ namespace LiteMonitor.src.SystemServices
         public void Dispose()
         {
             try { 
+                // [Fix] 取消后台任务
+                _backgroundCts.Cancel();
+                
                 // 终止 PresentMon 进程并清理僵尸进程
                 _presentMonProc?.Kill(); 
                 ForceKillZombies(); 
                 _isRunning = false; // 同步重置状态
+                
+                // [Fix] 释放取消令牌资源
+                _backgroundCts.Dispose();
             } catch { }
         }
     }

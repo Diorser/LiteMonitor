@@ -1,0 +1,84 @@
+{
+  "id": "GitHub",
+  "meta": {
+    "name": "GitHub项目监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "监控 GitHub 项目的 Star、Fork、Issues 数量"
+  },
+  "inputs": [
+    {
+      "key": "repo_path",
+      "label": "仓库路径",
+      "type": "text",
+      "default": "diorser/LiteMonitor",
+      "placeholder": "owner/repo",
+      "scope": "target"
+    },
+    {
+      "key": "display_mode",
+      "label": "显示内容",
+      "type": "select",
+      "default": "star_only",
+      "scope": "target",
+      "options": [
+        { "label": "仅 Star (🌟 1.2k)", "value": "star_only" },
+        { "label": "Star + Fork (🌟 1.2k 🔀 300)", "value": "star_fork" },
+        { "label": "Star + Issues (🌟 1.2k ⭕ 5)", "value": "star_issue" },
+        { "label": "详细数据 (🌟1.2k 🔀300 ⭕5)", "value": "detail" }
+      ]
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 300,
+    "steps": [
+      {
+        "id": "fetch_github",
+        "url": "https://api.github.com/repos/{{repo_path}}",
+        "method": "GET",
+        "response_format": "json",
+        "extract": {
+          "stars": "stargazers_count",
+          "forks": "forks_count",
+          "issues": "open_issues_count",
+          "repo_name": "name"
+        },
+        "process": [
+          {
+            "var": "repo_short",
+            "source": "repo_path",
+            "function": "regex_match",
+            "pattern": "([^/]+)$",
+            "to": "1"
+          },
+          {
+            "var": "display_template",
+            "source": "display_mode",
+            "function": "map",
+            "map": {
+              "star_only": "🌟{{stars}}",
+              "star_fork": "🌟{{stars}}  🔀{{forks}}",
+              "star_issue": "🌟{{stars}}  ⭕{{issues}}",
+              "detail": "🌟{{stars}} 🔀{{forks}} ⭕{{issues}}"
+            }
+          },
+          {
+            "var": "final_display",
+            "source": "display_template",
+            "function": "resolve_template"
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "stats",
+      "label": "{{repo_name ?? repo_short ?? repo_path}}",
+      "short_label": "Git",  
+      "format_val": "{{final_display}}",
+      "unit": ""
+    }
+  ]
+}

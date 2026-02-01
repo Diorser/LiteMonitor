@@ -172,6 +172,10 @@ namespace LiteMonitor.src.Plugins
                     {
                         if (double.TryParse(kv.Key, out double k)) sorted.Add((k, kv.Value));
                     }
+                    
+                    // [Fix] 防止空数组越界访问
+                    if (sorted.Count == 0) return "0";
+                    
                     sorted.Sort((a, b) => a.Th.CompareTo(b.Th));
 
                     string result = sorted[0].Val; 

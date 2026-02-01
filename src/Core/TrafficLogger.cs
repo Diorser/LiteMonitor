@@ -43,8 +43,10 @@ namespace LiteMonitor.src.Core
                         Data = JsonSerializer.Deserialize<TrafficData>(json) ?? new TrafficData();
                     }
                 }
-                catch 
+                catch (Exception ex)
                 { 
+                    // [Fix] 添加错误日志
+                    System.Diagnostics.Debug.WriteLine($"[TrafficLogger] Load failed: {ex.Message}");
                     Data = new TrafficData(); 
                 }
             }
@@ -61,7 +63,11 @@ namespace LiteMonitor.src.Core
                     string json = JsonSerializer.Serialize(Data, opt);
                     File.WriteAllText(_filePath, json);
                 }
-                catch { }
+                catch (Exception ex) 
+                { 
+                    // [Fix] 添加错误日志
+                    System.Diagnostics.Debug.WriteLine($"[TrafficLogger] Save failed: {ex.Message}");
+                }
             }
         }
 
