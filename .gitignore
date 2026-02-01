@@ -1,0 +1,60 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+*.nupkg
+*.snupkg
+
+# NuGet Packages
+*.nupkg
+packages/
+!.nuget/packages
+
+# Visual Studio
+.vs/
+*.csproj.user
+*.db
+*.opendb
+
+# JetBrains Rider
+.idea/
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Local settings files
+appsettings.*.json
+!appsettings.json
+
+# Project-specific output files
+settings.json
+TrafficHistory.json
+*.log
+
+# Crash logs
+LiteMonitor_Error.log
+fps_debug.log
