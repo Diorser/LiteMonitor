@@ -183,7 +183,16 @@ namespace LiteMonitor.src.Core
             
             // 1. 内存 (GB vs %)
             if (type == MetricType.Memory) 
-                return Settings.Load().MemoryDisplayMode == 1 ? "GB" : "%";
+            {
+                if (Settings.Load().MemoryDisplayMode != 1) return "%";
+                if (context == UnitContext.SettingsPanel || context == UnitContext.SettingsTaskbar) return "{u}";
+
+                double totalGB = (key.IndexOf("MEM", StringComparison.OrdinalIgnoreCase) >= 0) ? Settings.DetectedRamTotalGB : Settings.DetectedGpuVramTotalGB;
+                
+                return (totalGB > 0 && value.HasValue) 
+                    ? FormatDataSizeParts((value.Value / 100.0) * totalGB * 1073741824.0, -1).unit 
+                    : "GB";
+            }
             
 
             // 2. 数据 (动态单位)
