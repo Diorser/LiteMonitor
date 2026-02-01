@@ -123,11 +123,11 @@ namespace LiteMonitor.src.UI.Helpers
             // ★★★ 垂直任务栏定位 ★★★
             if (IsVertical())
             {
-                // Win10 原生挤占模式检查 (A/B 方案之 B) - 垂直模式
-                if (_winHelper.IsWin10Mode)
+                // 如果策略自带布局逻辑 (如 Win10 挤占模式)，直接委托处理
+                if (_winHelper.UsesInternalLayout)
                 {
                     // 注意：垂直模式下，Width 是固定的（任务栏宽度），Height 是 Monitor 高度
-                    _winHelper.SetPosition(_hTaskbar, 0, 0, _taskbarRect.Width, _form.Height, _cfg.TaskbarAlignLeft);
+                    _winHelper.SetPosition(_hTaskbar, 0, 0, _taskbarRect.Width, _form.Height, _cfg.TaskbarManualOffset, _cfg.TaskbarAlignLeft);
                     return;
                 }
 
@@ -176,13 +176,11 @@ namespace LiteMonitor.src.UI.Helpers
             }
             else
             {
-                // Win10 原生挤占模式检查 (A/B 方案之 B)
-                // 如果启用了 Win10 模式，我们就不需要计算 Right 偏移了，
-                // 因为位置是由 Win10Helper 在 SetPosition 内部通过 TryAdjustLayout 决定的。
-                // 这里我们只需要确保调用 SetPosition 即可，坐标传 0 也没关系。
-                if (_winHelper.IsWin10Mode)
+                // 如果策略自带布局逻辑 (如 Win10 挤占模式)，直接委托处理
+                // 我们不需要计算 Right 偏移，位置由 Strategy 内部决定
+                if (_winHelper.UsesInternalLayout)
                 {
-                    _winHelper.SetPosition(_hTaskbar, 0, 0, panelWidth, _taskbarHeight, _cfg.TaskbarAlignLeft);
+                    _winHelper.SetPosition(_hTaskbar, 0, 0, panelWidth, _taskbarHeight, _cfg.TaskbarManualOffset, _cfg.TaskbarAlignLeft);
                     return;
                 }
 

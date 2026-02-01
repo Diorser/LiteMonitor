@@ -6,34 +6,116 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
+using static LiteMonitor.src.UI.Helpers.NativeMethods;
 
 namespace LiteMonitor.src.UI.Helpers
 {
     /// <summary>
-    /// 任务栏窗口底层助手 (Windows Helper)
-    /// 职责：Win32 API、句柄查找、挂载逻辑、样式与图层设置
+    /// 任务栏集成策略接口
+    /// 定义了不同系统版本下任务栏挂载和布局的统一行为
+    /// </summary>
+    public interface ITaskbarStrategy
+    {
+        /// <summary>
+        /// 是否准备就绪
+        /// </summary>
+        bool IsReady { get; }
+
+        /// <summary>
+        /// 挂载到任务栏
+        /// </summary>
+        void Attach(IntPtr taskbarHandle);
+
+        /// <summary>
+        /// 设置位置和大小
+        /// </summary>
+        void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, int manualOffset, bool alignLeft);
+
+        /// <summary>
+        /// 恢复任务栏原始布局（如果做过修改）
+        /// </summary>
+        void Restore();
+
+        /// <summary>
+        /// 获取期望的父窗口句柄（用于检测是否脱离）
+        /// </summary>
+        IntPtr GetExpectedParent(IntPtr taskbarHandle);
+
+        /// <summary>
+        /// 是否拥有内部布局逻辑（如 Win10 挤占模式）
+        /// </summary>
+        bool HasInternalLayout { get; }
+    }
+
+    internal static class NativeMethods
+    {
+        public const int GWL_STYLE = -16;
+        public const int GWL_EXSTYLE = -20;
+        public const int WS_CHILD = 0x40000000;
+        public const int WS_VISIBLE = 0x10000000;
+        public const int WS_CLIPSIBLINGS = 0x04000000;
+        public const int WS_EX_LAYERED = 0x80000;
+        public const int WS_EX_TOOLWINDOW = 0x00000080;
+        public const uint LWA_COLORKEY = 0x00000001;
+        public const uint SWP_NOZORDER = 0x0004;
+        public const uint SWP_NOACTIVATE = 0x0010;
+        public const int WS_EX_TRANSPARENT = 0x00000020;
+        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT { public int X, Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT { public int left, top, right, bottom; }
+
+        [DllImport("user32.dll")] public static extern IntPtr FindWindow(string cls, string? name);
+        [DllImport("user32.dll")] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? name);
+        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int idx);
+        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int idx, int value);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+        [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref POINT pt);
+        [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr parent);
+        [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+        [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Auto)] public static extern IntPtr GetParent(IntPtr hWnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+        [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+        [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+    }
+
+    /// <summary>
+    /// 任务栏窗口底层助手 (Windows Helper) - Facade
+    /// 职责：作为统一入口，根据系统版本委托给具体的策略 (Strategy) 处理挂载和布局
     /// </summary>
     public class TaskbarWinHelper
     {
         private readonly Form _form;
+        private readonly ITaskbarStrategy _strategy;
 
         // ★★★ 性能优化缓存 ★★★
         private Rectangle _lastWindowRect = Rectangle.Empty;
         private Rectangle _cachedResult = Rectangle.Empty;
         private bool _isCacheValid = false;
 
-        // Win10 布局助手 (A/B 方案支持)
-        private TaskbarWin10LayoutHelper? _win10Helper;
-
-        // [Optimization] 静态缓存系统版本检测结果，供全局复用，避免重复调用系统 API
+        // [Optimization] 静态缓存系统版本检测结果
         private static readonly bool _isWin11 = Environment.OSVersion.Version.Major == 10 && Environment.OSVersion.Version.Build >= 22000;
 
-        public bool IsWin10Mode => !_isWin11 && _win10Helper != null && _win10Helper.IsReady;
-        public TaskbarWin10LayoutHelper Win10Helper => _win10Helper;
-
+        public bool UsesInternalLayout => _strategy.HasInternalLayout;
+        
         public TaskbarWinHelper(Form form)
         {
             _form = form;
+            // 策略工厂模式：根据系统版本选择合适的集成策略
+            if (_isWin11)
+            {
+                _strategy = new TaskbarStrategyWin11(form);
+            }
+            else
+            {
+                _strategy = new TaskbarStrategyWin10(form);
+            }
         }
 
         // =================================================================
@@ -73,87 +155,34 @@ namespace LiteMonitor.src.UI.Helpers
         }
 
         // =================================================================
-        // 挂载逻辑
+        // 挂载逻辑 (委托给策略)
         // =================================================================
         public void AttachToTaskbar(IntPtr taskbarHandle)
         {
-            IntPtr targetParent = taskbarHandle;
-
-            // Win10 兼容模式：初始化布局助手
-            if (!_isWin11)
-            {
-                _win10Helper ??= new TaskbarWin10LayoutHelper();
-                _win10Helper.Initialize(taskbarHandle);
-
-                // Win10下，为了与系统图标平级且正确遮挡，我们将父窗口设为 ReBarWindow32
-                if (_win10Helper.IsReady && _win10Helper.ReBarHandle != IntPtr.Zero)
-                {
-                    targetParent = _win10Helper.ReBarHandle;
-                }
-            }
-
-            SetParent(_form.Handle, targetParent);
-
-            int style = GetWindowLong(_form.Handle, GWL_STYLE);
-            style &= (int)~0x80000000; 
-            style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
-            SetWindowLong(_form.Handle, GWL_STYLE, style);
+            _strategy.Attach(taskbarHandle);
         }
 
-        public void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, bool alignLeft = true)
+        public void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, int manualOffset = 0, bool alignLeft = true)
         {
+            // 检查父窗口是否正确，防止脱离
             IntPtr currentParent = GetParent(_form.Handle);
-            // Win10下，父窗口可能是 ReBarWindow32
-            IntPtr expectedParent = taskbarHandle;
-            if (!_isWin11 && _win10Helper != null && _win10Helper.IsReady)
-                expectedParent = _win10Helper.ReBarHandle;
+            IntPtr expectedParent = _strategy.GetExpectedParent(taskbarHandle);
 
-            bool isAttached = (currentParent == expectedParent);
-
-            if (!isAttached)
+            if (currentParent != expectedParent)
             {
                 AttachToTaskbar(taskbarHandle);
-                currentParent = GetParent(_form.Handle);
-                isAttached = currentParent == expectedParent;
             }
 
-            // =================================================================
-            // Win10 原生任务栏挤占逻辑 (A/B 方案之 B)
-            // =================================================================
-            if (!_isWin11 && _win10Helper != null && _win10Helper.IsReady)
-            {
-                if (_win10Helper.TryAdjustLayout(taskbarHandle, w, h, alignLeft, out int win10X, out int win10Y))
-                {
-                    SetWindowPos(_form.Handle, IntPtr.Zero, win10X, win10Y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-                    return;
-                }
-            }
-
-            int finalX = left;
-            int finalY = top;
-            
-            if (isAttached)
-            {
-                POINT pt = new POINT { X = left, Y = top };
-                ScreenToClient(taskbarHandle, ref pt);
-                finalX = pt.X;
-                finalY = pt.Y;
-                SetWindowPos(_form.Handle, IntPtr.Zero, finalX, finalY, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-            else
-            {
-                IntPtr HWND_TOPMOST = (IntPtr)(-1);
-                SetWindowPos(_form.Handle, HWND_TOPMOST, finalX, finalY, w, h, SWP_NOACTIVATE);
-            }
+            _strategy.SetPosition(taskbarHandle, left, top, w, h, manualOffset, alignLeft);
         }
 
         public void RestoreTaskbar()
         {
-            _win10Helper?.Restore();
+            _strategy.Restore();
         }
 
         // =================================================================
-        // 句柄与信息获取
+        // 句柄与信息获取 (通用逻辑)
         // =================================================================
         public (IntPtr hTaskbar, IntPtr hTray) FindHandles(string targetDevice)
         {
@@ -219,30 +248,24 @@ namespace LiteMonitor.src.UI.Helpers
                     Rectangle screenBounds = screen.Bounds;
                     int reservedBottom = screenBounds.Bottom - workArea.Bottom;
 
-                    // 场景 A: 锚定模式 (Win10/11 正常桌面固定)
-                    // 如果 WorkingArea 被挤压 (>2px)，直接信赖 WorkingArea。
+                    // 场景 A: 锚定模式
                     if (reservedBottom > 2) 
                     {
                         finalRect = new Rectangle(rectPhys.Left, workArea.Bottom, rectPhys.Width, reservedBottom);
                     }
-                    // 场景 B: 悬浮模式 (自动隐藏 / 平板模式)
+                    // 场景 B: 悬浮模式
                     else
                     {
-                        // 针对 Win11 的强制修正 (复用静态 _isWin11 字段)
                         if (_isWin11)
                         {
-                            // 计算当前 DPI 下的标准任务栏高度 (Win11 标准为 48px @ 96DPI)
                             int dpi = GetTaskbarDpi();
                             int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
 
-                            // 判定是否处于"弹出/展开"状态
-                            // 如果物理高度 > 标准高度的 80%，说明它不是收起状态(收起状态通常很窄)
-                            // 此时由于 API 可能返回幽灵高度(60px+)，我们需要强制将其修正为标准高度
                             if (rectPhys.Height > (standardHeight * 0.8))
                             {
                                 finalRect = new Rectangle(
                                     rectPhys.Left, 
-                                    rectPhys.Bottom - standardHeight, // 紧贴物理底边
+                                    rectPhys.Bottom - standardHeight, 
                                     rectPhys.Width, 
                                     standardHeight);
                             }
@@ -295,7 +318,6 @@ namespace LiteMonitor.src.UI.Helpers
         public static int GetWidgetsWidth()
         {
             int dpi = GetTaskbarDpi();
-            // [Optimization] 复用静态缓存的 Win11 判断
             if (_isWin11)
             {
                 string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -314,53 +336,16 @@ namespace LiteMonitor.src.UI.Helpers
             return 0;
         }
 
-        // -------------------------------------------------------------
-        // Win32 API
-        // -------------------------------------------------------------
-        [DllImport("user32.dll")] public static extern IntPtr FindWindow(string cls, string? name);
-        [DllImport("user32.dll")] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? name);
-        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int idx);
-        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int idx, int value);
-        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-        [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref POINT pt);
-        [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr parent);
-        [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
-        [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
-        [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Auto)] public static extern IntPtr GetParent(IntPtr hWnd);
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern uint RegisterWindowMessage(string lpString);
-        [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
-        [DllImport("shell32.dll")] private static extern uint SHAppBarMessage(uint msg, ref APPBARDATA pData);
-        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindow(IntPtr hWnd);
-        [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
-
-        public const int GWL_STYLE = -16;
-        public const int GWL_EXSTYLE = -20;
-        public const int WS_CHILD = 0x40000000;
-        public const int WS_VISIBLE = 0x10000000;
-        public const int WS_CLIPSIBLINGS = 0x04000000;
-        public const int WS_EX_LAYERED = 0x80000;
-        public const int WS_EX_TOOLWINDOW = 0x00000080;
-        public const uint LWA_COLORKEY = 0x00000001;
-        public const uint SWP_NOZORDER = 0x0004;
-        public const uint SWP_NOACTIVATE = 0x0010;
-        public const int WS_EX_TRANSPARENT = 0x00000020;
-        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
-        private const uint ABM_GETTASKBARPOS = 5;
-
-        public struct POINT { public int X, Y; }
-        [StructLayout(LayoutKind.Sequential)] public struct RECT { public int left, top, right, bottom; }
-        [StructLayout(LayoutKind.Sequential)]
-        private struct APPBARDATA
-        {
-            public int cbSize;
-            public IntPtr hWnd;
-            public uint uCallbackMessage;
-            public uint uEdge;
-            public RECT rc;
-            public int lParam;
-        }
-
         public static void ActivateWindow(IntPtr handle) => SetForegroundWindow(handle);
+
+        public static bool IsWindow(IntPtr hWnd) => NativeMethods.IsWindow(hWnd);
+
+        public static void ApplyChildWindowStyle(IntPtr hWnd)
+        {
+            int style = GetWindowLong(hWnd, GWL_STYLE);
+            style &= (int)~0x80000000; 
+            style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
+            SetWindowLong(hWnd, GWL_STYLE, style);
+        }
     }
 }

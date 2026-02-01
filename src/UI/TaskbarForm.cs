@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using static LiteMonitor.src.UI.Helpers.TaskbarWinHelper;
+using static LiteMonitor.src.UI.Helpers.NativeMethods;
 
 namespace LiteMonitor
 {
