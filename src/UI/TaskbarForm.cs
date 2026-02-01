@@ -34,6 +34,7 @@ namespace LiteMonitor
         
         private const int WM_RBUTTONDOWN = 0x0204;
         private const int WM_RBUTTONUP = 0x0205;
+        private const int WM_LBUTTONDBLCLK = 0x0203;
         private bool _isWin11;
 
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
@@ -122,6 +123,16 @@ namespace LiteMonitor
                 this.BeginInvoke(new Action(ShowContextMenu));
                 return; 
             }
+
+            // [Fix] 强制拦截双击事件
+            // 当悬浮窗(Tooltip)显示时，WinForms 的标准双击事件可能因为焦点/激活状态的微妙变化而失效。
+            // 这里直接在消息层处理 WM_LBUTTONDBLCLK，确保双击动作始终能被触发。
+            if (m.Msg == WM_LBUTTONDBLCLK)
+            {
+                _bizHelper.HandleDoubleClick(_mainForm, _ui);
+                return;
+            }
+
             base.WndProc(ref m);
         }
 
@@ -241,6 +252,7 @@ namespace LiteMonitor
             {
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE (防止点击激活窗口，避免抢占焦点)
                 if (_cfg != null && _cfg.TaskbarClickThrough)
                 {
                     cp.ExStyle |= WS_EX_TRANSPARENT;
