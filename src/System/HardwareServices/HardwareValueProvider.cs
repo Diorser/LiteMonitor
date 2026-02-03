@@ -292,16 +292,35 @@ namespace LiteMonitor.src.SystemServices
 
                         if (result == null)
                         {
-                            if (Settings.DetectedRamTotalGB <= 0)
+                            // 1. 尝试获取基础数据 (Used, Available)
+                            // 这是最可靠的数据源，既能算出负载，也能初始化总容量
+                            float? usedVal = null;
+                            float? availVal = null;
+                            if (_manualSensorCache.TryGetValue("MEM.Used", out var u) && u.Value.HasValue) usedVal = u.Value.Value;
+                            if (_manualSensorCache.TryGetValue("MEM.Available", out var a) && a.Value.HasValue) availVal = a.Value.Value;
+
+                            // 2. 优先通过计算获取结果 (Used / (Used + Available))
+                            // 这种方式能同时确保 Load 百分比和 Total 容量都被正确处理，避免"有负载没容量"的问题
+                            if (usedVal.HasValue && availVal.HasValue)
                             {
-                                if (_manualSensorCache.TryGetValue("MEM.Used", out var u) && _manualSensorCache.TryGetValue("MEM.Available", out var a))
+                                float memTotal = usedVal.Value + availVal.Value;
+                                if (memTotal > 0)
                                 {
-                                    if (u.Value.HasValue && a.Value.HasValue)
+                                    // 初始化总容量 (供容量显示模式使用)
+                                    if (Settings.DetectedRamTotalGB <= 0)
                                     {
-                                        float rawTotal = u.Value.Value + a.Value.Value;
-                                        Settings.DetectedRamTotalGB = rawTotal > 512.0f ? rawTotal / 1024.0f : rawTotal;
+                                        Settings.DetectedRamTotalGB = memTotal > 512.0f ? memTotal / 1024.0f : memTotal;
                                     }
+
+                                    // 计算负载百分比
+                                    result = (usedVal.Value / memTotal) * 100.0f;
                                 }
+                            }
+
+                            // 3. 兜底：如果无法计算 (缺 Used/Available)，才尝试读取原生 Load 传感器
+                            if (result == null && _manualSensorCache.TryGetValue("MEM.Load", out var sLoad) && sLoad.Value.HasValue)
+                            {
+                                result = sLoad.Value.Value;
                             }
                         }
                         else

@@ -108,9 +108,19 @@ namespace LiteMonitor.src.SystemServices
             // --- Memory ---
             if (type == HardwareType.Memory) 
             {
+                // [Critical Fix] 严格排除虚拟内存 (Virtual Memory)
+                // LibreHardwareMonitor 会同时列出 "Generic Memory" 和 "Virtual Memory"
+                // 必须通过 Hardware 名称进行过滤，否则可能错误地映射到虚拟内存的 Load 传感器
                 if (Has(hw.Name, "virtual")) return null;
-                // 1. 负载 (保持不变)
-                if (s.SensorType == SensorType.Load && Has(name, "memory")) return "MEM.Load";
+                
+                // 1. 负载
+                // ★★★ 增强版匹配：支持名称仅为 "Memory" 的负载传感器 (常见于 LibreHardwareMonitor) ★★★
+                if (s.SensorType == SensorType.Load)
+                {
+                     if (Has(name, "memory")) return "MEM.Load";
+                     // 兼容只有 "Load" 字样的传感器
+                     if (name.Equals("Load", StringComparison.OrdinalIgnoreCase)) return "MEM.Load";
+                }
                 
                 // 2. ★ 增强版匹配：同时接受 Data 和 SmallData
                 if (s.SensorType == SensorType.Data || s.SensorType == SensorType.SmallData)
