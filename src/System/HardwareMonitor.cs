@@ -201,7 +201,9 @@ namespace LiteMonitor.src.SystemServices
                         if (IsMoboOrCooler(hw) && requirements.NeedMobo)
                         {
                              // ★★★ [优化] 降低更新频率：主板传感器每 3 秒更新一次，减少 I/O 阻塞 ★★★
-                             if (isSlowScanTick || requirements.ForceAll)
+                             // [Fix] 无论是否 ForceAll (WebServer)，只要是 SuperIO 这种慢速设备，
+                             // 都必须强制跟随慢速扫描周期 (isSlowScanTick)，禁止高频更新。
+                             if (isSlowScanTick)
                              {
                                  UpdateWithSubHardware(hw);
                              }
