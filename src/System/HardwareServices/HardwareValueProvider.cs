@@ -248,11 +248,19 @@ namespace LiteMonitor.src.SystemServices
 
                         if (result == null)
                         {
-                            result = _componentProcessor.GetCpuLoad();
-                            if (result == null && _manualSensorCache.TryGetValue("CPU.Load", out var fallbackS))
+                            // [Fix] 优先使用 LHM 的 "Total" 聚合传感器（与任务管理器一致）
+                            // 然后才回退到各核心平均值计算
+                            if (_manualSensorCache.TryGetValue("CPU.Load", out var totalSensor) && totalSensor.Value.HasValue)
                             {
-                                result = fallbackS.Value;
+                                result = totalSensor.Value.Value;
                             }
+
+                            // 如果 Total 传感器不可用，才回退到核心平均值
+                            if (result == null)
+                            {
+                                result = _componentProcessor.GetCpuLoad();
+                            }
+
                             if (result == null) result = 0f;
                         }
                         break;
