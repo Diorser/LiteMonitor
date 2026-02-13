@@ -91,6 +91,9 @@ namespace LiteMonitor
         public bool TaskbarSingleLine { get; set; } = false;// 单行显示
         public bool TaskbarHoverShowAll { get; set; } = true; // [新增] 悬浮显示所有监控项
         public int TaskbarManualOffset { get; set; } = 0;// 手动偏移量 (像素)
+        
+        // ★★★ [新增] Win11 任务栏修正高度 ★★★
+        public int Win11TaskbarHeight { get; set; } = 48; // 默认 48px (96dpi)
 
         // ====== 任务栏：高级自定义外观 ======
         public bool TaskbarCustomStyle { get; set; } = false; // 总开关
