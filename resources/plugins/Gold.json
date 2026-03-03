@@ -1,0 +1,29 @@
+{
+  "id": "gold_price",
+  "meta": {
+    "name": "黄金价格",
+    "version": "1.0",
+    "author": "JimmyK1m",
+    "description": "伦敦现货黄金价格监控"
+  },
+  "execution": {
+    "type": "api_json",
+    "url": "https://api.gold-api.com/price/XAU",
+    "method": "GET",
+    "extract": {
+      "price": "price"
+    },
+    "process": [{
+      "var": "price_modified",
+      "source": "price",
+      "function": "regex_replace",
+      "pattern": "(\\d+\\.\\d).*",
+      "to": "$1"
+    }]
+  },
+  "outputs": [{
+    "key": "price",
+    "label": "伦敦黄金",
+    "format_val": "{{price_modified}}"
+  }]
+}
