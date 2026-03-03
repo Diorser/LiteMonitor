@@ -23,7 +23,7 @@
   },
   "outputs": [{
     "key": "price",
-    "label": "伦敦黄金",
+    "label": "现货黄金",
     "format_val": "{{price_modified}}"
   }]
 }
