@@ -19,7 +19,7 @@
 
 
 	<ItemGroup>
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6-pre620" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="System.Text.Json" Version="9.0.10" />
   </ItemGroup>
 
