@@ -43,11 +43,15 @@ namespace LiteMonitor
             _mon = new HardwareMonitor(cfg);
             
             // ★★★ [新增] 监听硬件名称缓存完成事件，刷新布局 ★★★
+            // 注意：事件从后台线程触发，需要用 BeginInvoke 封送到 UI 线程
             _mon.OnHardwareNamesCached += () =>
             {
-                BuildMetrics();
-                _layoutDirty = true;
-                _form.Invalidate();
+                _form.BeginInvoke(new Action(() =>
+                {
+                    BuildMetrics();
+                    _layoutDirty = true;
+                    _form.Invalidate();
+                }));
             };
 
             _layout = new UILayout(ThemeManager.Current);
