@@ -22,6 +22,9 @@ namespace LiteMonitor.src.SystemServices
         // 子服务与处理器
         private readonly PerformanceCounterManager _perfManager;
         private readonly ComponentProcessor _componentProcessor;
+        
+        // ★★★ [新增] 摩尔线程 GPU 监控器引用 ★★★
+        private MttGpuMonitor? _mttGpuMonitor;
 
         // Tick 级智能缓存 (防止同帧重复计算)
         private readonly Dictionary<string, float> _tickCache = new();
@@ -51,6 +54,14 @@ namespace LiteMonitor.src.SystemServices
 
             // 初始化子服务
             _componentProcessor = new ComponentProcessor(c, s, map);
+        }
+        
+        /// <summary>
+        /// ★★★ [新增] 设置摩尔线程 GPU 监控器引用 ★★★
+        /// </summary>
+        public void SetMttGpuMonitor(MttGpuMonitor? monitor)
+        {
+            _mttGpuMonitor = monitor;
         }
 
         // ★★★ [新增] 清空缓存并重新预热（当硬件重载或配置变更时调用） ★★★
@@ -457,6 +468,21 @@ namespace LiteMonitor.src.SystemServices
                     else if (_lastValidMap.TryGetValue(key, out var last))
                     {
                         result = last;
+                    }
+                }
+                
+                // ★★★ [新增] 11. 摩尔线程 GPU 回退逻辑 ★★★
+                // 如果 LHM 未检测到 GPU 数据，尝试从摩尔线程 MTML 获取
+                if (result == null && _mttGpuMonitor?.HasMttGpu == true)
+                {
+                    result = _mttGpuMonitor.GetValue(key);
+                    if (result.HasValue)
+                    {
+                        // 记录最大值
+                        if (key == "GPU.Clock" && result.Value > 0 && result.Value < 6000f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
+                        else if (key == "GPU.Power" && result.Value > 0 && result.Value < 1200f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
                     }
                 }
 
