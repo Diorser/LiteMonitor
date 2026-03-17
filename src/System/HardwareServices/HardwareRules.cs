@@ -27,6 +27,9 @@ namespace LiteMonitor.src.SystemServices
             
             // 1. 特殊处理：Microsoft Basic Render Driver 永远垫底
             if (name.Contains("Basic Render", StringComparison.OrdinalIgnoreCase)) return 100;
+            
+            // ★★★ [新增] 摩尔线程 GPU 优先级 (与 Nvidia/AMD 独显同级) ★★★
+            if (IsMttGpu(hw, name)) return 0;
 
             // 2. Nvidia 显卡 (默认视为独显/最强)
             if (hw.HardwareType == HardwareType.GpuNvidia) return 0;
@@ -62,6 +65,21 @@ namespace LiteMonitor.src.SystemServices
             // 其他 -> 优先级 4
             return 4;
         }
+        
+        /// <summary>
+        /// ★★★ [新增] 判断是否为摩尔线程 GPU ★★★
+        /// </summary>
+        public static bool IsMttGpu(IHardware hw, string? name = null)
+        {
+            name ??= hw.Name;
+            if (string.IsNullOrEmpty(name)) return false;
+            
+            // 摩尔线程 GPU 名称特征：MTT, Moore Threads, 摩尔线程
+            return Has(name, "MTT") || 
+                   Has(name, "Moore Threads") || 
+                   Has(name, "摩尔线程") ||
+                   Has(name, "MT ");
+        }
 
         /// <summary>
         /// 判断是否为独显版 Arc (A/B/Pro 系列)
@@ -83,7 +101,7 @@ namespace LiteMonitor.src.SystemServices
         public static bool ShouldUseSharedMemory(IHardware hw)
         {
             // 只有 Intel 核显才优先使用共享内存
-            // Intel 独显 (Arc A/B/Pro) 和其他厂商 (Nvidia/AMD) 都使用专用显存 (Dedicated)
+            // Intel 独显 (Arc A/B/Pro) 和其他厂商 (Nvidia/AMD/MTT) 都使用专用显存 (Dedicated)
             if (hw.HardwareType == HardwareType.GpuIntel)
             {
                 // 如果是 Discrete Arc，则不使用 Shared (即使用 Dedicated)

@@ -41,6 +41,18 @@ namespace LiteMonitor
             _cfg = cfg;
             _form = form;
             _mon = new HardwareMonitor(cfg);
+            
+            // ★★★ [新增] 监听硬件名称缓存完成事件，刷新布局 ★★★
+            // 注意：事件从后台线程触发，需要用 BeginInvoke 封送到 UI 线程
+            _mon.OnHardwareNamesCached += () =>
+            {
+                _form.BeginInvoke(new Action(() =>
+                {
+                    BuildMetrics();
+                    _layoutDirty = true;
+                    _form.Invalidate();
+                }));
+            };
 
             _layout = new UILayout(ThemeManager.Current);
 
@@ -285,6 +297,28 @@ namespace LiteMonitor
                     string gName = LanguageManager.T(UIUtils.Intern("Groups." + currentGroupKey));
                     if (_cfg.GroupAliases.ContainsKey(currentGroupKey)) gName = _cfg.GroupAliases[currentGroupKey];
                     
+                    // ★★★ [新增] CPU/GPU 组使用实际硬件名称（保留 emoji 图标）★★★
+                    if (currentGroupKey == "CPU")
+                    {
+                        string cpuName = _mon.GetCpuName();
+                        if (!string.IsNullOrEmpty(cpuName))
+                        {
+                            // 提取原有 emoji（第一个字符），添加硬件名称
+                            string emoji = gName.Length > 0 && char.IsSurrogate(gName[0]) ? gName.Substring(0, 2) : 
+                                           (gName.Length > 0 ? gName[0].ToString() : "");
+                            gName = emoji + " " + cpuName;
+                        }
+                    }
+                    else if (currentGroupKey == "GPU")
+                    {
+                        string gpuName = _mon.GetGpuName();
+                        if (!string.IsNullOrEmpty(gpuName))
+                        {
+                            // GPU 使用和 CPU 一样的 💻 emoji
+                            gName = "💻 " + gpuName;
+                        }
+                    }
+                    
                     gr.Label = gName;
                     _groups.Add(gr);
                     currentGroupList = new List<MetricItem>();
@@ -332,6 +366,28 @@ namespace LiteMonitor
                 var gr = new GroupLayoutInfo(currentGroupKey, currentGroupList);
                 string gName = LanguageManager.T(UIUtils.Intern("Groups." + currentGroupKey));
                  if (_cfg.GroupAliases.ContainsKey(currentGroupKey)) gName = _cfg.GroupAliases[currentGroupKey];
+                
+                // ★★★ [新增] CPU/GPU 组使用实际硬件名称（保留 emoji 图标）★★★
+                if (currentGroupKey == "CPU")
+                {
+                    string cpuName = _mon.GetCpuName();
+                    if (!string.IsNullOrEmpty(cpuName))
+                    {
+                        // 提取原有 emoji（第一个字符），添加硬件名称
+                        string emoji = gName.Length > 0 && char.IsSurrogate(gName[0]) ? gName.Substring(0, 2) : 
+                                       (gName.Length > 0 ? gName[0].ToString() : "");
+                        gName = emoji + " " + cpuName;
+                    }
+                }
+                else if (currentGroupKey == "GPU")
+                {
+                    string gpuName = _mon.GetGpuName();
+                    if (!string.IsNullOrEmpty(gpuName))
+                    {
+                        // GPU 使用和 CPU 一样的 💻 emoji
+                        gName = "💻 " + gpuName;
+                    }
+                }
                 
                 gr.Label = gName;
                 _groups.Add(gr);

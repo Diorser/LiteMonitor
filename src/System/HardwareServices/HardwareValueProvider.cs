@@ -22,6 +22,9 @@ namespace LiteMonitor.src.SystemServices
         // 子服务与处理器
         private readonly PerformanceCounterManager _perfManager;
         private readonly ComponentProcessor _componentProcessor;
+        
+        // ★★★ [新增] 摩尔线程 GPU 监控器引用 ★★★
+        private MttGpuMonitor? _mttGpuMonitor;
 
         // Tick 级智能缓存 (防止同帧重复计算)
         private readonly Dictionary<string, float> _tickCache = new();
@@ -51,6 +54,14 @@ namespace LiteMonitor.src.SystemServices
 
             // 初始化子服务
             _componentProcessor = new ComponentProcessor(c, s, map);
+        }
+        
+        /// <summary>
+        /// ★★★ [新增] 设置摩尔线程 GPU 监控器引用 ★★★
+        /// </summary>
+        public void SetMttGpuMonitor(MttGpuMonitor? monitor)
+        {
+            _mttGpuMonitor = monitor;
         }
 
         // ★★★ [新增] 清空缓存并重新预热（当硬件重载或配置变更时调用） ★★★
@@ -230,7 +241,26 @@ namespace LiteMonitor.src.SystemServices
 
                 // 定义临时结果变量
                 float? result = null;
-                
+
+                // ★★★ [新增] 摩尔线程 GPU 优先逻辑 ★★★
+                // 当存在摩尔线程 GPU 时，GPU 相关指标优先从 MTML 获取
+                // 避免 LHM 返回其他 GPU（如 Intel iGPU）的数据导致不匹配
+                if (_mttGpuMonitor?.HasMttGpu == true && key.StartsWith("GPU."))
+                {
+                    result = _mttGpuMonitor.GetValue(key);
+                    if (result.HasValue)
+                    {
+                        // 记录最大值
+                        if (key == "GPU.Clock" && result.Value > 0 && result.Value < 6000f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
+                        else if (key == "GPU.Power" && result.Value > 0 && result.Value < 1200f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
+
+                        _tickCache[key] = result.Value;
+                        return result.Value;
+                    }
+                }
+
                 // ★★★ [核心逻辑] 全局开关判断：只有当开关开启，且管理器已初始化成功时，才尝试走计数器 ★★★
                 // 这里的 UseWindowsPerformanceCounters 对应 Step 1 中 Settings 新增的属性
                 bool useCounter = _cfg.UseWinPerCounters && _perfManager.IsInitialized;
@@ -457,6 +487,22 @@ namespace LiteMonitor.src.SystemServices
                     else if (_lastValidMap.TryGetValue(key, out var last))
                     {
                         result = last;
+                    }
+                }
+                
+                // ★★★ [新增] 11. 摩尔线程 GPU 回退逻辑 ★★★
+                // 对于 GPU key：开头已优先尝试 MTML，这里处理 MTML 无数据而 LHM 也无数据的情况
+                // 对于非 GPU key：当 LHM 无数据时尝试 MTML（未来可能有其他硬件支持）
+                if (result == null && _mttGpuMonitor?.HasMttGpu == true && key.StartsWith("GPU."))
+                {
+                    result = _mttGpuMonitor.GetValue(key);
+                    if (result.HasValue)
+                    {
+                        // 记录最大值
+                        if (key == "GPU.Clock" && result.Value > 0 && result.Value < 6000f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
+                        else if (key == "GPU.Power" && result.Value > 0 && result.Value < 1200f)
+                            _cfg.UpdateMaxRecord(key, result.Value);
                     }
                 }
 

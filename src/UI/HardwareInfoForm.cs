@@ -179,7 +179,7 @@ namespace LiteMonitor.src.UI
 
         private void AddHardwareNode(TreeNodeCollection parentNodes, IHardware hw, string filter, bool isSearch, bool isFirstHardware)
         {
-            string typeStr = GetHardwareTypeString(hw.HardwareType);
+            string typeStr = GetHardwareTypeStringWithMtt(hw);  // ★★★ [修改] 支持摩尔线程 GPU 检测 ★★★
             // ★★★ 替换这里：使用强力白名单清洗 ★★★
             string cleanName = SanitizeHardwareName(hw.Name);
             string label = $"{typeStr} {cleanName}";
@@ -301,6 +301,19 @@ namespace LiteMonitor.src.UI
                 case HardwareType.Cooler: return T("❄️ [Cooler]", "❄️ [散热器]");
                 default: return $"🟢 [{type}]";
             }
+        }
+        
+        /// <summary>
+        /// ★★★ [新增] 获取硬件类型字符串（支持摩尔线程 GPU 名称检测） ★★★
+        /// </summary>
+        private string GetHardwareTypeStringWithMtt(IHardware hw)
+        {
+            // 优先检测摩尔线程 GPU
+            if (HardwareRules.IsMttGpu(hw))
+            {
+                return T("🎮 [MTT GPU]", "🎮 [摩尔线程显卡]");
+            }
+            return GetHardwareTypeString(hw.HardwareType);
         }
         private string GetSensorTypeString(SensorType type)
         {

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices; // ★★★ 新增：引用用于内存�
 using System.Reflection; // ★★★ 新增：用于反射关闭历史记录
 using LibreHardwareMonitor.Hardware;
 using LiteMonitor.src.Core;
+using LiteMonitor.src.SystemServices; // ★★★ [MTT] 摩尔线程支持
 using System.Linq;
 using System.Threading;
 
@@ -15,6 +16,7 @@ namespace LiteMonitor.src.SystemServices
         #region Singleton & Events
         public static HardwareMonitor? Instance { get; private set; }
         public event Action? OnValuesUpdated;
+        public event Action? OnHardwareNamesCached; // ★★★ [新增] 硬件名称缓存完成事件 ★★★
         #endregion
 
         #region Private Fields
@@ -32,11 +34,15 @@ namespace LiteMonitor.src.SystemServices
 
         // 性能计数器管理器
         private readonly PerformanceCounterManager _perfCounterManager;
+        
+        // ★★★ [新增] 摩尔线程 GPU 监控器 ★★★
+        private readonly MttGpuMonitor _mttGpuMonitor;
 
         private readonly Dictionary<string, float> _lastValidMap = new();
         
         // 状态标记 (防止并发重载)
         private volatile bool _isReloading = false;
+        private volatile bool _initialized = false; // ★★★ [新增] 标记硬件是否已初始化 ★★★
 
         // 计时器相关
         private long _tickCounter = 0;
@@ -86,6 +92,9 @@ namespace LiteMonitor.src.SystemServices
 
             // ★★★ [新增] 1. 初始化计数器管理器 (必须在 ValueProvider 之前) ★★★
             _perfCounterManager = new PerformanceCounterManager();
+            
+            // ★★★ [新增] 初始化摩尔线程 GPU 监控器 ★★★
+            _mttGpuMonitor = new MttGpuMonitor();
 
             // 2. 初始化服务
             _sensorMap = new SensorMap();
@@ -106,6 +115,9 @@ namespace LiteMonitor.src.SystemServices
                 _lock, 
                 _lastValidMap
             );
+            
+            // ★★★ [新增] 设置摩尔线程 GPU 监控器引用 ★★★
+            _valueProvider.SetMttGpuMonitor(_mttGpuMonitor);
 
             // 3. 异步启动 (唯一优化：不卡UI)
             InitializeAsync();
@@ -117,6 +129,99 @@ namespace LiteMonitor.src.SystemServices
         public float? Get(string key) => _valueProvider.GetValue(key);
 
         public string GetNetworkIP() => _networkManager.GetCurrentIP();
+        
+        // ★★★ [新增] 获取摩尔线程 GPU 数据 ★★★
+        public MttGpuData? GetMttGpuData() => _mttGpuMonitor?.Update();
+        
+        // ★★★ [新增] 判断是否存在摩尔线程 GPU ★★★
+        public bool HasMttGpu => _mttGpuMonitor?.HasMttGpu ?? false;
+        
+        // ★★★ [新增] 缓存 CPU/GPU 名称，避免重复获取 ★★★
+        private string _cachedCpuName = "";
+        private string _cachedGpuName = "";
+        private bool _namesCached = false;
+        
+        /// <summary>
+        /// ★★★ [新增] 缓存硬件名称（在初始化完成后调用）★★★
+        /// </summary>
+        private void CacheHardwareNames()
+        {
+            try
+            {
+                // CPU
+                var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
+                _cachedCpuName = cpu?.Name ?? "";
+                
+                // GPU
+                if (_mttGpuMonitor?.HasMttGpu == true && !string.IsNullOrEmpty(_mttGpuMonitor.GpuName))
+                {
+                    _cachedGpuName = "Moore Threads " + _mttGpuMonitor.GpuName; // ★★★ 添加前缀 ★★★
+                }
+                else
+                {
+                    var gpu = _sensorMap.CachedGpu;
+                    _cachedGpuName = gpu?.Name ?? "";
+                }
+                
+                _namesCached = true;
+                
+                // ★★★ 触发事件，通知 UI 刷新 ★★★
+                OnHardwareNamesCached?.Invoke();
+            }
+            catch { }
+        }
+        
+        /// <summary>
+        /// ★★★ [新增] 获取 CPU 名称 ★★★
+        /// </summary>
+        public string GetCpuName()
+        {
+            // 优先使用缓存
+            if (_namesCached && !string.IsNullOrEmpty(_cachedCpuName))
+                return _cachedCpuName;
+            
+            try
+            {
+                var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
+                if (cpu != null && !string.IsNullOrEmpty(cpu.Name))
+                {
+                    _cachedCpuName = cpu.Name;
+                    return cpu.Name;
+                }
+            }
+            catch { }
+            return "";
+        }
+        
+        /// <summary>
+        /// ★★★ [新增] 获取 GPU 名称 ★★★
+        /// </summary>
+        public string GetGpuName()
+        {
+            // 优先使用缓存
+            if (_namesCached && !string.IsNullOrEmpty(_cachedGpuName))
+                return _cachedGpuName;
+            
+            try
+            {
+                // 优先：摩尔线程 GPU
+                if (_mttGpuMonitor?.HasMttGpu == true && !string.IsNullOrEmpty(_mttGpuMonitor.GpuName))
+                {
+                    _cachedGpuName = "Moore Threads " + _mttGpuMonitor.GpuName; // ★★★ 添加前缀 ★★★
+                    return _cachedGpuName;
+                }
+                
+                // 其次：LHM 检测到的 GPU
+                var gpu = _sensorMap.CachedGpu;
+                if (gpu != null && !string.IsNullOrEmpty(gpu.Name))
+                {
+                    _cachedGpuName = gpu.Name;
+                    return gpu.Name;
+                }
+            }
+            catch { }
+            return "";
+        }
 
         // ★★★ 新增：允许主程序手动触发驱动检查 (用于解决启动弹窗冲突) ★★★
         public Task SmartCheckDriver() => _driverInstaller.SmartCheckDriver();
@@ -232,6 +337,12 @@ namespace LiteMonitor.src.SystemServices
 
                 _valueProvider.OnUpdateTickStarted();
                 
+                // ★★★ [新增] 更新摩尔线程 GPU 数据 ★★★
+                if (_mttGpuMonitor?.HasMttGpu == true)
+                {
+                    _mttGpuMonitor.Update();
+                }
+                
                 // 任务错峰执行 (调用 SystemOptimizer)
                 SystemOptimizer.RunMaintenanceTasks(_secondsCounter);
                 
@@ -284,6 +395,7 @@ namespace LiteMonitor.src.SystemServices
             _valueProvider.Dispose();
             _perfCounterManager.Dispose(); // ★★★ [新增] 释放计数器资源 ★★★
             _fpsCounter.Dispose(); // <--- 新增
+            _mttGpuMonitor?.Dispose(); // ★★★ [新增] 释放摩尔线程 GPU 监控器 ★★★
             _networkManager.ClearCache();
             _diskManager.ClearCache(); // 漏掉的，补上
         }
@@ -299,6 +411,9 @@ namespace LiteMonitor.src.SystemServices
                 {
                     // ★★★ [新增] 启动计数器预热 (不阻塞主 UI) ★★★
                     _perfCounterManager.InitializeAsync();
+                    
+                    // ★★★ [新增] 初始化摩尔线程 GPU 监控器 ★★★
+                    _mttGpuMonitor.Initialize();
                     
                     // 这句耗时 4-5 秒，但在执行过程中，硬件会陆续添加到 _computer.Hardware
                     _computer.Open();
@@ -317,8 +432,13 @@ namespace LiteMonitor.src.SystemServices
                         // 2. 数据有了，再建立映射
                         _sensorMap.Rebuild(_computer, _cfg);
                         
-                        // ★★★ [新增] 3. 静态化预热：将所有传感器对象存入 Provider 缓存 ★★★
+                        // 3. ★★★ [新增] 缓存硬件名称 ★★★
+                        CacheHardwareNames();
+                        
+                        // 4. 静态化预热：将所有传感器对象存入 Provider 缓存
                         _valueProvider.PreCacheAllSensors(_sensorMap);
+                        
+                        _initialized = true; // ★★★ [新增] 标记初始化完成 ★★★
                     }
 
                     // 优化 T1：启动后大扫除
