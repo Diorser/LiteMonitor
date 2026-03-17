@@ -264,6 +264,40 @@ namespace LiteMonitor.src.SystemServices
             // ★★★ 修改：委托给 FanMapper 专用类处理 ★★★
             _fanMapper.ScanAndMapFans(computer, cfg, newMap);
 
+            // ============================================
+            // ★★★ [新增] 用户强制覆盖逻辑 ★★★
+            // ============================================
+            if (cfg.MonitorItems != null)
+            {
+                foreach (var item in cfg.MonitorItems)
+                {
+                    if (!string.IsNullOrEmpty(item.OverrideSensorId))
+                    {
+                        string targetId = item.OverrideSensorId.Trim();
+                        ISensor? match = null;
+
+                        // 简单的线性全扫描 (毕竟是在 Rebuild 低频操作中，耗时可忽略)
+                        computer.Accept(new HardwareVisitor(h => 
+                        {
+                            foreach (var s in h.Sensors)
+                            {
+                                if (string.Equals(s.Identifier.ToString(), targetId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    match = s;
+                                    break;
+                                }
+                            }
+                        }));
+
+                        if (match != null)
+                        {
+                            newMap[item.Key] = match;
+                            System.Diagnostics.Debug.WriteLine($"[SensorMap] Override applied: {item.Key} -> {match.Name} ({match.Identifier})");
+                        }
+                    }
+                }
+            }
+
             // 2. 原子交换数据 (加锁)
             lock (_lock)
             {
@@ -277,6 +311,23 @@ namespace LiteMonitor.src.SystemServices
                 _lastMapBuild = DateTime.Now;
                 // ★★★ [优化 3] 指纹记录已移除 ★★★
             }
+        }
+
+        // ============================================
+        // ★★★ [新增] 用于遍历寻找 Sensor 的访问器 ★★★
+        // ============================================
+        private class HardwareVisitor : IVisitor
+        {
+            private readonly Action<IHardware> _action;
+            public HardwareVisitor(Action<IHardware> action) { _action = action; }
+            public void VisitComputer(IComputer computer) => computer.Traverse(this);
+            public void VisitHardware(IHardware hardware)
+            {
+                _action(hardware);
+                foreach (var sub in hardware.SubHardware) sub.Accept(this);
+            }
+            public void VisitSensor(ISensor sensor) { }
+            public void VisitParameter(IParameter parameter) { }
         }
 
         // 复用 HardwareRules 的字符串匹配，避免重复造轮子

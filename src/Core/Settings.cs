@@ -281,6 +281,11 @@ namespace LiteMonitor
         // null/"Auto" = 自动(默认), "" = 不显示, "{u}/s" = 自定义格式
         public string UnitPanel { get; set; } = null; 
         public string UnitTaskbar { get; set; } = null;
+
+        // ★★★ [新增] 传感器ID强制覆盖 ★★★
+        // 允许用户手动指定 "/gpu-nvidia/0/power/0" 等 ID
+        public string OverrideSensorId { get; set; } = "";
+
         public bool VisibleInPanel { get; set; } = true;
         public bool VisibleInTaskbar { get; set; } = false;
         
