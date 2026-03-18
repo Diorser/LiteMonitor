@@ -84,6 +84,7 @@ namespace LiteMonitor
             try
             {
                 // ★★★ 3. 启动应用 ★★★
+                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 ApplicationConfiguration.Initialize();
                 Application.Run(new MainForm());
             }
