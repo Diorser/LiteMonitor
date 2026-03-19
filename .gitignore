@@ -4,7 +4,6 @@
 
 /.dotnet_cli/.dotnet
 /.vs
-/bin/Debug/net8.0-windows
-/LiteMonitor.Updater/obj
-/obj
-/bin/Debug
+/bin/*
+/obj/*
+/LiteMonitor.Updater/*
