@@ -25,6 +25,7 @@ namespace LiteMonitor
 
         private Point _dragOffset;
         private bool _uiDragging = false;
+        private System.Windows.Forms.Timer? _topMostGuardTimer;
 
         // 防止 Win11 自动隐藏无边框 + 无任务栏窗口
         protected override CreateParams CreateParams
@@ -324,31 +325,41 @@ namespace LiteMonitor
             {
                  _ = _bizHelper.RunStartupChecksAsync();
             }
-            // [Fix] 强制置顶刷新，增加重试机制确保在某些系统环境下依然生效
-            if (_cfg.TopMost)
-            {
-                this.BeginInvoke(new Action(async () =>
-                {
-                    await Task.Delay(3000);
-                    // 1. 立即执行第一次置顶
-                    this.TopMost = false;
-                    await Task.Delay(1000);
-                    this.TopMost = true;
-                    this.BringToFront();
-                }));
-            }
+            // [Fix] 置顶守护：周期性检测并恢复被虚拟桌面切换、全屏游戏等夺走的置顶状态
+            StartTopMostGuard();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            _cfg.Save(); 
-            TrafficLogger.Save(); 
+            _topMostGuardTimer?.Stop();
+            _topMostGuardTimer?.Dispose();
+            _cfg.Save();
+            TrafficLogger.Save();
             src.WebServer.LiteWebServer.Instance?.Stop();
-            
+
             base.OnFormClosed(e);
-            
+
             _ui?.Dispose();
             _bizHelper.Dispose();
+        }
+
+        private void StartTopMostGuard()
+        {
+            if (_topMostGuardTimer != null) return;
+            _topMostGuardTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            _topMostGuardTimer.Tick += (_, __) =>
+            {
+                if (_cfg.TopMost && Visible)
+                {
+                    // 如果本应用有其他活动窗口（如设置面板），跳过强制置顶以免遮挡
+                    var activeForm = Form.ActiveForm;
+                    if (activeForm != null && activeForm != this)
+                        return;
+
+                    _winHelper.ReapplyTopMost();
+                }
+            };
+            _topMostGuardTimer.Start();
         }
     }
 }

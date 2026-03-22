@@ -137,6 +137,25 @@ namespace LiteMonitor.src.UI.Helpers
         }
 
         // =================================================================
+        // 置顶守护
+        // =================================================================
+
+        /// <summary>
+        /// 通过 Win32 API 无条件强制置顶窗口。
+        /// 不检查 WS_EX_TOPMOST 标志，因为在全屏应用（如 VMware、无边框全屏游戏）中
+        /// 该标志可能仍然存在但窗口实际被覆盖，必须重新调用 SetWindowPos 才能恢复显示。
+        /// </summary>
+        public void ReapplyTopMost()
+        {
+            try
+            {
+                SetWindowPos(_form.Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            catch { }
+        }
+
+        // =================================================================
         // Win32 API
         // =================================================================
         public static int RegisterTaskbarCreatedMessage()
@@ -152,11 +171,16 @@ namespace LiteMonitor.src.UI.Helpers
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         [DllImport("user32.dll", SetLastError = true)] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll", SetLastError = true)] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern int RegisterWindowMessage(string lpString);
         [DllImport("user32.dll", SetLastError = true)] public static extern bool ChangeWindowMessageFilter(uint message, uint dwFlag);
 
         public const uint MSGFLT_ADD = 1;
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOACTIVATE = 0x0010;
         private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         private const int DWMWCP_ROUND = 2;
         private const int DWMWA_BORDER_COLOR = 34;
@@ -164,6 +188,7 @@ namespace LiteMonitor.src.UI.Helpers
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TRANSPARENT = 0x20;
         private const int WS_EX_LAYERED = 0x80000;
+        private const int WS_EX_TOPMOST = 0x00000008;
 
         public static void ActivateWindow(IntPtr handle) => SetForegroundWindow(handle);
     }
