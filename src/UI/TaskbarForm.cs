@@ -57,12 +57,11 @@ namespace LiteMonitor
             TopMost = false;
             DoubleBuffered = true;
 
-            ReloadLayout();
-
             _bizHelper.CheckTheme(true);
             _bizHelper.FindHandles();
             
             _bizHelper.AttachToTaskbar();
+            ReloadLayout();
             _winHelper.ApplyLayeredStyle(_bizHelper.TransparentKey, _cfg.TaskbarClickThrough);
 
             _timer.Interval = Math.Max(_cfg.RefreshMs, 60);
@@ -79,7 +78,10 @@ namespace LiteMonitor
         {
             _layout = new HorizontalLayout(ThemeManager.Current, 300, LayoutMode.Taskbar, _cfg);
             _lastLayoutSignature = ""; // 重置签名，强制重算
-            _winHelper.ApplyLayeredStyle(_bizHelper.TransparentKey, _cfg.TaskbarClickThrough);
+            if (IsHandleCreated)
+            {
+                _winHelper.ApplyLayeredStyle(_bizHelper.TransparentKey, _cfg.TaskbarClickThrough);
+            }
             _bizHelper.CheckTheme(true);
 
             // 更新悬浮窗模式 (支持热切换)
