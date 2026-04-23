@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using LibreHardwareMonitor.Hardware;
 using LiteMonitor.src.Core;
 
@@ -277,9 +279,72 @@ namespace LiteMonitor.src.SystemServices
                 _lastMapBuild = DateTime.Now;
                 // ★★★ [优化 3] 指纹记录已移除 ★★★
             }
+
+            WriteDiagnostics(computer, newMap, newGpu, newCpuCache);
         }
 
         // 复用 HardwareRules 的字符串匹配，避免重复造轮子
         public static bool Has(string source, string sub) => HardwareRules.Has(source, sub);
+
+        private static void WriteDiagnostics(
+            Computer computer,
+            Dictionary<string, ISensor> newMap,
+            IHardware? newGpu,
+            List<CpuCoreSensors> newCpuCache)
+        {
+            if (!string.Equals(Environment.GetEnvironmentVariable("LITEMONITOR_DIAG"), "1", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            try
+            {
+                var sb = new StringBuilder(8192);
+                sb.AppendLine("==== LiteMonitor Hardware Diagnostics ====");
+                sb.AppendLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sb.AppendLine();
+                sb.AppendLine("[Selected]");
+                sb.AppendLine($"GPU={newGpu?.Name ?? "<null>"}");
+                sb.AppendLine($"CPUCoreCache={newCpuCache.Count}");
+                sb.AppendLine();
+                sb.AppendLine("[Mapped Keys]");
+
+                foreach (var kv in newMap.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    string hwName = kv.Value.Hardware?.Name ?? "<unknown>";
+                    string sensorName = kv.Value.Name ?? "<unknown>";
+                    string sensorType = kv.Value.SensorType.ToString();
+                    string value = kv.Value.Value?.ToString("0.###") ?? "null";
+                    sb.AppendLine($"{kv.Key} => {sensorType} | {sensorName} [{hwName}] | {value}");
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("[Hardware Tree]");
+                foreach (var hw in computer.Hardware)
+                {
+                    DumpHardware(sb, hw, 0);
+                }
+
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "hardware_diagnostic.log"), sb.ToString(), Encoding.UTF8);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void DumpHardware(StringBuilder sb, IHardware hw, int depth)
+        {
+            string indent = new string(' ', depth * 2);
+            sb.AppendLine($"{indent}- {hw.HardwareType}: {hw.Name}");
+
+            foreach (var s in hw.Sensors.OrderBy(x => x.SensorType).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                string value = s.Value?.ToString("0.###") ?? "null";
+                sb.AppendLine($"{indent}  * {s.SensorType}: {s.Name} = {value}");
+            }
+
+            foreach (var sub in hw.SubHardware)
+            {
+                DumpHardware(sb, sub, depth + 1);
+            }
+        }
     }
 }

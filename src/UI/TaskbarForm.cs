@@ -37,18 +37,18 @@ namespace LiteMonitor
         private const int WM_LBUTTONDBLCLK = 0x0203;
         private bool _isWin11;
 
-        public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
+        public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm, string targetDevice)
         {
             _cfg = cfg;
             _ui = ui;
             _mainForm = mainForm;
-            TargetDevice = _cfg.TaskbarMonitorDevice;
+            TargetDevice = targetDevice ?? "";
 
             _isWin11 = Environment.OSVersion.Version >= new Version(10, 0, 22000);
 
             // 初始化组件
             _winHelper = new TaskbarWinHelper(this);
-            _bizHelper = new TaskbarBizHelper(this, _cfg, _winHelper);
+            _bizHelper = new TaskbarBizHelper(this, _cfg, _winHelper, TargetDevice);
 
             // 窗体属性
             FormBorderStyle = FormBorderStyle.None;

@@ -3,6 +3,7 @@ using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.UI;
 using LiteMonitor.src.UI.Helpers;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -67,48 +68,76 @@ namespace LiteMonitor
         public void CleanMemory() => _bizHelper.CleanMemory();
 
         // ==== 任务栏显示 ====
-        private TaskbarForm? _taskbar;
+        private readonly Dictionary<string, TaskbarForm> _taskbars = new();
 
         public void ToggleTaskbar(bool show)
         {
             if (show)
             {
-                if (_taskbar != null && !_taskbar.IsDisposed)
+                if (_ui == null) return;
+
+                var desiredDevices = GetDesiredTaskbarDevices();
+                var staleKeys = _taskbars.Keys.Where(x => !desiredDevices.Contains(x, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                foreach (var key in staleKeys)
                 {
-                    if (_taskbar.TargetDevice != _cfg.TaskbarMonitorDevice)
+                    if (_taskbars.TryGetValue(key, out var stale))
                     {
-                        _taskbar.Close();
-                        _taskbar.Dispose();
-                        _taskbar = null;
+                        if (!stale.IsDisposed) stale.Close();
+                        _taskbars.Remove(key);
                     }
                 }
 
-                if (_taskbar == null || _taskbar.IsDisposed)
+                foreach (var device in desiredDevices)
                 {
-                    if (_ui != null)
+                    if (!_taskbars.TryGetValue(device, out var taskbar) || taskbar.IsDisposed)
                     {
-                        _taskbar = new TaskbarForm(_cfg, _ui, this);
-                        _taskbar.Show();
+                        taskbar = new TaskbarForm(_cfg, _ui, this, device);
+                        _taskbars[device] = taskbar;
+                        taskbar.Show();
+                        continue;
                     }
-                }
-                else
-                {
-                    if (!_taskbar.Visible)
+
+                    if (!taskbar.Visible)
                     {
-                        _taskbar.Show();
-                        _taskbar.ReloadLayout();
+                        taskbar.Show();
                     }
+
+                    taskbar.ReloadLayout();
                 }
             }
             else
             {
-                if (_taskbar != null)
+                foreach (var taskbar in _taskbars.Values.ToList())
                 {
-                    _taskbar.Close();
-                    _taskbar.Dispose();
-                    _taskbar = null;
+                    if (!taskbar.IsDisposed) taskbar.Close();
                 }
+                _taskbars.Clear();
             }
+        }
+
+        private List<string> GetDesiredTaskbarDevices()
+        {
+            var configuredDevices = (_cfg.TaskbarMonitorDevices ?? new List<string>())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (configuredDevices.Count > 0)
+            {
+                return configuredDevices;
+            }
+
+            if (_cfg.TaskbarShowOnAllScreens)
+            {
+                return Screen.AllScreens
+                    .Select(screen => screen.DeviceName ?? "")
+                    .Where(name => !string.IsNullOrEmpty(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return new List<string> { _cfg.TaskbarMonitorDevice ?? "" };
         }
 
         // ========== 构造函数 ==========
@@ -344,6 +373,7 @@ namespace LiteMonitor
             _cfg.Save(); 
             TrafficLogger.Save(); 
             src.WebServer.LiteWebServer.Instance?.Stop();
+            ToggleTaskbar(false);
             
             base.OnFormClosed(e);
             

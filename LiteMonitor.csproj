@@ -9,6 +9,9 @@
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationIcon>resources\assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
     <DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 	  
@@ -19,7 +22,7 @@
 
 
 	<ItemGroup>
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.7-pre675" />
     <PackageReference Include="System.Text.Json" Version="9.0.10" />
   </ItemGroup>
 

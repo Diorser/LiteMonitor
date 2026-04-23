@@ -14,6 +14,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         private Panel _container;
         private List<Control> _customColorInputs = new List<Control>();
         private List<Control> _customLayoutInputs = new List<Control>();
+        private List<LiteCheck> _monitorChecks = new List<LiteCheck>();
         private Control _styleCombo;
         private CheckBox _chkCustomLayout;
         
@@ -45,6 +46,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         private void InitializeUI()
         {
             CreateGeneralGroup(); 
+            CreateMonitorGroup();
             CreateLayoutGroup();
             CreateColorGroup();   
         }
@@ -117,24 +119,6 @@ namespace LiteMonitor.src.UI.SettingsPage
             group.AddToggle(this, "Menu.TaskbarSingleLine", () => Config?.TaskbarSingleLine ?? false, v => { if(Config!=null) Config.TaskbarSingleLine = v; });
             group.AddToggle(this, "Menu.TaskbarHoverShowAll", () => Config?.TaskbarHoverShowAll ?? false, v => { if (Config != null) Config.TaskbarHoverShowAll = v; });
             group.AddToggle(this, "Menu.ClickThrough", () => Config?.TaskbarClickThrough ?? false, v => { if(Config!=null) Config.TaskbarClickThrough = v; });
-           
-            // Monitor Selection
-            var screens = Screen.AllScreens;
-            var screenNames = screens.Select((s, i) => $"{i + 1}: {s.DeviceName.Replace(@"\\.\DISPLAY", "Display ")}{(s.Primary ? " [Main]" : "")}").ToList();
-            screenNames.Insert(0, LanguageManager.T("Menu.Auto"));
-            
-            group.AddComboIndex(this, "Menu.TaskbarMonitor", screenNames.ToArray(), 
-                () => {
-                    if (string.IsNullOrEmpty(Config?.TaskbarMonitorDevice)) return 0;
-                    var idx = Array.FindIndex(screens, s => s.DeviceName == Config.TaskbarMonitorDevice);
-                    return idx >= 0 ? idx + 1 : 0;
-                },
-                idx => {
-                    if (Config == null) return;
-                    if (idx == 0) Config.TaskbarMonitorDevice = ""; 
-                    else Config.TaskbarMonitorDevice = screens[idx - 1].DeviceName;
-                }
-            );
 
             // Double Click Action
             string[] actions = { 
@@ -162,6 +146,113 @@ namespace LiteMonitor.src.UI.SettingsPage
 
             group.AddHint(LanguageManager.T("Menu.TaskbarAlignTip"));
             AddGroupToPage(group);
+        }
+
+        private void CreateMonitorGroup()
+        {
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.TaskbarMonitorSettings"));
+            AddMonitorSelectionItems(group);
+            group.AddHint(LanguageManager.T("Menu.TaskbarMonitorTip"));
+            AddGroupToPage(group);
+        }
+
+        private void AddMonitorSelectionItems(LiteSettingsGroup group)
+        {
+            _monitorChecks.Clear();
+            var strAuto = LanguageManager.T("Menu.Auto");
+
+            var chkAuto = new LiteCheck(false, LanguageManager.T("Menu.Enable"));
+            chkAuto.CheckedChanged += (s, e) =>
+            {
+                if (Config == null || !chkAuto.Checked) return;
+
+                Config.TaskbarMonitorDevices.Clear();
+                Config.TaskbarMonitorDevice = "";
+                Config.TaskbarShowOnAllScreens = false;
+
+                foreach (var check in _monitorChecks.Where(x => !ReferenceEquals(x, chkAuto)))
+                {
+                    if (check.Checked) check.Checked = false;
+                }
+            };
+            RegisterRefresh(() => chkAuto.Checked = GetSelectedDevices().Count == 0);
+            _monitorChecks.Add(chkAuto);
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarMonitor"), chkAuto));
+
+            var screens = Screen.AllScreens;
+            for (int i = 0; i < screens.Length; i++)
+            {
+                var screen = screens[i];
+                string deviceName = screen.DeviceName;
+                string label = $"{i + 1}: {deviceName.Replace(@"\\.\DISPLAY", "Display ")}{(screen.Primary ? $" [{strAuto}]" : "")}";
+                var chk = new LiteCheck(false, LanguageManager.T("Menu.Enable"));
+
+                chk.CheckedChanged += (s, e) =>
+                {
+                    if (Config == null) return;
+
+                    var selected = GetSelectedDevices();
+                    if (chk.Checked)
+                    {
+                        if (!selected.Contains(deviceName, StringComparer.OrdinalIgnoreCase))
+                        {
+                            selected.Add(deviceName);
+                        }
+
+                        Config.TaskbarMonitorDevices = selected
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                        Config.TaskbarMonitorDevice = Config.TaskbarMonitorDevices.FirstOrDefault() ?? "";
+                        Config.TaskbarShowOnAllScreens = false;
+
+                        if (chkAuto.Checked) chkAuto.Checked = false;
+                    }
+                    else
+                    {
+                        selected.RemoveAll(x => string.Equals(x, deviceName, StringComparison.OrdinalIgnoreCase));
+                        Config.TaskbarMonitorDevices = selected;
+                        Config.TaskbarMonitorDevice = Config.TaskbarMonitorDevices.FirstOrDefault() ?? "";
+                    }
+                };
+
+                RegisterRefresh(() =>
+                {
+                    var selected = GetSelectedDevices();
+                    chk.Checked = selected.Contains(deviceName, StringComparer.OrdinalIgnoreCase);
+                });
+
+                _monitorChecks.Add(chk);
+                group.AddItem(new LiteSettingsItem(label, chk));
+            }
+        }
+
+        private List<string> GetSelectedDevices()
+        {
+            if (Config == null) return new List<string>();
+
+            if (Config.TaskbarShowOnAllScreens)
+            {
+                return Screen.AllScreens
+                    .Select(screen => screen.DeviceName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            if (Config.TaskbarMonitorDevices != null && Config.TaskbarMonitorDevices.Count > 0)
+            {
+                return Config.TaskbarMonitorDevices
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(Config.TaskbarMonitorDevice))
+            {
+                return new List<string> { Config.TaskbarMonitorDevice };
+            }
+
+            return new List<string>();
         }
 
         private void CreateLayoutGroup()

@@ -215,7 +215,7 @@ namespace LiteMonitor.src.UI.Helpers
                 if (screen.Bounds.Contains(r.Location) || screen.Bounds.IntersectsWith(r))
                     return hWnd;
             }
-            return FindWindow("Shell_TrayWnd", null);
+            return IntPtr.Zero;
         }
 
         public Rectangle GetTaskbarRect(IntPtr hTaskbar, string targetDevice)

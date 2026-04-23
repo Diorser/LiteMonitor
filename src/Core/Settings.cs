@@ -85,6 +85,8 @@ namespace LiteMonitor
         
         // ★★★ 新增：指定任务栏显示的屏幕设备名 ("" = 自动/主屏) ★★★
         public string TaskbarMonitorDevice { get; set; } = "";
+        public List<string> TaskbarMonitorDevices { get; set; } = new List<string>();
+        public bool TaskbarShowOnAllScreens { get; set; } = false;
 
         // 任务栏行为配置
         public bool TaskbarClickThrough { get; set; } = false;     // 鼠标穿透
