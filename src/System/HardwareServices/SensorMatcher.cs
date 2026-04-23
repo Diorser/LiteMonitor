@@ -12,6 +12,35 @@ namespace LiteMonitor.src.SystemServices
     {
         // 复用 HardwareRules 的字符串匹配，避免重复造轮子
         private static bool Has(string source, string sub) => HardwareRules.Has(source, sub);
+        
+        // 统一 GPU 负载命名识别：覆盖不同厂商/驱动的常见命名，并排除干扰项
+        private static bool IsGpuLoadName(string name)
+        {
+            bool include =
+                Has(name, "core") ||
+                Has(name, "d3d 3d") ||
+                Has(name, "3d") ||
+                Has(name, "graphics") ||
+                Has(name, "gpu") ||
+                Has(name, "render") ||
+                Has(name, "utilization") ||
+                Has(name, "global") ||
+                name.Equals("load", StringComparison.OrdinalIgnoreCase);
+
+            if (!include) return false;
+
+            bool exclude =
+                Has(name, "memory") ||
+                Has(name, "video") ||
+                Has(name, "encode") ||
+                Has(name, "decode") ||
+                Has(name, "copy") ||
+                Has(name, "bus") ||
+                Has(name, "pcie") ||
+                Has(name, "media");
+
+            return !exclude;
+        }
 
         /// <summary>
         /// 尝试匹配传感器名称到标准 Key
@@ -71,7 +100,7 @@ namespace LiteMonitor.src.SystemServices
             // --- GPU ---
             if (type is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
             {
-                if (s.SensorType == SensorType.Load && (Has(name, "core") || Has(name, "d3d 3d"))) return "GPU.Load";
+                if (s.SensorType == SensorType.Load && IsGpuLoadName(name)) return "GPU.Load";
                 if (s.SensorType == SensorType.Temperature && (Has(name, "core") || Has(name, "hot spot") || Has(name, "soc") || Has(name, "vr"))) return "GPU.Temp";
                 
                 // VRAM Logic (简化且准确)

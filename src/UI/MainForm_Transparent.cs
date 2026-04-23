@@ -22,6 +22,7 @@ namespace LiteMonitor
         private readonly MainFormBizHelper _bizHelper;
         private readonly int _wmTaskbarCreated;
         private const int WM_DISPLAYCHANGE = 0x007E;
+        private const int WM_GETOBJECT = 0x003D;
         private CancellationTokenSource _displayChangeCts;
 
         private Point _dragOffset;
@@ -258,6 +259,13 @@ namespace LiteMonitor
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_GETOBJECT)
+            {
+                // 裁剪发布在部分环境下会触发 WinForms 可访问性类型加载异常，直接忽略此消息避免异常刷屏。
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             if (m.Msg == _wmTaskbarCreated && _wmTaskbarCreated != 0)
             {
                 // [Fix] Explorer 重启后，子窗口 TaskbarForm 会被销毁或失效。

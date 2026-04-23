@@ -35,6 +35,7 @@ namespace LiteMonitor
         private const int WM_RBUTTONDOWN = 0x0204;
         private const int WM_RBUTTONUP = 0x0205;
         private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_GETOBJECT = 0x003D;
         private bool _isWin11;
 
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm, string targetDevice)
@@ -111,6 +112,13 @@ namespace LiteMonitor
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_GETOBJECT)
+            {
+                // 裁剪发布在部分环境下会触发 WinForms 可访问性类型加载异常，直接忽略此消息避免异常刷屏。
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             // [Fix] 兼容性修复：在 Win11 25H2 + StartAllBack 环境下，
             // 右键事件会穿透到原生任务栏。
             // 因此不再区分系统版本，统一拦截右键按下和抬起消息。
@@ -141,7 +149,14 @@ namespace LiteMonitor
         {
             if (_currentMenu != null)
             {
-                _currentMenu.Dispose();
+                try
+                {
+                    _currentMenu.Dispose();
+                }
+                catch (TypeLoadException)
+                {
+                    // single-file + trimmed 下，WinForms ToolStrip 清理链可能抛 TypeLoadException，忽略以保证运行。
+                }
                 _currentMenu = null;
             }
 

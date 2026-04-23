@@ -16,6 +16,19 @@ namespace LiteMonitor
 {
     public static class MenuManager
     {
+        private static Image? TryLoadMenuImage(Func<Image> resourceGetter)
+        {
+            try
+            {
+                return resourceGetter();
+            }
+            catch
+            {
+                // 单文件+裁剪发布下，WinForms 资源反序列化可能失败。此处降级为空图标，避免启动崩溃。
+                return null;
+            }
+        }
+
         /// <summary>
         /// 构建 LiteMonitor 主菜单（右键菜单 + 托盘菜单）
         /// </summary>
@@ -31,7 +44,7 @@ namespace LiteMonitor
 
             // === 清理内存 ===
             var cleanMem = new ToolStripMenuItem(LanguageManager.T("Menu.CleanMemory"));
-            cleanMem.Image = Properties.Resources.CleanMem;
+            cleanMem.Image = TryLoadMenuImage(() => Properties.Resources.CleanMem);
             cleanMem.Click += (_, __) => form.CleanMemory();
             menu.Items.Add(cleanMem);
             menu.Items.Add(new ToolStripSeparator());
@@ -354,7 +367,7 @@ namespace LiteMonitor
             var themeRoot = new ToolStripMenuItem(LanguageManager.T("Menu.Theme"));
             // 主题编辑器 (独立窗口，保持原样)
             var themeEditor = new ToolStripMenuItem(LanguageManager.T("Menu.ThemeEditor"));
-            themeEditor.Image = Properties.Resources.ThemeIcon;
+            themeEditor.Image = TryLoadMenuImage(() => Properties.Resources.ThemeIcon);
             themeEditor.Click += (_, __) => new ThemeEditor.ThemeEditorForm().Show();
             themeRoot.DropDownItems.Add(themeEditor);
             themeRoot.DropDownItems.Add(new ToolStripSeparator());
@@ -381,7 +394,7 @@ namespace LiteMonitor
 
             // --- [系统硬件详情] ---
             var btnHardware = new ToolStripMenuItem(LanguageManager.T("Menu.HardwareInfo")); 
-            btnHardware.Image = Properties.Resources.HardwareInfo; // 或者找个图标
+            btnHardware.Image = TryLoadMenuImage(() => Properties.Resources.HardwareInfo); // 或者找个图标
             btnHardware.Click += (s, e) => 
             {
                 // 这里的模式是：每次点击都 new 一个新的，关闭即销毁。
@@ -397,7 +410,7 @@ namespace LiteMonitor
 
             // 网络测速 (独立窗口，保持原样)
             var speedWindow = new ToolStripMenuItem(LanguageManager.T("Menu.Speedtest"));
-            speedWindow.Image = Properties.Resources.NetworkIcon;
+            speedWindow.Image = TryLoadMenuImage(() => Properties.Resources.NetworkIcon);
             speedWindow.Click += (_, __) =>
             {
                 var f = new SpeedTestForm();
@@ -408,7 +421,7 @@ namespace LiteMonitor
 
             // 历史流量统计 (独立窗口，保持原样)
             var trafficItem = new ToolStripMenuItem(LanguageManager.T("Menu.Traffic"));
-            trafficItem.Image = Properties.Resources.TrafficIcon;
+            trafficItem.Image = TryLoadMenuImage(() => Properties.Resources.TrafficIcon);
             trafficItem.Click += (_, __) =>
             {
                 var formHistory = new TrafficHistoryForm(cfg);
@@ -416,11 +429,11 @@ namespace LiteMonitor
             };
             menu.Items.Add(trafficItem);
             menu.Items.Add(new ToolStripSeparator());
-             // =================================================================
+            // =================================================================
             // [新增] 设置中心入口
             // =================================================================
             var itemSettings = new ToolStripMenuItem(LanguageManager.T("Menu.SettingsPanel")); 
-            itemSettings.Image = Properties.Resources.Settings;
+            itemSettings.Image = TryLoadMenuImage(() => Properties.Resources.Settings);
             
             // 临时写死中文，等面板做完善了再换成 LanguageManager.T("Menu.Settings")
             
