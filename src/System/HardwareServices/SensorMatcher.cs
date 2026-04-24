@@ -42,6 +42,40 @@ namespace LiteMonitor.src.SystemServices
             return !exclude;
         }
 
+        public static int ScoreGpuTempSensor(ISensor sensor)
+        {
+            if (sensor.SensorType != SensorType.Temperature) return int.MinValue;
+
+            string name = sensor.Name ?? "";
+            if (string.IsNullOrWhiteSpace(name)) return int.MinValue;
+
+            bool exclude =
+                Has(name, "memory") ||
+                Has(name, "vram") ||
+                Has(name, "hbm") ||
+                Has(name, "vrm") ||
+                Has(name, "liquid") ||
+                Has(name, "coolant");
+
+            if (exclude) return int.MinValue;
+
+            int score = 0;
+
+            if (Has(name, "core")) score += 120;
+            if (Has(name, "package")) score += 110;
+            if (Has(name, "gpu")) score += 100;
+            if (Has(name, "edge")) score += 95;
+            if (Has(name, "junction")) score += 90;
+            if (Has(name, "hot spot") || Has(name, "hotspot")) score += 85;
+            if (Has(name, "temperature")) score += 40;
+            if (Has(name, "temp")) score += 20;
+            if (Has(name, "soc")) score += 10;
+            if (name.Equals("temperature", StringComparison.OrdinalIgnoreCase)) score += 60;
+            if (name.Equals("gpu", StringComparison.OrdinalIgnoreCase)) score += 10;
+
+            return score > 0 ? score : int.MinValue;
+        }
+
         /// <summary>
         /// 尝试匹配传感器名称到标准 Key
         /// </summary>
@@ -101,7 +135,7 @@ namespace LiteMonitor.src.SystemServices
             if (type is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
             {
                 if (s.SensorType == SensorType.Load && IsGpuLoadName(name)) return "GPU.Load";
-                if (s.SensorType == SensorType.Temperature && (Has(name, "core") || Has(name, "hot spot") || Has(name, "soc") || Has(name, "vr"))) return "GPU.Temp";
+                if (ScoreGpuTempSensor(s) != int.MinValue) return "GPU.Temp";
                 
                 // VRAM Logic (简化且准确)
                 // 1. 根据硬件规则判断是否应该优先找共享内存 (核显)

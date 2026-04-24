@@ -187,6 +187,17 @@ namespace LiteMonitor.src.SystemServices
 
                             // 2. 如果优先级相同 (通常是同一张显卡的不同传感器，或者是两张同样的显卡)，
                             // 则应用 D3D vs Vendor 优选逻辑。
+                            if (key == "GPU.Temp")
+                            {
+                                int existingScore = SensorMatcher.ScoreGpuTempSensor(existing);
+                                int newScore = SensorMatcher.ScoreGpuTempSensor(s);
+                                if (newScore > existingScore)
+                                {
+                                    newMap[key] = s;
+                                }
+                                continue;
+                            }
+
                             bool existingIsD3D = existing.Name.Contains("D3D", StringComparison.OrdinalIgnoreCase);
                             bool newIsD3D = s.Name.Contains("D3D", StringComparison.OrdinalIgnoreCase);
                             

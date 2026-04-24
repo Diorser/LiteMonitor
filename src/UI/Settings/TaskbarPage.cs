@@ -159,8 +159,6 @@ namespace LiteMonitor.src.UI.SettingsPage
         private void AddMonitorSelectionItems(LiteSettingsGroup group)
         {
             _monitorChecks.Clear();
-            var strAuto = LanguageManager.T("Menu.Auto");
-
             var chkAuto = new LiteCheck(false, LanguageManager.T("Menu.Enable"));
             chkAuto.CheckedChanged += (s, e) =>
             {
@@ -184,7 +182,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             {
                 var screen = screens[i];
                 string deviceName = screen.DeviceName;
-                string label = $"{i + 1}: {deviceName.Replace(@"\\.\DISPLAY", "Display ")}{(screen.Primary ? $" [{strAuto}]" : "")}";
+                string label = $"{i + 1}: {deviceName.Replace(@"\\.\DISPLAY", "Display ")}";
                 var chk = new LiteCheck(false, LanguageManager.T("Menu.Enable"));
 
                 chk.CheckedChanged += (s, e) =>

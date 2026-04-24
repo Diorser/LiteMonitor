@@ -120,6 +120,7 @@ namespace LiteMonitor
         private List<string> GetDesiredTaskbarDevices()
         {
             var configuredDevices = (_cfg.TaskbarMonitorDevices ?? new List<string>())
+                .Select(NormalizeTaskbarDevice)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -132,13 +133,26 @@ namespace LiteMonitor
             if (_cfg.TaskbarShowOnAllScreens)
             {
                 return Screen.AllScreens
-                    .Select(screen => screen.DeviceName ?? "")
+                    .Select(screen => NormalizeTaskbarDevice(screen.DeviceName))
                     .Where(name => !string.IsNullOrEmpty(name))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
 
-            return new List<string> { _cfg.TaskbarMonitorDevice ?? "" };
+            return new List<string> { NormalizeTaskbarDevice(_cfg.TaskbarMonitorDevice) };
+        }
+
+        private static string NormalizeTaskbarDevice(string? deviceName)
+        {
+            if (string.IsNullOrWhiteSpace(deviceName))
+            {
+                return Screen.PrimaryScreen?.DeviceName ?? "";
+            }
+
+            var matched = Screen.AllScreens.FirstOrDefault(s =>
+                string.Equals(s.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+
+            return matched?.DeviceName ?? deviceName;
         }
 
         // ========== 构造函数 ==========
