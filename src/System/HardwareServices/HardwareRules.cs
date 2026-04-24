@@ -34,9 +34,11 @@ namespace LiteMonitor.src.SystemServices
             // 3. AMD 显卡
             if (hw.HardwareType == HardwareType.GpuAmd)
             {
-                // 通用名 "AMD Radeon(TM) Graphics" 通常是核显 -> 优先级 2
-                if (name.Equals("AMD Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase)) return 2;
-                // 其他具体型号 (如 RX 7900 XTX) 视为独显 -> 优先级 0
+                // AMD 核显常见命名：Radeon(TM) Graphics / 610M / 780M / Vega 等
+                // 这类设备应低于独显，避免覆盖独显的 GPU.Load 映射
+                if (IsAmdIntegratedGpu(name)) return 2;
+                
+                // 其他具体型号 (如 RX 7900 XTX / RX 7600M) 视为独显 -> 优先级 0
                 return 0;
             }
 
@@ -75,6 +77,37 @@ namespace LiteMonitor.src.SystemServices
             // 核显特征：通常叫 "Intel Arc Graphics" 或 "Intel Arc 140V" (无系列前缀)
             // 简单启发式：检查是否包含 " A", " B", " Pro" (注意空格)
             return Has(name, " A") || Has(name, " B") || Has(name, " Pro");
+        }
+
+        private static bool IsAmdIntegratedGpu(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+
+            if (name.Equals("AMD Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // 独显关键字：RX / PRO / FIREPRO 优先视作独显
+            if (Has(name, "rx") || Has(name, "pro") || Has(name, "firepro"))
+                return false;
+
+            // 常见核显命名关键字
+            if (Has(name, "vega")) return true;
+            if (Has(name, "radeon") && Has(name, "graphics")) return true;
+
+            if (Has(name, "radeon"))
+            {
+                // 典型 RDNA 核显尾缀（610M/660M/680M/760M/780M/880M/890M）
+                string[] igpuTokens = { "610m", "660m", "680m", "760m", "780m", "880m", "890m" };
+                foreach (var token in igpuTokens)
+                {
+                    if (Has(name, token)) return true;
+                }
+
+                // 没有 RX/PRO/FIREPRO 且标记为 Radeon(TM)，大概率为核显
+                if (Has(name, "radeon(tm)")) return true;
+            }
+
+            return false;
         }
 
         /// <summary>

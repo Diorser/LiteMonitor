@@ -159,7 +159,14 @@ namespace LiteMonitor.src.UI.Helpers
         {
             if (_form.ContextMenuStrip != null)
             {
-                _form.ContextMenuStrip.Dispose();
+                try
+                {
+                    _form.ContextMenuStrip.Dispose();
+                }
+                catch (TypeLoadException)
+                {
+                    // single-file + trimmed 下，WinForms ToolStrip 清理链可能抛 TypeLoadException，忽略以保证运行。
+                }
                 _form.ContextMenuStrip = null;
             }
             _form.ContextMenuStrip = MenuManager.Build((MainForm)_form, _cfg, _ui);

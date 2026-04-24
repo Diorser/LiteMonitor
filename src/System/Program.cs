@@ -133,6 +133,8 @@ namespace LiteMonitor
                                   $"[Time]: {DateTime.Now}\n" +
                                   $"[Source]: {source}\n" +
                                   $"[Message]: {ex.Message}\n" +
+                                  $"[Exception]: {ex.GetType().FullName}\n" +
+                                  $"[Detail]: {ex}\n" +
                                   $"[Stack]:\n{ex.StackTrace}\n" +
                                   "==================================================\n\n";
 

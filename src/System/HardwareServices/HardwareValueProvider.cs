@@ -169,6 +169,131 @@ namespace LiteMonitor.src.SystemServices
             return null;
         }
 
+        private static bool IsGpuLoadSensorCandidate(string name)
+        {
+            bool include =
+                SensorMap.Has(name, "core") ||
+                SensorMap.Has(name, "d3d 3d") ||
+                SensorMap.Has(name, "3d") ||
+                SensorMap.Has(name, "graphics") ||
+                SensorMap.Has(name, "gpu") ||
+                SensorMap.Has(name, "render") ||
+                SensorMap.Has(name, "utilization") ||
+                SensorMap.Has(name, "global") ||
+                name.Equals("load", StringComparison.OrdinalIgnoreCase);
+
+            if (!include) return false;
+
+            bool exclude =
+                SensorMap.Has(name, "memory") ||
+                SensorMap.Has(name, "video") ||
+                SensorMap.Has(name, "encode") ||
+                SensorMap.Has(name, "decode") ||
+                SensorMap.Has(name, "copy") ||
+                SensorMap.Has(name, "bus") ||
+                SensorMap.Has(name, "pcie") ||
+                SensorMap.Has(name, "media");
+
+            return !exclude;
+        }
+
+        private static int ScoreGpuLoadSensor(ISensor sensor)
+        {
+            string name = sensor.Name ?? "";
+            if (!IsGpuLoadSensorCandidate(name)) return int.MinValue;
+
+            int score = 0;
+
+            if (SensorMap.Has(name, "core")) score += 60;
+            if (SensorMap.Has(name, "gpu")) score += 45;
+            if (SensorMap.Has(name, "graphics")) score += 40;
+            if (SensorMap.Has(name, "d3d 3d")) score += 35;
+            else if (SensorMap.Has(name, "3d")) score += 25;
+            if (SensorMap.Has(name, "utilization")) score += 20;
+            if (SensorMap.Has(name, "global")) score += 20;
+            if (SensorMap.Has(name, "render")) score += 15;
+            if (name.Equals("load", StringComparison.OrdinalIgnoreCase)) score += 10;
+            if (!SensorMap.Has(name, "d3d")) score += 5;
+
+            return score;
+        }
+
+        private ISensor? FindBestGpuLoadSensor()
+        {
+            var gpu = _sensorMap.CachedGpu;
+            if (gpu == null) return null;
+
+            ISensor? best = null;
+            int bestScore = int.MinValue;
+            float bestValue = float.MinValue;
+
+            foreach (var sensor in gpu.Sensors)
+            {
+                if (sensor.SensorType != SensorType.Load) continue;
+
+                int score = ScoreGpuLoadSensor(sensor);
+                if (score == int.MinValue) continue;
+
+                float value = sensor.Value ?? float.MinValue;
+
+                if (best == null ||
+                    score > bestScore ||
+                    (score == bestScore && value > bestValue))
+                {
+                    best = sensor;
+                    bestScore = score;
+                    bestValue = value;
+                }
+            }
+
+            return best;
+        }
+
+        private static IEnumerable<ISensor> EnumerateSensors(IHardware hardware)
+        {
+            foreach (var sensor in hardware.Sensors)
+            {
+                yield return sensor;
+            }
+
+            foreach (var sub in hardware.SubHardware)
+            {
+                foreach (var sensor in EnumerateSensors(sub))
+                {
+                    yield return sensor;
+                }
+            }
+        }
+
+        private ISensor? FindBestGpuTempSensor()
+        {
+            var gpu = _sensorMap.CachedGpu;
+            if (gpu == null) return null;
+
+            ISensor? best = null;
+            int bestScore = int.MinValue;
+            float bestValue = float.MinValue;
+
+            foreach (var sensor in EnumerateSensors(gpu))
+            {
+                int score = SensorMatcher.ScoreGpuTempSensor(sensor);
+                if (score == int.MinValue) continue;
+
+                float value = sensor.Value ?? float.MinValue;
+
+                if (best == null ||
+                    score > bestScore ||
+                    (score == bestScore && value > bestValue))
+                {
+                    best = sensor;
+                    bestScore = score;
+                    bestValue = value;
+                }
+            }
+
+            return best;
+        }
+
         public void ClearCache()
         {
             lock (_lock)
@@ -337,7 +462,60 @@ namespace LiteMonitor.src.SystemServices
                         }
                         break;
 
-                    // 7. 显存
+                    // 7. GPU 负载
+                    case "GPU.Load":
+                        if (_manualSensorCache.TryGetValue("GPU.Load", out var gpuLoadSensor) &&
+                            gpuLoadSensor.Value.HasValue &&
+                            !float.IsNaN(gpuLoadSensor.Value.Value))
+                        {
+                            result = gpuLoadSensor.Value.Value;
+                        }
+
+                        // 如果当前映射缺失或长期停在 0，自动从当前 GPU 重新挑选更合理的负载传感器
+                        if (result == null || result.Value <= 0.01f)
+                        {
+                            var bestGpuLoad = FindBestGpuLoadSensor();
+                            if (bestGpuLoad != null && bestGpuLoad.Value.HasValue && !float.IsNaN(bestGpuLoad.Value.Value))
+                            {
+                                result = bestGpuLoad.Value.Value;
+                                _manualSensorCache["GPU.Load"] = bestGpuLoad;
+                            }
+                        }
+
+                        if (result == null && _lastValidMap.TryGetValue("GPU.Load", out var lastGpuLoad))
+                        {
+                            result = lastGpuLoad;
+                        }
+
+                        if (result == null) result = 0f;
+                        result = Math.Clamp(result.Value, 0f, 100f);
+                        break;
+
+                    // 7. GPU 温度 / 显存
+                    case "GPU.Temp":
+                        if (_manualSensorCache.TryGetValue("GPU.Temp", out var gpuTempSensor) &&
+                            gpuTempSensor.Value.HasValue &&
+                            !float.IsNaN(gpuTempSensor.Value.Value))
+                        {
+                            result = gpuTempSensor.Value.Value;
+                        }
+
+                        if (result == null || result.Value <= 0.01f)
+                        {
+                            var bestGpuTemp = FindBestGpuTempSensor();
+                            if (bestGpuTemp != null && bestGpuTemp.Value.HasValue && !float.IsNaN(bestGpuTemp.Value.Value))
+                            {
+                                result = bestGpuTemp.Value.Value;
+                                _manualSensorCache["GPU.Temp"] = bestGpuTemp;
+                            }
+                        }
+
+                        if (result == null && _lastValidMap.TryGetValue("GPU.Temp", out var lastGpuTemp))
+                        {
+                            result = lastGpuTemp;
+                        }
+                        break;
+
                     case "GPU.VRAM":
                         float? used = GetValue("GPU.VRAM.Used");
                         float? total = GetValue("GPU.VRAM.Total");

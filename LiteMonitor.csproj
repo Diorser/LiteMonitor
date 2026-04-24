@@ -9,6 +9,11 @@
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationIcon>resources\assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- 修复单文件+裁剪发布时，Resources.Designer 中 Bitmap/Icon 资源加载失败 -->
+    <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
     <DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 	  
@@ -18,9 +23,16 @@
   </PropertyGroup>
 
 
-	<ItemGroup>
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.7-pre675" />
     <PackageReference Include="System.Text.Json" Version="9.0.10" />
+  </ItemGroup>
+
+  <!-- 在 single-file + trimmed 模式下保留 WinForms 关键程序集，避免运行期 TypeLoadException -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="System.Windows.Forms" />
+    <TrimmerRootAssembly Include="System.Drawing.Common" />
+    <TrimmerRootAssembly Include="Accessibility" />
   </ItemGroup>
 
     <!-- 自动复制 themes 与 lang 目录下的所有文件 -->

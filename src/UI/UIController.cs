@@ -198,7 +198,7 @@ namespace LiteMonitor
                         }
                         else
                         {
-                            it.Value = _mon.Get(it.Key);
+                            SetMetricValue(it, _mon.Get(it.Key));
                             it.TickSmooth(_cfg.AnimationSpeed);
                         }
                     }
@@ -219,7 +219,7 @@ namespace LiteMonitor
                         }
                         else 
                         {
-                            it.Value = _mon.Get(it.Key);
+                            SetMetricValue(it, _mon.Get(it.Key));
                             it.TickSmooth(_cfg.AnimationSpeed);
                         }
                     }
@@ -319,9 +319,7 @@ namespace LiteMonitor
                 }
                 else
                 {
-                    float? val = _mon.Get(item.Key);
-                    item.Value = val;
-                    if (val.HasValue) item.DisplayValue = val.Value;
+                    SetMetricValue(item, _mon.Get(item.Key));
                 }
 
                 currentGroupList.Add(item);
@@ -444,9 +442,14 @@ namespace LiteMonitor
         private void InitMetricValue(MetricItem? item)
         {
             if (item == null) return;
-            float? val = _mon.Get(item.Key);
-            item.Value = val;
-            if (val.HasValue) item.DisplayValue = val.Value;
+            SetMetricValue(item, _mon.Get(item.Key));
+        }
+
+        private static void SetMetricValue(MetricItem item, float? value)
+        {
+            item.Value = value;
+            item.TextValue = value.HasValue ? null : "--";
+            if (value.HasValue) item.DisplayValue = value.Value;
         }
         
         private void CheckTemperatureAlert()

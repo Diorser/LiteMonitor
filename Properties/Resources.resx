@@ -119,30 +119,30 @@
   </resheader>
   <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
   <data name="AppIcon" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\app.ico;System.Drawing.Icon, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\app.ico;System.Drawing.Icon, System.Drawing.Common</value>
   </data>
   <data name="CleanMem" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\CleanMem.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\CleanMem.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>CleanMem</comment>
   </data>
   <data name="HardwareInfo" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\HardwareInfo.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\HardwareInfo.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>HardwareInfo.png</comment>
   </data>
   <data name="NetworkIcon" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\NetworkTest.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\NetworkTest.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>网络图标</comment>
   </data>
   <data name="Settings" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\Settings.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\Settings.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>Settings</comment>
   </data>
   <data name="ThemeIcon" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\ThemeIcon.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\ThemeIcon.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>主题图标</comment>
   </data>
   <data name="TrafficIcon" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\resources\assets\Traffic.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+    <value>..\resources\assets\Traffic.png;System.Drawing.Bitmap, System.Drawing.Common</value>
     <comment>历史流量统计</comment>
   </data>
 </root>

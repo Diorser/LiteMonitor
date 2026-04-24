@@ -16,6 +16,7 @@ namespace LiteMonitor.src.UI.Helpers
         private readonly Form _form;
         private readonly Settings _cfg;
         private readonly TaskbarWinHelper _winHelper;
+        private readonly string _targetDevice;
         
         private Rectangle _taskbarRect = Rectangle.Empty;
         private int _taskbarHeight = 32;
@@ -33,11 +34,12 @@ namespace LiteMonitor.src.UI.Helpers
         public Color TransparentKey => _transparentKey;
         public bool LastIsLightTheme => _lastIsLightTheme;
 
-        public TaskbarBizHelper(Form form, Settings cfg, TaskbarWinHelper winHelper)
+        public TaskbarBizHelper(Form form, Settings cfg, TaskbarWinHelper winHelper, string targetDevice)
         {
             _form = form;
             _cfg = cfg;
             _winHelper = winHelper;
+            _targetDevice = targetDevice;
             _isWin11 = Environment.OSVersion.Version >= new Version(10, 0, 22000);
         }
 
@@ -84,7 +86,7 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         public void FindHandles()
         {
-            var handles = _winHelper.FindHandles(_cfg.TaskbarMonitorDevice);
+            var handles = _winHelper.FindHandles(_targetDevice);
             _hTaskbar = handles.hTaskbar;
             _hTray = handles.hTray;
         }
@@ -104,7 +106,7 @@ namespace LiteMonitor.src.UI.Helpers
 
         public void UpdateTaskbarRect()
         {
-            _taskbarRect = _winHelper.GetTaskbarRect(_hTaskbar, _cfg.TaskbarMonitorDevice);
+            _taskbarRect = _winHelper.GetTaskbarRect(_hTaskbar, _targetDevice);
             _taskbarHeight = Math.Max(24, _taskbarRect.Height);
         }
 

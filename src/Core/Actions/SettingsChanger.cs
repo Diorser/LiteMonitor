@@ -57,6 +57,11 @@ namespace LiteMonitor.src.Core.Actions
                     live.PluginInstances = System.Text.Json.JsonSerializer.Deserialize<List<PluginInstanceConfig>>(json) ?? new List<PluginInstanceConfig>();
                     continue;
                 }
+                if (p.Name == "TaskbarMonitorDevices")
+                {
+                    live.TaskbarMonitorDevices = new List<string>(draft.TaskbarMonitorDevices ?? new List<string>());
+                    continue;
+                }
                 if (p.Name == "Thresholds")
                 {
                     // 阈值是 Class 类型 (ThresholdsSet)，必须深拷贝

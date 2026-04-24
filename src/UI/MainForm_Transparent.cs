@@ -3,6 +3,7 @@ using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.UI;
 using LiteMonitor.src.UI.Helpers;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -21,6 +22,7 @@ namespace LiteMonitor
         private readonly MainFormBizHelper _bizHelper;
         private readonly int _wmTaskbarCreated;
         private const int WM_DISPLAYCHANGE = 0x007E;
+        private const int WM_GETOBJECT = 0x003D;
         private CancellationTokenSource _displayChangeCts;
 
         private Point _dragOffset;
@@ -67,48 +69,90 @@ namespace LiteMonitor
         public void CleanMemory() => _bizHelper.CleanMemory();
 
         // ==== 任务栏显示 ====
-        private TaskbarForm? _taskbar;
+        private readonly Dictionary<string, TaskbarForm> _taskbars = new();
 
         public void ToggleTaskbar(bool show)
         {
             if (show)
             {
-                if (_taskbar != null && !_taskbar.IsDisposed)
+                if (_ui == null) return;
+
+                var desiredDevices = GetDesiredTaskbarDevices();
+                var staleKeys = _taskbars.Keys.Where(x => !desiredDevices.Contains(x, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                foreach (var key in staleKeys)
                 {
-                    if (_taskbar.TargetDevice != _cfg.TaskbarMonitorDevice)
+                    if (_taskbars.TryGetValue(key, out var stale))
                     {
-                        _taskbar.Close();
-                        _taskbar.Dispose();
-                        _taskbar = null;
+                        if (!stale.IsDisposed) stale.Close();
+                        _taskbars.Remove(key);
                     }
                 }
 
-                if (_taskbar == null || _taskbar.IsDisposed)
+                foreach (var device in desiredDevices)
                 {
-                    if (_ui != null)
+                    if (!_taskbars.TryGetValue(device, out var taskbar) || taskbar.IsDisposed)
                     {
-                        _taskbar = new TaskbarForm(_cfg, _ui, this);
-                        _taskbar.Show();
+                        taskbar = new TaskbarForm(_cfg, _ui, this, device);
+                        _taskbars[device] = taskbar;
+                        taskbar.Show();
+                        continue;
                     }
-                }
-                else
-                {
-                    if (!_taskbar.Visible)
+
+                    if (!taskbar.Visible)
                     {
-                        _taskbar.Show();
-                        _taskbar.ReloadLayout();
+                        taskbar.Show();
                     }
+
+                    taskbar.ReloadLayout();
                 }
             }
             else
             {
-                if (_taskbar != null)
+                foreach (var taskbar in _taskbars.Values.ToList())
                 {
-                    _taskbar.Close();
-                    _taskbar.Dispose();
-                    _taskbar = null;
+                    if (!taskbar.IsDisposed) taskbar.Close();
                 }
+                _taskbars.Clear();
             }
+        }
+
+        private List<string> GetDesiredTaskbarDevices()
+        {
+            var configuredDevices = (_cfg.TaskbarMonitorDevices ?? new List<string>())
+                .Select(NormalizeTaskbarDevice)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (configuredDevices.Count > 0)
+            {
+                return configuredDevices;
+            }
+
+            if (_cfg.TaskbarShowOnAllScreens)
+            {
+                return Screen.AllScreens
+                    .Select(screen => NormalizeTaskbarDevice(screen.DeviceName))
+                    .Where(name => !string.IsNullOrEmpty(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return new List<string> { NormalizeTaskbarDevice(_cfg.TaskbarMonitorDevice) };
+        }
+
+        private static string NormalizeTaskbarDevice(string? deviceName)
+        {
+            if (string.IsNullOrWhiteSpace(deviceName))
+            {
+                return Screen.PrimaryScreen?.DeviceName ?? "";
+            }
+
+            var matched = Screen.AllScreens.FirstOrDefault(s =>
+                string.Equals(s.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+
+            return matched?.DeviceName ?? deviceName;
         }
 
         // ========== 构造函数 ==========
@@ -229,6 +273,13 @@ namespace LiteMonitor
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_GETOBJECT)
+            {
+                // 裁剪发布在部分环境下会触发 WinForms 可访问性类型加载异常，直接忽略此消息避免异常刷屏。
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             if (m.Msg == _wmTaskbarCreated && _wmTaskbarCreated != 0)
             {
                 // [Fix] Explorer 重启后，子窗口 TaskbarForm 会被销毁或失效。
@@ -344,6 +395,7 @@ namespace LiteMonitor
             _cfg.Save(); 
             TrafficLogger.Save(); 
             src.WebServer.LiteWebServer.Instance?.Stop();
+            ToggleTaskbar(false);
             
             base.OnFormClosed(e);
             

@@ -301,7 +301,7 @@ namespace LiteMonitor.src.SystemServices
                     _perfCounterManager.InitializeAsync();
                     
                     // 这句耗时 4-5 秒，但在执行过程中，硬件会陆续添加到 _computer.Hardware
-                    _computer.Open();
+                    OpenComputerSafe();
 
                     // ★★★ T0+级修复：彻底禁用历史记录，解决 SensorValue[] 飙升 ★★★
                     // 必须在 Open() 之后调用，此时传感器才被创建
@@ -442,7 +442,7 @@ namespace LiteMonitor.src.SystemServices
                         _computer.Hardware.Clear();
                     }
                     
-                    _computer.Open();
+                    OpenComputerSafe();
 
                     DisableSensorHistory();
                 }
@@ -465,6 +465,44 @@ namespace LiteMonitor.src.SystemServices
         {
             try { _computer.Accept(new DisableHistoryVisitor()); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemoryFix] Failed: {ex.Message}"); }
+        }
+
+        private void OpenComputerSafe()
+        {
+            try
+            {
+                _computer.Open();
+            }
+            catch (ArgumentNullException ex) when (IsMutexBootstrapFailure(ex))
+            {
+                System.Diagnostics.Debug.WriteLine($"[HardwareMonitor] Computer.Open mutex bootstrap failed, retrying in compatibility mode: {ex.Message}");
+                OpenComputerWithoutMutex();
+            }
+        }
+
+        private void OpenComputerWithoutMutex()
+        {
+            var type = typeof(Computer);
+            var addGroups = type.GetMethod("AddGroups", BindingFlags.Instance | BindingFlags.NonPublic);
+            var openField = type.GetField("_open", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (addGroups == null || openField == null)
+                throw new MissingMemberException("LibreHardwareMonitor compatibility entry points were not found.");
+
+            bool isOpen = openField.GetValue(_computer) as bool? ?? false;
+            if (!isOpen)
+            {
+                addGroups.Invoke(_computer, null);
+                openField.SetValue(_computer, true);
+            }
+        }
+
+        private static bool IsMutexBootstrapFailure(ArgumentNullException ex)
+        {
+            if (!string.Equals(ex.ParamName, "identity", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return ex.StackTrace?.Contains("LibreHardwareMonitor.Hardware.Mutexes", StringComparison.Ordinal) == true;
         }
 
         // 递归更新子硬件，确保 SuperIO 刷新
