@@ -215,7 +215,7 @@ namespace LiteMonitor.src.UI.Helpers
                 if (screen.Bounds.Contains(r.Location) || screen.Bounds.IntersectsWith(r))
                     return hWnd;
             }
-            return FindWindow("Shell_TrayWnd", null);
+            return IntPtr.Zero;
         }
 
         public Rectangle GetTaskbarRect(IntPtr hTaskbar, string targetDevice)
@@ -264,7 +264,7 @@ namespace LiteMonitor.src.UI.Helpers
 
                             if (!isVertical)
                             {
-                                int dpi = GetTaskbarDpi();
+                                int dpi = GetTaskbarDpi(hTaskbar);
                                 int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
 
                                 if (rectPhys.Height > (standardHeight * 0.8))
@@ -312,14 +312,19 @@ namespace LiteMonitor.src.UI.Helpers
             catch { return false; }
         }
 
+        public static int GetTaskbarDpi(IntPtr hWnd)
+        {
+            if (hWnd != IntPtr.Zero)
+            {
+                try { return (int)GetDpiForWindow(hWnd); } catch { }
+            }
+            return 96;
+        }
+
         public static int GetTaskbarDpi()
         {
             IntPtr taskbar = FindWindow("Shell_TrayWnd", null);
-            if (taskbar != IntPtr.Zero)
-            {
-                try { return (int)GetDpiForWindow(taskbar); } catch { }
-            }
-            return 96;
+            return GetTaskbarDpi(taskbar);
         }
 
         public static int GetWidgetsWidth()
