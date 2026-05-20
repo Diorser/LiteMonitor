@@ -160,6 +160,14 @@ namespace LiteMonitor.src.UI.SettingsPage
                 () => Config?.TaskbarManualOffset ?? 0, 
                 v => { if(Config!=null) Config.TaskbarManualOffset = v; });
 
+            // [新增] Win11 高度修正
+            if (Environment.OSVersion.Version.Major == 10 && Environment.OSVersion.Version.Build >= 22000)
+            {
+                group.AddInt(this, "Win11 任务栏高度", "px", 
+                    () => Config?.Win11TaskbarHeight ?? 48, 
+                    v => { if(Config!=null) Config.Win11TaskbarHeight = v; });
+            }
+
             group.AddHint(LanguageManager.T("Menu.TaskbarAlignTip"));
             AddGroupToPage(group);
         }
