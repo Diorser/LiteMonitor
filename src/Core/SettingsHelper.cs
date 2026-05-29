@@ -283,6 +283,7 @@ namespace LiteMonitor
             settings.PreferredCpuFan = UIUtils.Intern(settings.PreferredCpuFan);
             settings.PreferredCpuPump = UIUtils.Intern(settings.PreferredCpuPump);
             settings.PreferredCaseFan = UIUtils.Intern(settings.PreferredCaseFan);
+            settings.PreferredCpuTemp = UIUtils.Intern(settings.PreferredCpuTemp);
             settings.PreferredMoboTemp = UIUtils.Intern(settings.PreferredMoboTemp);
             
             settings.TaskbarFontFamily = UIUtils.Intern(settings.TaskbarFontFamily);

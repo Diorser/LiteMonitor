@@ -223,6 +223,7 @@
     "DiskSource": "디스크",
     "NetworkSource": "네트워크",
     "GpuSource": "GPU",
+    "CpuTempSource": "CPU 온도 소스",
     "Auto": "자동",
     "UseWinPerCounters": "시스템 카운터 우선",
     "UseWinPerCountersTip": "⚠️부정확시 끄세요. CPU/GPU/RAM/디스크는 센서에서 직접 읽습니다.",

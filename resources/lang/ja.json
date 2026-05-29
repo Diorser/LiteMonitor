@@ -224,6 +224,7 @@
     "DiskSource": "ディスク",
     "NetworkSource": "ネットワーク",
     "GpuSource": "GPU",
+    "CpuTempSource": "CPU 温度ソース",
     "Auto": "自動",
     "UseWinPerCounters": "システムカウンター優先",
     "UseWinPerCountersTip": "⚠️不正確な場合は無効にしてください。CPU/GPU/RAM/ディスクはセンサーから直接読み取られます。",

@@ -223,6 +223,7 @@
     "DiskSource": "Disk",
     "NetworkSource": "Network",
     "GpuSource": "GPU",
+    "CpuTempSource": "CPU Temp Source",
     "Auto": "Auto",
     "UseWinPerCounters": "Use Sys Counters",
     "UseWinPerCountersTip": "⚠️Disable if inaccurate. CPU/GPU/MEM/DISK read from sensors.",

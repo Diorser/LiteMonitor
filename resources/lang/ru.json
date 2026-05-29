@@ -223,6 +223,7 @@
     "DiskSource": "Диск",
     "NetworkSource": "Сеть",
     "GpuSource": "GPU",
+    "CpuTempSource": "Источник температуры CPU",
     "Auto": "Авто",
     "UseWinPerCounters": "Системные счетчики",
     "UseWinPerCountersTip": "⚠️Отключите при неточности. CPU/GPU/RAM/Диск читаются из датчиков.",

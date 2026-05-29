@@ -221,6 +221,7 @@
     "DiskSource": "首選磁碟",
     "NetworkSource": "首選網卡",
     "GpuSource": "首選顯卡",
+    "CpuTempSource": "CPU 溫度來源",
     "Auto": "自動模式",
     "UseWinPerCounters": "優先使用系統計數器",
     "UseWinPerCountersTip": "⚠️如數據不準可關閉系統計數器，關閉後，CPU使用率、CPU頻率、記憶體占用、磁碟讀取將直讀硬體感測器",
