@@ -1,0 +1,75 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build/test outputs
+*.dll
+*.exe
+*.pdb
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+**/packages/*
+!**/packages/build/
+
+# Rider/JetBrains
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# AI coding assistants (local/session/cache artifacts)
+# Claude / Claude Code
+.claude/
+CLAUDE.local.md
+# Cursor
+.cursor/
+.cursorignore
+# Windsurf
+.windsurf/
+# Cline / Roo
+.clinerules.local
+# Aider
+.aider*
+# Continue
+.continue/
+# GitHub Copilot / Codeium / Cody local caches
+.copilot/
+.codeium/
+.cody/
+
+# Note: shared, intentionally-committed config (e.g. CLAUDE.md, .cursorrules,
+# .windsurfrules, .clinerules) is NOT ignored above. Add it here if you want
+# it ignored too.
+
+# Keep intentionally-bundled binaries shipped with the app
+!resources/LiteMonitor.Updater.exe
+!resources/assets/LiteMonitorFPS.exe
+!resources/assets/PawnIO_setup.exe
