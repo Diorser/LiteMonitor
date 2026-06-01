@@ -16,6 +16,7 @@ namespace LiteMonitor.src.SystemServices
         private readonly NetworkManager _networkManager;
         private readonly DiskManager _diskManager;
         private readonly FpsCounter _fpsCounter;
+        private readonly EcFanReader _ecFanReader;
         private readonly object _lock;
         private readonly Dictionary<string, float> _lastValidMap; 
         
@@ -52,6 +53,7 @@ namespace LiteMonitor.src.SystemServices
             _perfManager = perfManager;
             _lock = syncLock;
             _lastValidMap = lastValid;
+            _ecFanReader = new EcFanReader();
 
             // 初始化子服务
             _componentProcessor = new ComponentProcessor(c, s, map);
@@ -410,7 +412,11 @@ namespace LiteMonitor.src.SystemServices
                     case "CPU.Pump":
                     case "CASE.Fan":
                     case "GPU.Fan":
-                        if (_manualSensorCache.TryGetValue(key, out var sFan))
+                        if ((key == "CPU.Fan" || key == "GPU.Fan") && _ecFanReader.TryGetRpm(key, out float ecRpm))
+                        {
+                            result = ecRpm;
+                        }
+                        else if (_manualSensorCache.TryGetValue(key, out var sFan))
                         {
                             result = sFan.Value;
                         }
@@ -568,6 +574,7 @@ namespace LiteMonitor.src.SystemServices
 
         public void Dispose()
         {
+            _ecFanReader.Dispose();
         }
     }
 }
