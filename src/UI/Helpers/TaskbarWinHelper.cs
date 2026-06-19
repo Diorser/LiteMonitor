@@ -103,7 +103,7 @@ namespace LiteMonitor.src.UI.Helpers
         private static readonly bool _isWin11 = Environment.OSVersion.Version.Major == 10 && Environment.OSVersion.Version.Build >= 22000;
 
         public bool UsesInternalLayout => _strategy.HasInternalLayout;
-        
+
         public TaskbarWinHelper(Form form)
         {
             _form = form;
@@ -186,22 +186,31 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         public (IntPtr hTaskbar, IntPtr hTray) FindHandles(string targetDevice)
         {
-            Screen target = Screen.PrimaryScreen;
+            // [Fix] 如果指定了目标屏幕但找不到，返回 Zero 而非 fallback 到主屏
+            // 这样 Tick 重试机制才能生效
             if (!string.IsNullOrEmpty(targetDevice))
             {
-                target = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice) ?? Screen.PrimaryScreen;
+                var target = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice);
+                if (target == null) return (IntPtr.Zero, IntPtr.Zero);
+
+                if (target.Primary)
+                {
+                    IntPtr hTaskbar = FindWindow("Shell_TrayWnd", null);
+                    IntPtr hTray = FindWindowEx(hTaskbar, IntPtr.Zero, "TrayNotifyWnd", null);
+                    return (hTaskbar, hTray);
+                }
+                else
+                {
+                    IntPtr hTaskbar = FindSecondaryTaskbar(target);
+                    return (hTaskbar, IntPtr.Zero);
+                }
             }
 
-            if (target.Primary)
+            // 自动模式：使用主屏
             {
                 IntPtr hTaskbar = FindWindow("Shell_TrayWnd", null);
                 IntPtr hTray = FindWindowEx(hTaskbar, IntPtr.Zero, "TrayNotifyWnd", null);
                 return (hTaskbar, hTray);
-            }
-            else
-            {
-                IntPtr hTaskbar = FindSecondaryTaskbar(target);
-                return (hTaskbar, IntPtr.Zero);
             }
         }
 
@@ -215,7 +224,9 @@ namespace LiteMonitor.src.UI.Helpers
                 if (screen.Bounds.Contains(r.Location) || screen.Bounds.IntersectsWith(r))
                     return hWnd;
             }
-            return FindWindow("Shell_TrayWnd", null);
+            // [Fix] 不再 fallback 到主屏 Shell_TrayWnd
+            // 启动时副屏任务栏可能尚未就绪，返回 Zero 让 Tick 重试机制生效
+            return IntPtr.Zero;
         }
 
         public Rectangle GetTaskbarRect(IntPtr hTaskbar, string targetDevice)
@@ -248,33 +259,39 @@ namespace LiteMonitor.src.UI.Helpers
                     Rectangle screenBounds = screen.Bounds;
                     int reservedBottom = screenBounds.Bottom - workArea.Bottom;
 
-                    // 场景 A: 锚定模式
-                    if (reservedBottom > 2) 
+                    // [Fix] DPI 缩放可能导致 screenBounds 和 workArea 处于不同坐标空间
+                    // (screenBounds 返回物理像素，workArea 返回逻辑像素)
+                    // 判断方法：如果物理矩形高度已经是合理的任务栏高度(20~100px)，直接使用
+                    bool physHeightIsReasonable = rectPhys.Height >= 20 && rectPhys.Height <= 100;
+
+                    // 场景 A: 锚定模式 - 仅当物理高度不合理时才用 WorkingArea 修正
+                    if (reservedBottom > 2 && !physHeightIsReasonable) 
                     {
                         finalRect = new Rectangle(rectPhys.Left, workArea.Bottom, rectPhys.Width, reservedBottom);
                     }
-                    // 场景 B: 悬浮模式
+                    // 场景 B: 物理矩形已经是合理高度，直接使用
+                    else if (physHeightIsReasonable)
+                    {
+                        finalRect = rectPhys;
+                    }
+                    // 场景 C: 悬浮模式 - 物理高度异常，需要修正
                     else
                     {
-                        if (_isWin11)
+                        // 增加对垂直任务栏的判断，防止误判
+                        bool isVertical = rectPhys.Height > rectPhys.Width;
+
+                        if (!isVertical)
                         {
-                            // [Fix] 增加对垂直任务栏的判断，防止误判
-                            // StartAllBack 等软件可能启用垂直任务栏，此时不应应用底部水平任务栏的高度修正
-                            bool isVertical = rectPhys.Height > rectPhys.Width;
+                            int dpi = GetTaskbarDpi();
+                            int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
 
-                            if (!isVertical)
+                            if (rectPhys.Height > (standardHeight * 0.8))
                             {
-                                int dpi = GetTaskbarDpi();
-                                int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
-
-                                if (rectPhys.Height > (standardHeight * 0.8))
-                                {
-                                    finalRect = new Rectangle(
-                                        rectPhys.Left, 
-                                        rectPhys.Bottom - standardHeight, 
-                                        rectPhys.Width, 
-                                        standardHeight);
-                                }
+                                finalRect = new Rectangle(
+                                    rectPhys.Left, 
+                                    rectPhys.Bottom - standardHeight, 
+                                    rectPhys.Width, 
+                                    standardHeight);
                             }
                         }
                     }

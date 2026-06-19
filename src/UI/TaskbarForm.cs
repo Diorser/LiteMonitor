@@ -174,9 +174,12 @@ namespace LiteMonitor
             // [Fix] 周期性检查句柄，防止 Explorer 重启后句柄失效
             // 优化：仅在重试期或句柄无效时调用 FindHandles，且限制调用频率
             bool isHandleInvalid = !_bizHelper.IsTaskbarValid();
-            
-            // 如果处于重试期，或者句柄无效且距离上次查找超过2秒(防止无Explorer时高频空转)
-            if (isHandleInvalid && (DateTime.Now - _lastFindHandleTime).TotalSeconds > 2)
+            // [Fix] 检查当前句柄是否挂载在正确的屏幕上
+            // 解决启动时副屏任务栏未就绪导致 fallback 到主屏的问题
+            bool isWrongScreen = !isHandleInvalid && !_bizHelper.IsOnCorrectScreen();
+
+            // 如果句柄无效、或挂载到了错误的屏幕，且距离上次查找超过2秒(防止无Explorer时高频空转)
+            if ((isHandleInvalid || isWrongScreen) && (DateTime.Now - _lastFindHandleTime).TotalSeconds > 2)
             {
                 _bizHelper.FindHandles();
                 _lastFindHandleTime = DateTime.Now;
@@ -188,7 +191,10 @@ namespace LiteMonitor
             // 使用临时变量接收，先判断数据有效性，再赋值给成员变量 _cols
             // 防止在 UI 重建期间(RebuildLayout)获取到空列表导致任务栏闪烁或清空
             var nextCols = _ui.GetTaskbarColumns();
-            if (nextCols == null || nextCols.Count == 0) return;
+            if (nextCols == null || nextCols.Count == 0)
+            {
+                return;
+            }
             
             _cols = nextCols; // 确认有效后再更新引用
 
@@ -239,7 +245,10 @@ namespace LiteMonitor
             // ★ 调试验证用：如果消失时出现了一个红块，说明 OnPaint 被调用但 _cols 为空
             // e.Graphics.FillRectangle(Brushes.Red, 0, 0, 20, 20); 
 
-            if (_cols == null) return;
+            if (_cols == null)
+            {
+                return;
+            }
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
             g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
