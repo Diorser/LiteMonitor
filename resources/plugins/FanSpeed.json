@@ -1,0 +1,45 @@
+{
+  "id": "fan_speed",
+  "meta": {
+    "name": "风扇转速",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "直接读 EC，实时显示 CPU/GPU 风扇转速 — 机械革命蛟龙16 Pro"
+  },
+  "inputs": [],
+  "execution": {
+    "type": "chain",
+    "interval": 5,
+    "steps": [
+      {
+        "id": "get_fans",
+        "url": "http://localhost:18900/fan",
+        "extract": {
+          "cpu_fan": "cpu_fan",
+          "gpu_fan": "gpu_fan",
+          "cpu_color": "cpu_color",
+          "gpu_color": "gpu_color"
+        }
+      }
+    ]
+  },
+  "process": [],
+  "outputs": [
+    {
+      "key": "cpu",
+      "label": "CPU风扇",
+      "short_label": "CPU",
+      "format_val": "{{cpu_fan}}",
+      "unit": "RPM",
+      "color": "{{cpu_color ?? '0'}}"
+    },
+    {
+      "key": "gpu",
+      "label": "GPU风扇",
+      "short_label": "GPU",
+      "format_val": "{{gpu_fan}}",
+      "unit": "RPM",
+      "color": "{{gpu_color ?? '0'}}"
+    }
+  ]
+}
