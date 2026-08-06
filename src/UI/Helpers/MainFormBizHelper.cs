@@ -112,14 +112,15 @@ namespace LiteMonitor.src.UI.Helpers
             if (IsDragging || _form.ContextMenuStrip?.Visible == true) return;
             if (DateTime.Now < _keepVisibleUntil) return;
 
-            var center = new Point(_form.Left + _form.Width / 2, _form.Top + _form.Height / 2);
-            var screen = Screen.FromPoint(center);
+            // 以窗口覆盖面积最大的显示器作为归属，避免窗口跨屏时仅因中心点越过边界就切换显示器。
+            var screen = Screen.FromControl(_form);
             var area = screen.WorkingArea;
             var cursor = Cursor.Position;
 
-            bool nearLeft = _form.Left <= area.Left + _hideThreshold;
-            bool nearRight = area.Right - _form.Right <= _hideThreshold;
-            bool nearTop = _form.Top <= area.Top + _hideThreshold;
+            // 内部屏幕边界不是自动隐藏边缘。例如左屏右侧连接着右屏时，不能把窗口推到右屏。
+            bool nearLeft = !HasAdjacentScreen(screen, DockEdge.Left) && _form.Left <= area.Left + _hideThreshold;
+            bool nearRight = !HasAdjacentScreen(screen, DockEdge.Right) && area.Right - _form.Right <= _hideThreshold;
+            bool nearTop = !HasAdjacentScreen(screen, DockEdge.Top) && _form.Top <= area.Top + _hideThreshold;
 
             bool shouldHide = nearLeft || nearRight || nearTop;
 
@@ -150,6 +151,34 @@ namespace LiteMonitor.src.UI.Helpers
                     else if (_dock == DockEdge.Top && cursor.Y <= area.Top + hoverBand) { _form.Top = area.Top; _isHidden = false; _dock = DockEdge.None; }
                 }
             }
+        }
+
+        private static bool HasAdjacentScreen(Screen screen, DockEdge edge)
+        {
+            const int tolerance = 1;
+            Rectangle bounds = screen.Bounds;
+
+            foreach (var other in Screen.AllScreens)
+            {
+                if (other.DeviceName == screen.DeviceName) continue;
+
+                Rectangle otherBounds = other.Bounds;
+                bool horizontalOverlap = otherBounds.Left < bounds.Right && otherBounds.Right > bounds.Left;
+                bool verticalOverlap = otherBounds.Top < bounds.Bottom && otherBounds.Bottom > bounds.Top;
+
+                bool adjacent = edge switch
+                {
+                    DockEdge.Left => otherBounds.Right >= bounds.Left - tolerance && otherBounds.Left < bounds.Left && verticalOverlap,
+                    DockEdge.Right => otherBounds.Left <= bounds.Right + tolerance && otherBounds.Right > bounds.Right && verticalOverlap,
+                    DockEdge.Top => otherBounds.Bottom >= bounds.Top - tolerance && otherBounds.Top < bounds.Top && horizontalOverlap,
+                    DockEdge.Bottom => otherBounds.Top <= bounds.Bottom + tolerance && otherBounds.Bottom > bounds.Bottom && horizontalOverlap,
+                    _ => false
+                };
+
+                if (adjacent) return true;
+            }
+
+            return false;
         }
 
         // =================================================================
@@ -226,8 +255,7 @@ namespace LiteMonitor.src.UI.Helpers
         public void SavePos()
         {
             ClampToScreen(force: false);
-            var center = new Point(_form.Left + _form.Width / 2, _form.Top + _form.Height / 2);
-            var scr = Screen.FromPoint(center);
+            var scr = Screen.FromControl(_form);
 
             _cfg.ScreenDevice = scr.DeviceName;
             _cfg.Position = new Point(_form.Left, _form.Top);
