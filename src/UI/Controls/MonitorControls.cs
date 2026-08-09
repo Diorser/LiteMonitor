@@ -359,7 +359,7 @@ namespace LiteMonitor.src.UI.Controls
                 ForeColor = Color.Gray 
             };
 
-            string defGName = LanguageManager.T("Groups." + groupKey);
+            string defGName = LanguageManager.GetOriginal(UIUtils.Intern("Groups." + groupKey));
             if (defGName.StartsWith("Groups.")) defGName = groupKey;
             
             InputAlias = new LiteUnderlineInput(string.IsNullOrEmpty(alias) ? defGName : alias, "", "", 100) 

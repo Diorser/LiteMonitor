@@ -248,6 +248,10 @@ namespace LiteMonitor.src.UI
             // 5. [Fix] Rebase Draft to match Live
             // 将 Live 环境中由插件生成的最新监控项同步回 Draft，并保留动态显示属性
             SettingsChanger.RebaseDraftMonitorItems(_cfg, _draftCfg);
+            if (_pages.TryGetValue("Monitor", out var monitorPage) && monitorPage is MonitorPage page)
+            {
+                page.RefreshAfterApply();
+            }
         }
     }
 }
