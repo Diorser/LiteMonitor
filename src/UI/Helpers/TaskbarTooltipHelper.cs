@@ -48,6 +48,9 @@ namespace LiteMonitor.src.UI.Helpers
 
         public void ReloadMode()
         {
+            // 缩放或主题变化后，下一次显示必须按新的物理尺寸重新计算宽度。
+            _cachedTargetWidth = 0;
+
             // 清理旧的事件和计时器
             if (!_targetForm.IsDisposed)
             {

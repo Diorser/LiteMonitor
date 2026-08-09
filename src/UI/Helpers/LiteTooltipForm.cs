@@ -19,6 +19,7 @@ namespace LiteMonitor.src.UI.Helpers
         private const int PADDING_Y = 8;
         private const int ROW_HEIGHT = 22;
         private const int GROUP_GAP = 4;     // 组间距
+        private const int COLUMN_GAP = 8;    // 标签和值之间的最小间距
         
         // 缓存数据
         private List<GroupLayoutInfo>? _groups;
@@ -106,6 +107,31 @@ namespace LiteMonitor.src.UI.Helpers
 
         private int S(int val) => (int)(val * _scale);
 
+        private Font GetTextFont()
+        {
+            return UIUtils.GetFont(
+                _theme!.FontItem.FontFamily.Name,
+                Math.Max(8f, _theme.FontItem.Size - 0.5f),
+                _isBold);
+        }
+
+        private int GetRowHeight(Font font)
+        {
+            // 缩放较小时字体仍有最小字号，行高不能继续缩到字体实际高度以下。
+            return Math.Max(S(ROW_HEIGHT), font.Height + Math.Max(2, S(2)));
+        }
+
+        private static int MeasureTextWidth(string text, Font font)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+
+            return TextRenderer.MeasureText(
+                text,
+                font,
+                Size.Empty,
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+        }
+
         private void CalculateLayout(int fixedWidth)
         {
             if (_groups == null || _groups.Count == 0 || _theme == null)
@@ -114,13 +140,35 @@ namespace LiteMonitor.src.UI.Helpers
                 return;
             }
 
-            // 1. 使用固定宽度 (不再测量文本，极大提升性能)
-            _totalWidth = fixedWidth;
+            var smallFont = GetTextFont();
+
+            // 1. 固定宽度作为基准，但不能小于实际标签和值所需的宽度。
+            //    低缩放下字体有最小字号，单纯按比例缩小会导致两列文字重叠。
+            int paddingX = Math.Max(1, S(PADDING_X));
+            int textGap = Math.Max(4, S(COLUMN_GAP));
+            int minContentWidth = 0;
+
+            foreach (var group in _groups)
+            {
+                foreach (var item in group.Items)
+                {
+                    string label = item.Label;
+                    if (string.IsNullOrEmpty(label)) label = item.Key;
+
+                    string value = item.GetFormattedText(false);
+                    int lineWidth = MeasureTextWidth(label, smallFont)
+                        + textGap
+                        + MeasureTextWidth(value, smallFont);
+                    minContentWidth = Math.Max(minContentWidth, lineWidth);
+                }
+            }
+
+            _totalWidth = Math.Max(fixedWidth, paddingX * 2 + minContentWidth);
 
             // 2. 计算总高度
-            int paddingY = S(PADDING_Y);
-            int groupGap = S(GROUP_GAP);
-            int rowHeight = S(ROW_HEIGHT);
+            int paddingY = Math.Max(1, S(PADDING_Y));
+            int groupGap = Math.Max(1, S(GROUP_GAP));
+            int rowHeight = GetRowHeight(smallFont);
 
             // 优化：预先计算总行数，避免循环累加
             int totalLines = _groups.Sum(g => g.Items.Count);
@@ -259,7 +307,8 @@ namespace LiteMonitor.src.UI.Helpers
             using var penSep = new Pen(_separatorColor);
 
             // 优化：提前获取字体，避免在循环中重复查找 (GetFont 内部虽然有字典缓存，但仍有哈希查找开销)
-            var smallFont = UIUtils.GetFont(_theme.FontItem.FontFamily.Name, Math.Max(8f, _theme.FontItem.Size - 0.5f), _isBold);
+            var smallFont = GetTextFont();
+            rowHeight = GetRowHeight(smallFont);
 
             for (int i = 0; i < _groups.Count; i++)
             {
