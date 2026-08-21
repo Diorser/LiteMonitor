@@ -95,6 +95,23 @@ namespace LiteMonitor.src.UI.Helpers
             return TaskbarWinHelper.IsWindow(_hTaskbar);
         }
 
+        public bool IsTaskbarIntegrationValid()
+        {
+            return IsTaskbarValid() && _winHelper.IsAttachedToTaskbar(_hTaskbar);
+        }
+
+        public bool RecoverTaskbarIntegration()
+        {
+            _winHelper.InvalidateTaskbarRectCache();
+            FindHandles();
+
+            if (!IsTaskbarValid()) return false;
+
+            AttachToTaskbar();
+            UpdateTaskbarRect();
+            return !_taskbarRect.IsEmpty;
+        }
+
         public void AttachToTaskbar()
         {
             if (_hTaskbar == IntPtr.Zero) FindHandles();

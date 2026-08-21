@@ -28,7 +28,10 @@ namespace LiteMonitor.src.UI.Helpers
 
         // 优化配置
         private const int GAP_TOLERANCE = 1; // 容忍 1px 的误差，防止反复重绘造成的闪烁
-        public bool IsReady => _hReBar != IntPtr.Zero && _hMin != IntPtr.Zero;
+        public bool IsReady => _hReBar != IntPtr.Zero &&
+                               _hMin != IntPtr.Zero &&
+                               IsWindow(_hReBar) &&
+                               IsWindow(_hMin);
 
         public bool HasInternalLayout => true;
 
@@ -87,16 +90,28 @@ namespace LiteMonitor.src.UI.Helpers
 
         private void InitializeHandles(IntPtr hTaskbar)
         {
+            IntPtr previousReBar = _hReBar;
+            IntPtr previousMin = _hMin;
+
             // Win10 结构：Shell_TrayWnd -> ReBarWindow32 -> MSTaskSwWClass
             _hReBar = FindWindowEx(hTaskbar, IntPtr.Zero, "ReBarWindow32", null);
             if (_hReBar == IntPtr.Zero)
                 _hReBar = FindWindowEx(hTaskbar, IntPtr.Zero, "WorkerW", null); 
 
+            _hMin = IntPtr.Zero;
             if (_hReBar != IntPtr.Zero)
             {
                 _hMin = FindWindowEx(_hReBar, IntPtr.Zero, "MSTaskSwWClass", null);
                 if (_hMin == IntPtr.Zero)
                     _hMin = FindWindowEx(_hReBar, IntPtr.Zero, "MSTaskListWClass", null); 
+            }
+
+            if (_hReBar != previousReBar || _hMin != previousMin)
+            {
+                _lastSqueezedWidth = -1;
+                _lastUsedWidth = 0;
+                _lastSqueezedHeight = -1;
+                _lastUsedHeight = 0;
             }
         }
 
