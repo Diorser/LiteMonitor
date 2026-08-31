@@ -207,6 +207,34 @@ namespace LiteMonitor.src.UI.SettingsPage
             _isLoaded = true;
         }
 
+        public void RefreshAfterApply()
+        {
+            if (!_isLoaded || Config == null) return;
+
+            try
+            {
+                var sourceList = Config.MonitorItems ?? new List<MonitorItemConfig>();
+                var json = JsonSerializer.Serialize(sourceList);
+                _workingList = JsonSerializer.Deserialize<List<MonitorItemConfig>>(json) ?? new List<MonitorItemConfig>();
+
+                var liveMap = sourceList.ToDictionary(x => x.Key, x => x);
+                foreach (var item in _workingList)
+                {
+                    if (liveMap.TryGetValue(item.Key, out var liveItem))
+                    {
+                        item.DynamicLabel = liveItem.DynamicLabel;
+                        item.DynamicTaskbarLabel = liveItem.DynamicTaskbarLabel;
+                    }
+                }
+            }
+            catch
+            {
+                _workingList = new List<MonitorItemConfig>();
+            }
+
+            _lastDataSignature = GenerateSignature();
+            ReloadList();
+        }
         private string GenerateSignature()
         {
             if (Config?.MonitorItems == null) return "null";
@@ -214,11 +242,25 @@ namespace LiteMonitor.src.UI.SettingsPage
             // [Fix] Include DynamicLabel in signature to detect label updates (Plugin Sync)
             var sb = new System.Text.StringBuilder();
             sb.Append(Config.MonitorItems.Count);
+            if (Config.GroupAliases != null)
+            {
+                foreach (var alias in Config.GroupAliases.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    sb.Append("|GROUP:");
+                    sb.Append(alias.Key);
+                    sb.Append('=');
+                    sb.Append(alias.Value ?? "");
+                }
+            }
             
             foreach (var item in Config.MonitorItems)
             {
                 sb.Append('|');
                 sb.Append(item.Key);
+                sb.Append(':');
+                sb.Append(item.SortIndex);
+                sb.Append(':');
+                sb.Append(item.TaskbarSortIndex);
                 // 动态属性
                 sb.Append(':');
                 sb.Append(item.DynamicLabel ?? ""); 
@@ -498,8 +540,8 @@ namespace LiteMonitor.src.UI.SettingsPage
                 foreach (var block in blocks)
                 {
                     string alias = block.Header.InputAlias.Inner.Text.Trim();
-                    string defName = LanguageManager.T("Groups." + block.Header.GroupKey);
-                    if (!string.IsNullOrEmpty(alias) && alias != defName) 
+                    string defName = LanguageManager.GetOriginal(UIUtils.Intern("Groups." + block.Header.GroupKey));
+                    if (!string.IsNullOrEmpty(alias) && !string.Equals(alias, defName, StringComparison.Ordinal))
                         Config.GroupAliases[block.Header.GroupKey] = alias;
                     else 
                         Config.GroupAliases.Remove(block.Header.GroupKey);

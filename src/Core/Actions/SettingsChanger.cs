@@ -132,28 +132,49 @@ namespace LiteMonitor.src.Core.Actions
         {
             if (live?.MonitorItems == null || draft == null) return;
 
-            // 1. 通过序列化进行深拷贝，断开引用关联
-            // 注意：这会丢失 [JsonIgnore] 的动态属性
-            var json = System.Text.Json.JsonSerializer.Serialize(live.MonitorItems);
-            var newItems = System.Text.Json.JsonSerializer.Deserialize<List<MonitorItemConfig>>(json) 
-                           ?? new List<MonitorItemConfig>();
-
-            // 2. 恢复动态属性 (Runtime State)
-            // 因为 Draft 是给 UI 用的，必须包含当前的显示名称
-            var liveMap = live.MonitorItems.ToDictionary(x => x.Key);
-            
-            foreach (var item in newItems)
+            // 运行时可能会添加/删除插件监控项，或更新动态标签；但用户在 Draft
+            // 中编辑的可见性、名称、单位和排序必须优先保留，不能被 Live 整体覆盖。
+            var liveMap = new Dictionary<string, MonitorItemConfig>(StringComparer.OrdinalIgnoreCase);
+            foreach (var liveItem in live.MonitorItems)
             {
-                if (liveMap.TryGetValue(item.Key, out var liveItem))
-                {
-                    item.DynamicLabel = liveItem.DynamicLabel;
-                    item.DynamicTaskbarLabel = liveItem.DynamicTaskbarLabel;
-                }
+                if (liveItem != null && !string.IsNullOrEmpty(liveItem.Key) && !liveMap.ContainsKey(liveItem.Key))
+                    liveMap[liveItem.Key] = liveItem;
             }
 
-            draft.MonitorItems = newItems;
+            var mergedItems = new List<MonitorItemConfig>();
+            var retainedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 按 Draft 原有顺序保留仍然存在的用户配置。
+            foreach (var draftItem in draft.MonitorItems ?? new List<MonitorItemConfig>())
+            {
+                if (draftItem == null || string.IsNullOrEmpty(draftItem.Key) ||
+                    !liveMap.TryGetValue(draftItem.Key, out var liveItem) ||
+                    !retainedKeys.Add(draftItem.Key))
+                    continue;
+
+                draftItem.DynamicLabel = liveItem.DynamicLabel;
+                draftItem.DynamicTaskbarLabel = liveItem.DynamicTaskbarLabel;
+                mergedItems.Add(draftItem);
+            }
+
+            // 将应用期间由插件生成的新项追加到 Draft；JsonIgnore 的动态字段单独恢复。
+            foreach (var liveItem in live.MonitorItems)
+            {
+                if (liveItem == null || string.IsNullOrEmpty(liveItem.Key) || retainedKeys.Contains(liveItem.Key))
+                    continue;
+
+                var json = System.Text.Json.JsonSerializer.Serialize(liveItem);
+                var clonedItem = System.Text.Json.JsonSerializer.Deserialize<MonitorItemConfig>(json);
+                if (clonedItem == null) continue;
+
+                clonedItem.DynamicLabel = liveItem.DynamicLabel;
+                clonedItem.DynamicTaskbarLabel = liveItem.DynamicTaskbarLabel;
+                mergedItems.Add(clonedItem);
+                retainedKeys.Add(liveItem.Key);
+            }
+
+            draft.MonitorItems = mergedItems;
         }
-        
         /// <summary>
         /// 向设置中添加新的插件实例。
         /// </summary>
