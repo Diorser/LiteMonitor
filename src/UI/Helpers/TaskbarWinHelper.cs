@@ -184,13 +184,20 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         // 句柄与信息获取 (通用逻辑)
         // =================================================================
-        public (IntPtr hTaskbar, IntPtr hTray) FindHandles(string targetDevice)
+        public (IntPtr hTaskbar, IntPtr hTray) FindHandles(string targetDevice, bool fallbackToPrimary = true)
         {
-            Screen target = Screen.PrimaryScreen;
+            Screen? target = Screen.PrimaryScreen;
             if (!string.IsNullOrEmpty(targetDevice))
             {
-                target = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice) ?? Screen.PrimaryScreen;
+                target = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice);
+                if (target == null)
+                {
+                    if (!fallbackToPrimary) return (IntPtr.Zero, IntPtr.Zero);
+                    target = Screen.PrimaryScreen;
+                }
             }
+
+            if (target == null) return (IntPtr.Zero, IntPtr.Zero);
 
             if (target.Primary)
             {
@@ -200,12 +207,12 @@ namespace LiteMonitor.src.UI.Helpers
             }
             else
             {
-                IntPtr hTaskbar = FindSecondaryTaskbar(target);
+                IntPtr hTaskbar = FindSecondaryTaskbar(target, fallbackToPrimary);
                 return (hTaskbar, IntPtr.Zero);
             }
         }
 
-        private IntPtr FindSecondaryTaskbar(Screen screen)
+        private IntPtr FindSecondaryTaskbar(Screen screen, bool fallbackToPrimary)
         {
             IntPtr hWnd = IntPtr.Zero;
             while ((hWnd = FindWindowEx(IntPtr.Zero, hWnd, "Shell_SecondaryTrayWnd", null)) != IntPtr.Zero)
@@ -215,7 +222,7 @@ namespace LiteMonitor.src.UI.Helpers
                 if (screen.Bounds.Contains(r.Location) || screen.Bounds.IntersectsWith(r))
                     return hWnd;
             }
-            return FindWindow("Shell_TrayWnd", null);
+            return fallbackToPrimary ? FindWindow("Shell_TrayWnd", null) : IntPtr.Zero;
         }
 
         public Rectangle GetTaskbarRect(IntPtr hTaskbar, string targetDevice)

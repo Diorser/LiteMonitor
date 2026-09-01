@@ -21,6 +21,7 @@ namespace LiteMonitor
         
         private HorizontalLayout _layout;
         private List<Column>? _cols;
+        private List<Column>? _sourceCols;
         private ContextMenuStrip? _currentMenu;
         private DateTime _lastFindHandleTime = DateTime.MinValue;
         private string _lastLayoutSignature = "";
@@ -37,18 +38,28 @@ namespace LiteMonitor
         private const int WM_LBUTTONDBLCLK = 0x0203;
         private bool _isWin11;
 
-        public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
+        public TaskbarForm(
+            Settings cfg,
+            UIController ui,
+            MainForm mainForm,
+            string? targetDevice = null,
+            bool fallbackToPrimary = true)
         {
             _cfg = cfg;
             _ui = ui;
             _mainForm = mainForm;
-            TargetDevice = _cfg.TaskbarMonitorDevice;
+            TargetDevice = targetDevice ?? _cfg.TaskbarMonitorDevice;
 
             _isWin11 = Environment.OSVersion.Version >= new Version(10, 0, 22000);
 
             // 初始化组件
             _winHelper = new TaskbarWinHelper(this);
-            _bizHelper = new TaskbarBizHelper(this, _cfg, _winHelper);
+            _bizHelper = new TaskbarBizHelper(
+                this,
+                _cfg,
+                _winHelper,
+                TargetDevice,
+                fallbackToPrimary);
 
             // 窗体属性
             FormBorderStyle = FormBorderStyle.None;
@@ -73,6 +84,25 @@ namespace LiteMonitor
             _tooltipHelper = new TaskbarTooltipHelper(this, _cfg, _ui);
 
             Tick();
+        }
+
+        public bool ShowWhenReady()
+        {
+            if (IsDisposed) return false;
+
+            if (!_bizHelper.IsTaskbarValid())
+            {
+                _bizHelper.FindHandles();
+                if (!_bizHelper.IsTaskbarValid())
+                {
+                    if (Visible) Hide();
+                    return false;
+                }
+                _bizHelper.AttachToTaskbar();
+            }
+
+            if (!Visible) Show();
+            return true;
         }
 
         public void ReloadLayout()
@@ -180,6 +210,20 @@ namespace LiteMonitor
             {
                 _bizHelper.FindHandles();
                 _lastFindHandleTime = DateTime.Now;
+
+                if (_bizHelper.IsTaskbarValid())
+                {
+                    _bizHelper.AttachToTaskbar();
+                    if (!Visible) Show();
+                }
+            }
+
+            // “所有屏幕”模式下，系统可能没有为某块屏幕创建副任务栏。
+            // 此时保持窗体隐藏，避免它回退到主任务栏或漂浮在桌面上。
+            if (!_bizHelper.IsTaskbarValid())
+            {
+                if (Visible) Hide();
+                return;
             }
 
             if (Math.Abs(Environment.TickCount) % 5000 < _cfg.RefreshMs) _bizHelper.CheckTheme();
@@ -190,7 +234,14 @@ namespace LiteMonitor
             var nextCols = _ui.GetTaskbarColumns();
             if (nextCols == null || nextCols.Count == 0) return;
             
-            _cols = nextCols; // 确认有效后再更新引用
+            // 每个任务栏窗体必须拥有独立的 Bounds/ColumnWidth。
+            // MetricItem 仍共享，因此硬件数据只采集一次；不同 DPI 不会互相覆盖布局。
+            if (!ReferenceEquals(_sourceCols, nextCols) || _cols == null)
+            {
+                _sourceCols = nextCols;
+                _cols = CloneColumns(nextCols);
+                _lastLayoutSignature = "";
+            }
 
             _bizHelper.UpdateTaskbarRect(); 
             
@@ -227,6 +278,26 @@ namespace LiteMonitor
             _tooltipHelper.UpdateContent();
 
             Invalidate();
+        }
+
+        private static List<Column> CloneColumns(List<Column> source)
+        {
+            var result = new List<Column>(source.Count);
+            foreach (Column column in source)
+            {
+                result.Add(new Column
+                {
+                    Top = column.Top,
+                    Bottom = column.Bottom
+                });
+            }
+            return result;
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            ReloadLayout();
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)

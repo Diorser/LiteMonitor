@@ -121,18 +121,32 @@ namespace LiteMonitor.src.UI.SettingsPage
             // Monitor Selection
             var screens = Screen.AllScreens;
             var screenNames = screens.Select((s, i) => $"{i + 1}: {s.DeviceName.Replace(@"\\.\DISPLAY", "Display ")}{(s.Primary ? " [Main]" : "")}").ToList();
+            screenNames.Insert(0, LanguageManager.T("Menu.AllMonitors"));
             screenNames.Insert(0, LanguageManager.T("Menu.Auto"));
             
             group.AddComboIndex(this, "Menu.TaskbarMonitor", screenNames.ToArray(), 
                 () => {
+                    if (Config?.TaskbarShowOnAllMonitors == true) return 1;
                     if (string.IsNullOrEmpty(Config?.TaskbarMonitorDevice)) return 0;
                     var idx = Array.FindIndex(screens, s => s.DeviceName == Config.TaskbarMonitorDevice);
-                    return idx >= 0 ? idx + 1 : 0;
+                    return idx >= 0 ? idx + 2 : 0;
                 },
                 idx => {
                     if (Config == null) return;
-                    if (idx == 0) Config.TaskbarMonitorDevice = ""; 
-                    else Config.TaskbarMonitorDevice = screens[idx - 1].DeviceName;
+                    if (idx == 0)
+                    {
+                        Config.TaskbarShowOnAllMonitors = false;
+                        Config.TaskbarMonitorDevice = "";
+                    }
+                    else if (idx == 1)
+                    {
+                        Config.TaskbarShowOnAllMonitors = true;
+                    }
+                    else
+                    {
+                        Config.TaskbarShowOnAllMonitors = false;
+                        Config.TaskbarMonitorDevice = screens[idx - 2].DeviceName;
+                    }
                 }
             );
 

@@ -3,6 +3,7 @@ using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.UI;
 using LiteMonitor.src.UI.Helpers;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -72,47 +73,90 @@ namespace LiteMonitor
         public void CleanMemory() => _bizHelper.CleanMemory();
 
         // ==== 任务栏显示 ====
-        private TaskbarForm? _taskbar;
+        private readonly Dictionary<string, TaskbarForm> _taskbars =
+            new(StringComparer.OrdinalIgnoreCase);
+        private bool _taskbarAllMonitorsMode;
 
         public void ToggleTaskbar(bool show)
         {
-            if (show)
+            if (!show)
             {
-                if (_taskbar != null && !_taskbar.IsDisposed)
-                {
-                    if (_taskbar.TargetDevice != _cfg.TaskbarMonitorDevice)
-                    {
-                        _taskbar.Close();
-                        _taskbar.Dispose();
-                        _taskbar = null;
-                    }
-                }
+                CloseAllTaskbarForms();
+                return;
+            }
 
-                if (_taskbar == null || _taskbar.IsDisposed)
+            if (_ui == null) return;
+
+            bool allMonitors = _cfg.TaskbarShowOnAllMonitors;
+            if (_taskbars.Count > 0 && _taskbarAllMonitorsMode != allMonitors)
+            {
+                CloseAllTaskbarForms();
+            }
+            _taskbarAllMonitorsMode = allMonitors;
+
+            var desiredDevices = GetDesiredTaskbarDevices();
+            var desiredSet = new HashSet<string>(desiredDevices, StringComparer.OrdinalIgnoreCase);
+
+            foreach (string existing in _taskbars.Keys.ToList())
+            {
+                if (!desiredSet.Contains(existing) || _taskbars[existing].IsDisposed)
                 {
-                    if (_ui != null)
-                    {
-                        _taskbar = new TaskbarForm(_cfg, _ui, this);
-                        _taskbar.Show();
-                    }
-                }
-                else
-                {
-                    if (!_taskbar.Visible)
-                    {
-                        _taskbar.Show();
-                        _taskbar.ReloadLayout();
-                    }
+                    CloseTaskbarForm(existing);
                 }
             }
-            else
+
+            foreach (string device in desiredDevices)
             {
-                if (_taskbar != null)
+                if (!_taskbars.TryGetValue(device, out TaskbarForm? taskbar) || taskbar.IsDisposed)
                 {
-                    _taskbar.Close();
-                    _taskbar.Dispose();
-                    _taskbar = null;
+                    taskbar = new TaskbarForm(
+                        _cfg,
+                        _ui,
+                        this,
+                        device,
+                        fallbackToPrimary: !allMonitors);
+                    _taskbars[device] = taskbar;
                 }
+
+                if (!taskbar.Visible) taskbar.ReloadLayout();
+                taskbar.ShowWhenReady();
+            }
+        }
+
+        private List<string> GetDesiredTaskbarDevices()
+        {
+            if (_cfg.TaskbarShowOnAllMonitors)
+            {
+                return Screen.AllScreens
+                    .OrderByDescending(screen => screen.Primary)
+                    .Select(screen => screen.DeviceName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return new List<string> { _cfg.TaskbarMonitorDevice ?? string.Empty };
+        }
+
+        private void CloseTaskbarForm(string device)
+        {
+            if (!_taskbars.Remove(device, out TaskbarForm? taskbar)) return;
+
+            try
+            {
+                if (!taskbar.IsDisposed)
+                {
+                    taskbar.Close();
+                    taskbar.Dispose();
+                }
+            }
+            catch { }
+        }
+
+        private void CloseAllTaskbarForms()
+        {
+            foreach (string device in _taskbars.Keys.ToList())
+            {
+                CloseTaskbarForm(device);
             }
         }
 
@@ -270,7 +314,11 @@ namespace LiteMonitor
                 {
                     if (!t.IsCanceled)
                     {
-                        this.BeginInvoke(new Action(() => _bizHelper?.RestorePos()));
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            _bizHelper?.RestorePos();
+                            if (_cfg.ShowTaskbar) ToggleTaskbar(true);
+                        }));
                     }
                 });
             }
@@ -346,6 +394,7 @@ namespace LiteMonitor
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            CloseAllTaskbarForms();
             _cfg.Save(); 
             TrafficLogger.Save(); 
             HardwareHistoryLogger.Save();
