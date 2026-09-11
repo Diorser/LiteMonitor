@@ -31,19 +31,31 @@ namespace LiteMonitor
 
         // ★★★ [新增] 极简的核心：手动刷新缓存 ★★★
         // 在 UIController 初始化或配置变更时调用它
-        public static void ReloadStyle(Settings cfg)
+        public static void ReloadStyle(Settings cfg, float dpiScale = 1f)
         {     
             var s = cfg.GetStyle();
+            dpiScale = dpiScale <= 0 ? 1f : dpiScale;
 
-            // ★★★ 修复：先释放旧字体资源，防止 GDI 句柄泄漏 ★★★
             if (_cachedFont != null)
             {
+                // This font is owned by the taskbar renderer and must be replaced
+                // when the taskbar style changes.
                 try { _cachedFont.Dispose(); } catch { }
                 _cachedFont = null;
             }
 
-            // 无论开关怎么变，这里拿到的永远是正确参数
-            _cachedFont = UIUtils.GetFont(s.Font, s.Size, s.Bold);
+            // Keep this font independent from UIUtils' shared cache. Other UI
+            // components clear that cache while rebuilding menus and themes.
+            try
+            {
+                _cachedFont = new Font(s.Font, s.Size * dpiScale,
+                    s.Bold ? FontStyle.Bold : FontStyle.Regular);
+            }
+            catch
+            {
+                _cachedFont = new Font(SystemFonts.DefaultFont.FontFamily, s.Size * dpiScale,
+                    s.Bold ? FontStyle.Bold : FontStyle.Regular);
+            }
 
             // 颜色依然允许自定义
             _useCustom = cfg.TaskbarCustomStyle;
@@ -72,7 +84,8 @@ namespace LiteMonitor
             
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
             g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            // Avoid RGB subpixel fringes on the taskbar overlay.
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
             // 使用传入的 light 参数，避免每次都查询系统主题瓠
             //bool light = IsSystemLight();
@@ -134,33 +147,35 @@ namespace LiteMonitor
             // ★★★ 修复：如果开启了隐藏标签 (如 IP/Dashboard)，则仅绘制 Value (左对齐) ★★★
             if (hideLabel)
             {
-                TextRenderer.DrawText(
-                    g, value, font, rc, valueColor,
-                    TextFormatFlags.Left |
-                    TextFormatFlags.VerticalCenter |
-                    TextFormatFlags.NoPadding |
-                    TextFormatFlags.NoClipping
-                );
+                DrawText(g, value, font, rc, valueColor, StringAlignment.Near);
                 return;
             }
 
             // Label 左对齐
-            TextRenderer.DrawText(
-                g, label, font, rc, labelColor,
-                TextFormatFlags.Left |
-                TextFormatFlags.VerticalCenter |
-                TextFormatFlags.NoPadding |
-                TextFormatFlags.NoClipping
-            );
+            DrawText(g, label, font, rc, labelColor, StringAlignment.Near);
 
             // Value 右对齐
-            TextRenderer.DrawText(
-                g, value, font, rc, valueColor,
-                TextFormatFlags.Right |
-                TextFormatFlags.VerticalCenter |
-                TextFormatFlags.NoPadding |
-                TextFormatFlags.NoClipping
-            );
+            DrawText(g, value, font, rc, valueColor, StringAlignment.Far);
+        }
+
+        private static void DrawText(Graphics g, string text, Font font, Rectangle rect,
+            Color color, StringAlignment alignment)
+        {
+            if (string.IsNullOrEmpty(text) || rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            using var brush = new SolidBrush(color);
+            using var format = new StringFormat
+            {
+                Alignment = alignment,
+                LineAlignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip,
+                Trimming = StringTrimming.None
+            };
+
+            // Graphics.DrawString honors TextRenderingHint; TextRenderer.DrawText
+            // uses GDI and can keep ClearType behavior on layered windows.
+            g.DrawString(text, font, brush, rect, format);
         }
         // [新增] 辅助：根据状态快速获取颜色 (替代原来的 PickColor)
         private static Color GetStateColor(int state, bool light)

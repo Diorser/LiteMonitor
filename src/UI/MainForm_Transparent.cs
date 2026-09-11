@@ -21,6 +21,7 @@ namespace LiteMonitor
         private readonly MainFormBizHelper _bizHelper;
         private readonly int _wmTaskbarCreated;
         private const int WM_DISPLAYCHANGE = 0x007E;
+        private const int WM_DPICHANGED = 0x02E0;
         private CancellationTokenSource _displayChangeCts;
 
         private Point _dragOffset;
@@ -273,6 +274,14 @@ namespace LiteMonitor
                         this.BeginInvoke(new Action(() => _bizHelper?.RestorePos()));
                     }
                 });
+            }
+
+            if (m.Msg == WM_DPICHANGED && _ui != null)
+            {
+                // UIController reads the new DeviceDpi and rebuilds the theme
+                // fonts/layout while the taskbar child handles its own bitmap.
+                _ui.ApplyTheme(_cfg.Skin, retainData: true);
+                _taskbar?.ReloadLayout();
             }
 
             base.WndProc(ref m);

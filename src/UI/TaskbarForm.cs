@@ -35,7 +35,9 @@ namespace LiteMonitor
         private const int WM_RBUTTONDOWN = 0x0204;
         private const int WM_RBUTTONUP = 0x0205;
         private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_DPICHANGED = 0x02E0;
         private bool _isWin11;
+        private float _dpiScale = 1f;
 
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
         {
@@ -49,6 +51,7 @@ namespace LiteMonitor
             // 初始化组件
             _winHelper = new TaskbarWinHelper(this);
             _bizHelper = new TaskbarBizHelper(this, _cfg, _winHelper);
+            _dpiScale = DeviceDpi > 0 ? DeviceDpi / 96f : 1f;
 
             // 窗体属性
             FormBorderStyle = FormBorderStyle.None;
@@ -134,7 +137,26 @@ namespace LiteMonitor
                 return;
             }
 
+            if (m.Msg == WM_DPICHANGED)
+            {
+                int dpi = (int)(m.WParam.ToInt64() & 0xFFFF);
+                ApplyDpi(dpi > 0 ? dpi / 96f : 1f);
+            }
+
             base.WndProc(ref m);
+        }
+
+        private void ApplyDpi(float dpiScale)
+        {
+            if (dpiScale <= 0 || Math.Abs(dpiScale - _dpiScale) < 0.01f)
+                return;
+
+            _dpiScale = dpiScale;
+            TaskbarRenderer.ReloadStyle(_cfg, _dpiScale);
+            ReloadLayout();
+            _bizHelper.UpdateTaskbarRect();
+            _bizHelper.UpdatePlacement(Width);
+            Invalidate();
         }
 
         private void ShowContextMenu()
@@ -239,11 +261,18 @@ namespace LiteMonitor
             // ★ 调试验证用：如果消失时出现了一个红块，说明 OnPaint 被调用但 _cols 为空
             // e.Graphics.FillRectangle(Brushes.Red, 0, 0, 20, 20); 
 
-            if (_cols == null) return;
-            var g = e.Graphics;
+            RenderSurface(e.Graphics);
+        }
+
+        private void RenderSurface(Graphics g)
+        {
+            if (_cols == null || ClientSize.Width <= 0 || ClientSize.Height <= 0)
+                return;
+
+            g.Clear(_bizHelper.TransparentKey);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
             g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             TaskbarRenderer.Render(g, _cols, _bizHelper.LastIsLightTheme);
         }
 
@@ -252,7 +281,7 @@ namespace LiteMonitor
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+                cp.ExStyle |= WS_EX_TOOLWINDOW;
                 cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE (防止点击激活窗口，避免抢占焦点)
                 if (_cfg != null && _cfg.TaskbarClickThrough)
                 {

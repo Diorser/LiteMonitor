@@ -54,11 +54,10 @@ namespace LiteMonitor.src.UI.Helpers
         public const int WS_CHILD = 0x40000000;
         public const int WS_VISIBLE = 0x10000000;
         public const int WS_CLIPSIBLINGS = 0x04000000;
-        public const int WS_EX_LAYERED = 0x80000;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
-        public const uint LWA_COLORKEY = 0x00000001;
         public const uint SWP_NOZORDER = 0x0004;
         public const uint SWP_NOACTIVATE = 0x0010;
+        public const uint SWP_SHOWWINDOW = 0x0040;
         public const int WS_EX_TRANSPARENT = 0x00000020;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
@@ -76,7 +75,6 @@ namespace LiteMonitor.src.UI.Helpers
         [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref POINT pt);
         [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr parent);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
-        [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
         [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Auto)] public static extern IntPtr GetParent(IntPtr hWnd);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindow(IntPtr hWnd);
@@ -123,13 +121,10 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         public void ApplyLayeredStyle(Color transparentKey, bool clickThrough)
         {
+            // Win11 uses a normal top-level overlay here. Its background is
+            // deliberately opaque because color-key/ARGB composition is not
+            // reliable for this taskbar integration path.
             _form.BackColor = transparentKey;
-            
-            if (_form.IsHandleCreated)
-            {
-                uint colorKey = (uint)(transparentKey.R | (transparentKey.G << 8) | (transparentKey.B << 16));
-                SetLayeredWindowAttributes(_form.Handle, colorKey, 0, LWA_COLORKEY);
-            }
 
             int exStyle = GetWindowLong(_form.Handle, GWL_EXSTYLE);
             if (clickThrough) exStyle |= WS_EX_TRANSPARENT; 
