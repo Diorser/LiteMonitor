@@ -183,9 +183,12 @@ namespace LiteMonitor.src.SystemServices
                 lock (_lock)
                 {
                     // [Optimization] 极简维护
-                    // 仅每10分钟做一次兜底检查 (内部自动 Rebuild)，无需关心返回值。
-                    // 即使重建了，ValueProvider 会在下一次取值时懒加载或直接从 Map 取，也不需要手动 PreCache。
-                    _sensorMap.EnsureFresh(_computer, _cfg);
+                    // 每10分钟做一次兜底重建。Rebuild 后必须同步刷新 ValueProvider 的取值缓存，
+                    // 否则晚激活的传感器 (如核显的 D3D 负载节点) 映射进 Map 后，缓存里依旧没有 GPU 键。
+                    if (_sensorMap.EnsureFresh(_computer, _cfg))
+                    {
+                        _valueProvider.PreCacheAllSensors(_sensorMap);
+                    }
 
                     // 3秒一次 (慢速扫描)
                     bool isSlowScanTick = (_secondsCounter % 3 == 0); 

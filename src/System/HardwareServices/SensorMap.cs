@@ -41,13 +41,15 @@ namespace LiteMonitor.src.SystemServices
 
         // [Fix] 回归 v1.2.9 的简单逻辑
         // 只有在初始化时才需要 build，之后除非手动触发或 10 分钟兜底，否则不需要任何检测。
-        // EnsureFresh 的返回值改为 void，因为不需要外部感知是否重建。
-        public void EnsureFresh(Computer computer, Settings cfg) 
+        // 返回值表示本轮是否发生了 Rebuild，调用方可借此刷新取值缓存 (PreCacheAllSensors)。
+        public bool EnsureFresh(Computer computer, Settings cfg)
         {
             if ((DateTime.Now - _lastMapBuild).TotalMinutes > 10)
             {
                 Rebuild(computer, cfg);
+                return true;
             }
+            return false;
         }
 
         public void Clear()
@@ -102,6 +104,27 @@ namespace LiteMonitor.src.SystemServices
 
             string preferredGpu = cfg.PreferredGpu ?? "";
             IHardware? selectedGpu = HardwareScanner.FindGpuByConfig(computer, preferredGpu);
+
+            // ★★★ [Fix] 核显占用无法统计的根因 ★★★
+            // Intel 核显 (IntelIntegratedGpu) 的负载 ("D3D 3D") 和显存 ("D3D Shared Memory ...") 传感器，
+            // 以及 AMD 显卡的负载传感器 (AmdGpu._coreLoad)，都是懒激活的：
+            // 构造时只创建对象，首次 hw.Update() 后才注册进 Sensors 集合。
+            // 启动/重载时 Rebuild 先于任何 GPU Update 执行，此时这些显卡的 Sensors 里没有可映射的负载传感器，
+            // 导致 GPU.Load 永远缺失；而 NVIDIA / Intel Arc 独显在构造阶段末尾自调 Update，传感器已就绪，不受影响。
+            // 这里在映射前对"将参与映射但负载/显存传感器尚未激活"的显卡补一次 Update，让传感器先上线。
+            IEnumerable<IHardware> gpusToMap = selectedGpu != null
+                ? new[] { selectedGpu }
+                : computer.Hardware.Where(HardwareScanner.IsGpuHardware);
+
+            foreach (var gpu in gpusToMap)
+            {
+                bool hasLoad = gpu.Sensors.Any(s => s.SensorType == SensorType.Load);
+                bool hasMemory = gpu.Sensors.Any(s => s.SensorType == SensorType.SmallData);
+                if (!hasLoad || !hasMemory)
+                {
+                    try { gpu.Update(); } catch { }
+                }
+            }
 
             // 局部递归函数
             void RegisterTo(IHardware hw)
