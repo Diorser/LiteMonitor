@@ -111,6 +111,8 @@ namespace LiteMonitor
         // ★ 2. 运行时缓存：存储探测到的总容量 (GB)
         [JsonIgnore] public static float DetectedRamTotalGB { get; set; } = 0;
         [JsonIgnore] public static float DetectedGpuVramTotalGB { get; set; } = 0;
+        // ★ 虚拟内存(已提交)的"提交上限"总容量，与物理内存总量不同，需单独缓存
+        [JsonIgnore] public static float DetectedVmemTotalGB { get; set; } = 0;
 
         // 开启后：CPU使用率、CPU频率、内存占用、磁盘读写 将优先从 Windows 计数器读取
         public bool UseWinPerCounters { get; set; } = true;
@@ -241,7 +243,7 @@ namespace LiteMonitor
                 CachedPropShortLabelKey = UIUtils.Intern("PROP.ShortLabel." + _key);
                 CachedItemsKey = UIUtils.Intern("Items." + _key);
 
-                if (_key == "MEM.Load" || _key == "MOBO.Temp" || _key == "DISK.Temp" || _key == "CASE.Fan"|| _key == "FPS") 
+                if (_key == "MEM.Load" || _key == "MEM.Virtual" || _key == "MOBO.Temp" || _key == "DISK.Temp" || _key == "CASE.Fan"|| _key == "FPS")
                     CachedUIGroup = "HOST"; 
                 else if (_key.StartsWith("DASH."))
                 {
@@ -303,6 +305,7 @@ namespace LiteMonitor
 
                 // Fallback for uninitialized state (should be rare)
                 if (Key == "MEM.Load" || 
+                    Key == "MEM.Virtual" ||
                     Key == "MOBO.Temp" || 
                     Key == "DISK.Temp" || 
                     Key == "CASE.Fan"|| 

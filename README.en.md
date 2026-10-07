@@ -30,7 +30,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 |-----------|----------|
 | 💻 **CPU** | Real-time usage & temperature (multi-core average + peak). |
 | 🎮 **GPU** | GPU usage, temperature, VRAM usage; supports NVIDIA / AMD / Intel. |
-| 💾 **Memory** | RAM usage overview in percentage. |
+| 💾 **Memory** | RAM usage plus committed (virtual) memory, in percentage or used size. |
 | 📀 **Disk** | Read/Write throughput (KB/s, MB/s). Auto/manual disk selection supported. |
 | 🌐 **Network** | Upload/Download speed with adaptive unit formatting. Auto/manual NIC selection supported. |
 

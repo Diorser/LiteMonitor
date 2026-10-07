@@ -221,6 +221,9 @@ namespace LiteMonitor.src.SystemServices
         {
             if (_lastValidMap.TryGetValue(key, out float lastVal)) return lastVal;
 
+            // 虚拟内存走独立 Win32 通道，不依赖性能计数器，因此放在 useCounter 判断之前
+            if (key == "MEM.Virtual") return ReadVirtualMemory();
+
             bool useCounter = _cfg.UseWinPerCounters && _perfManager.IsInitialized;
             if (!useCounter) return null;
 
@@ -333,6 +336,14 @@ namespace LiteMonitor.src.SystemServices
                         break;
                     case "DATA.DayDown":
                         result = TrafficLogger.GetTodayStats().down;
+                        break;
+
+                    // 6.1 虚拟内存 (已提交内存，即 物理内存 + 页面文件 的使用量)
+                    // 说明：数据源为系统级 Win32 API (GetPerformanceInfo)，与 LHM 传感器无关，
+                    // 因此这里不判断 useCounter —— 开关关闭时同样可用。
+                    // 该 API 无"首次采样为 0"的问题，不需要写入 _lastValidMap 兜底。
+                    case "MEM.Virtual":
+                        result = ReadVirtualMemory();
                         break;
 
                     // 6. 内存
@@ -526,6 +537,22 @@ namespace LiteMonitor.src.SystemServices
             {
                 if (lockTaken) Monitor.Exit(_lock);
             }
+        }
+
+        /// <summary>
+        /// 读取虚拟内存(已提交内存)占用率。
+        /// <para>取自系统级 Win32 API，同时刷新"提交上限"总容量缓存 (供容量显示模式换算)。</para>
+        /// </summary>
+        private float? ReadVirtualMemory()
+        {
+            var vm = _perfManager.GetVirtualMemoryData();
+
+            if (vm.TotalGB.HasValue && vm.TotalGB.Value > 0.1f)
+            {
+                Settings.DetectedVmemTotalGB = vm.TotalGB.Value;
+            }
+
+            return vm.Load;
         }
 
         private float? ReadMoboTemperature(ISensor sensor)

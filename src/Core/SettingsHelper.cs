@@ -184,10 +184,12 @@ namespace LiteMonitor
 
                 // [4xx] HOST (MEM, FPS, MOBO, DISK Temp, CASE Fan)
                 new MonitorItemConfig { Key = "MEM.Load",  SortIndex = 401, VisibleInPanel = true, VisibleInTaskbar = true },
-                new MonitorItemConfig { Key = "FPS",       SortIndex = 402, VisibleInPanel = false },
-                new MonitorItemConfig { Key = "MOBO.Temp", SortIndex = 403, VisibleInPanel = false },
-                new MonitorItemConfig { Key = "DISK.Temp", SortIndex = 404, VisibleInPanel = false },
-                new MonitorItemConfig { Key = "CASE.Fan",  SortIndex = 405, VisibleInPanel = false },
+                // [New] 虚拟内存 (已提交内存)：默认不显示，用户可在 [监控项显示] 页面勾选
+                new MonitorItemConfig { Key = "MEM.Virtual", SortIndex = 402, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "FPS",       SortIndex = 403, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "MOBO.Temp", SortIndex = 404, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "DISK.Temp", SortIndex = 405, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "CASE.Fan",  SortIndex = 406, VisibleInPanel = false },
                 
                 // [5xx] BATTERY (New Group)
                 new MonitorItemConfig { Key = "BAT.Percent", SortIndex = 501, VisibleInPanel = false, VisibleInTaskbar = false },
