@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using static LiteMonitor.src.UI.Helpers.NativeMethods;
@@ -57,10 +58,19 @@ namespace LiteMonitor.src.UI.Helpers
         public const int WS_EX_LAYERED = 0x80000;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
         public const uint LWA_COLORKEY = 0x00000001;
+        public const uint SWP_NOSIZE = 0x0001;
+        public const uint SWP_NOMOVE = 0x0002;
         public const uint SWP_NOZORDER = 0x0004;
         public const uint SWP_NOACTIVATE = 0x0010;
+        public const uint SWP_SHOWWINDOW = 0x0040;
+        public const uint GW_CHILD = 5;
+        public const uint GW_HWNDNEXT = 2;
         public const int WS_EX_TRANSPARENT = 0x00000020;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+        public static readonly IntPtr HWND_TOP = IntPtr.Zero;
+
+        // Win11 任务栏本体。它铺满整条任务栏，监控条必须保持在它上面才看得见。
+        public const string CompositionBridgeClass = "Windows.UI.Composition.DesktopWindowContentBridge";
 
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT { public int X, Y; }
@@ -83,6 +93,9 @@ namespace LiteMonitor.src.UI.Helpers
         [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
         [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
         [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     }
 
     /// <summary>
@@ -160,6 +173,55 @@ namespace LiteMonitor.src.UI.Helpers
         public void AttachToTaskbar(IntPtr taskbarHandle)
         {
             _strategy.Attach(taskbarHandle);
+        }
+
+        /// <summary>
+        /// 显卡驱动重置、DWM 重建时，Explorer 通常保留 Shell_TrayWnd，
+        /// 同时把新的合成层插到同级最前面。父句柄没变，旧的重挂逻辑不会跑，
+        /// 定位又带 SWP_NOZORDER，监控条就一直被整层盖住。
+        /// 这里只在合成层确实排在自己前面时，才不激活地抬回同级最前。
+        /// </summary>
+        public bool EnsureAboveCompositionBridge()
+        {
+            if (!_form.IsHandleCreated || !IsWindow(_form.Handle)) return false;
+
+            IntPtr hwnd = _form.Handle;
+            IntPtr parent = GetParent(hwnd);
+            if (parent == IntPtr.Zero || !IsWindow(parent)) return false;
+            if (!IsCoveredByCompositionBridge(hwnd, parent)) return false;
+
+            return SetWindowPos(
+                hwnd,
+                HWND_TOP,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+
+        internal static bool IsCoveredByCompositionBridge(IntPtr hwnd, IntPtr parent)
+        {
+            bool sawBridge = false;
+            IntPtr sibling = GetWindow(parent, GW_CHILD);
+            while (sibling != IntPtr.Zero)
+            {
+                if (sibling == hwnd) return sawBridge;
+
+                if (IsWindowVisible(sibling) && IsCompositionBridge(sibling))
+                    sawBridge = true;
+
+                sibling = GetWindow(sibling, GW_HWNDNEXT);
+            }
+
+            return false;
+        }
+
+        private static bool IsCompositionBridge(IntPtr hwnd)
+        {
+            var name = new StringBuilder(256);
+            if (GetClassName(hwnd, name, name.Capacity) == 0) return false;
+            return name.ToString() == CompositionBridgeClass;
         }
 
         public void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, int manualOffset = 0, bool alignLeft = true)

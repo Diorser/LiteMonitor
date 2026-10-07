@@ -270,7 +270,12 @@ namespace LiteMonitor
                 {
                     if (!t.IsCanceled)
                     {
-                        this.BeginInvoke(new Action(() => _bizHelper?.RestorePos()));
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            _bizHelper?.RestorePos();
+                            // 显示模式已经回来时立刻抬一次。合成层若稍后再建，Tick 还会再抬。
+                            _taskbar?.EnsureAboveCompositionBridge();
+                        }));
                     }
                 });
             }
