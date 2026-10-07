@@ -217,6 +217,43 @@ namespace LiteMonitor.src.SystemServices
             return (null, null);
         }
 
+        /// <summary>
+        /// 获取系统级"已提交"内存 (即虚拟内存) 数据，等价于任务管理器 → 性能 → 内存 中的"已提交"。
+        /// <para>已提交 = 物理内存 + 页面文件(页面交换文件)；其上限为"提交限制 (Commit Limit)"。</para>
+        /// <para>[注意] 数据源必须是 PSAPI 的 GetPerformanceInfo (系统级)，
+        /// 不能用 GlobalMemoryStatusEx 的 ullTotalPageFile/ullAvailPageFile —— 后者是"当前进程"视角，数值偏小。</para>
+        /// <para>该方法不依赖任何 PerformanceCounter，因此不受"优先使用系统计数器"开关影响，随时可读。</para>
+        /// </summary>
+        /// <returns>(占用率%, 已提交GB, 提交上限GB)；读取失败时全部为 null</returns>
+        public (float? Load, float? UsedGB, float? TotalGB) GetVirtualMemoryData()
+        {
+            try
+            {
+                uint size = (uint)Marshal.SizeOf(typeof(PERFORMANCE_INFORMATION));
+                if (GetPerformanceInfo(out PERFORMANCE_INFORMATION pi, size))
+                {
+                    // 该结构体所有容量字段的单位都是"页"，需要乘以页大小换算成字节
+                    double pageSize = pi.PageSize.ToInt64();
+                    if (pageSize <= 0) pageSize = 4096; // 兜底：常规 4KB 分页
+
+                    double limitBytes = pi.CommitLimit.ToInt64() * pageSize;
+                    double usedBytes = pi.CommitTotal.ToInt64() * pageSize;
+
+                    if (limitBytes > 0)
+                    {
+                        float totalGB = (float)(limitBytes / 1073741824.0);
+                        float usedGB = (float)(usedBytes / 1073741824.0);
+                        float load = (float)(usedBytes / limitBytes * 100.0);
+                        if (load < 0f) load = 0f;
+                        if (load > 100f) load = 100f; // 极端情况下系统可超提交，截断以保证进度条正确
+                        return (load, usedGB, totalGB);
+                    }
+                }
+            }
+            catch { }
+            return (null, null, null);
+        }
+
         public float? GetDiskRead() => SafeRead(_diskReadCounter);
         public float? GetDiskWrite() => SafeRead(_diskWriteCounter);
         public float? GetDiskActive() => SafeRead(_diskActiveCounter);
@@ -324,5 +361,30 @@ namespace LiteMonitor.src.SystemServices
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
+        // --- Win32 API 虚拟内存(已提交)结构体定义 ---
+        // 对应 PSAPI 的 PERFORMANCE_INFORMATION，容量字段单位为"页"(PageSize 字节/页)
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PERFORMANCE_INFORMATION
+        {
+            public uint cb;
+            public IntPtr CommitTotal;         // 已提交总量 (即虚拟内存已用量)
+            public IntPtr CommitLimit;         // 提交上限 (= 物理内存 + 当前页面文件上限)
+            public IntPtr CommitPeak;          // 峰值
+            public IntPtr PhysicalTotal;
+            public IntPtr PhysicalAvailable;
+            public IntPtr SystemCache;
+            public IntPtr KernelTotal;
+            public IntPtr KernelPaged;
+            public IntPtr KernelNonpaged;
+            public IntPtr PageSize;            // 每页字节数
+            public uint HandleCount;
+            public uint ProcessCount;
+            public uint ThreadCount;
+        }
+
+        [DllImport("psapi.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetPerformanceInfo(out PERFORMANCE_INFORMATION pPerformanceInformation, uint cb);
     }
 }

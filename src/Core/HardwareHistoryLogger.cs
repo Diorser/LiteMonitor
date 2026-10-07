@@ -30,7 +30,7 @@ namespace LiteMonitor.src.Core
     public static class HardwareHistoryLogger
     {
         public static readonly string[] TemperatureKeys = { "CPU.Temp", "GPU.Temp", "DISK.Temp", "MOBO.Temp" };
-        public static readonly string[] LoadKeys = { "CPU.Load", "GPU.Load", "MEM.Load" };
+        public static readonly string[] LoadKeys = { "CPU.Load", "GPU.Load", "MEM.Load", "MEM.Virtual" };
         public static readonly string[] FrequencyKeys = { "CPU.Clock", "GPU.Clock" };
         public static readonly string[] PowerKeys = { "CPU.Power", "GPU.Power", "BAT.Power" };
         public static readonly string[] FpsKeys = { "FPS" };

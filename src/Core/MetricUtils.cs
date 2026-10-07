@@ -100,6 +100,24 @@ namespace LiteMonitor.src.Core
         // =========================================================
 
         /// <summary>
+        /// 是否为虚拟内存 (已提交内存) 指标。
+        /// <para>虚拟内存的容量基准是"提交上限 (物理内存 + 页面文件)"，不能用物理内存总量换算。</para>
+        /// </summary>
+        public static bool IsVirtualMemory(string key) =>
+            !string.IsNullOrEmpty(key) && key.Equals("MEM.Virtual", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 获取内存类指标的"总容量 (GB)"基准，用于容量显示模式的换算
+        /// </summary>
+        private static double GetMemoryTotalGB(string key)
+        {
+            if (IsVirtualMemory(key)) return Settings.DetectedVmemTotalGB;
+            return key.IndexOf("MEM", StringComparison.OrdinalIgnoreCase) >= 0
+                ? Settings.DetectedRamTotalGB
+                : Settings.DetectedGpuVramTotalGB;
+        }
+
+        /// <summary>
         /// 获取纯数值字符串 (已处理缩放、舍入、紧凑模式)
         /// </summary>
         public static string GetValueStr(string key, float? value, bool compact = false)
@@ -113,9 +131,7 @@ namespace LiteMonitor.src.Core
                  var cfg = Settings.Load();
                  if (cfg.MemoryDisplayMode == 1) // 容量模式
                  {
-                     double totalGB = (key.IndexOf("MEM", StringComparison.OrdinalIgnoreCase) >= 0) 
-                        ? Settings.DetectedRamTotalGB 
-                        : Settings.DetectedGpuVramTotalGB;
+                     double totalGB = GetMemoryTotalGB(key);
 
                      if (totalGB > 0)
                      {
@@ -187,7 +203,7 @@ namespace LiteMonitor.src.Core
                 if (Settings.Load().MemoryDisplayMode != 1) return "%";
                 if (context == UnitContext.SettingsPanel || context == UnitContext.SettingsTaskbar) return "{u}";
 
-                double totalGB = (key.IndexOf("MEM", StringComparison.OrdinalIgnoreCase) >= 0) ? Settings.DetectedRamTotalGB : Settings.DetectedGpuVramTotalGB;
+                double totalGB = GetMemoryTotalGB(key);
                 
                 return (totalGB > 0 && value.HasValue) 
                     ? FormatDataSizeParts((value.Value / 100.0) * totalGB * 1073741824.0, -1).unit 
