@@ -39,6 +39,7 @@ namespace LiteMonitor
         public string PreferredCpuFan { get; set; } = "";
         public string PreferredCpuPump { get; set; } = ""; // 保存用户选的水冷接口
         public string PreferredCaseFan { get; set; } = "";
+        public string PreferredCpuTemp { get; set; } = "";
         public string PreferredMoboTemp { get; set; } = "";
         
         // 主窗体所在的屏幕设备名 (用于记忆上次位置)

@@ -14,9 +14,17 @@ namespace LiteMonitor.src.SystemServices
         private static List<string>? _cachedNetworkList = null;
         private static List<string>? _cachedDiskList = null;
         private static List<GpuOption>? _cachedGpuOptions = null;
+        private static List<SensorOption>? _cachedCpuTempOptions = null;
         private static List<string>? _cachedMoboTempList = null;
 
         public sealed class GpuOption
+        {
+            public string Label { get; set; } = "";
+            public string Value { get; set; } = "";
+            public string Name { get; set; } = "";
+        }
+
+        public sealed class SensorOption
         {
             public string Label { get; set; } = "";
             public string Value { get; set; } = "";
@@ -32,6 +40,7 @@ namespace LiteMonitor.src.SystemServices
             _cachedNetworkList = null;
             _cachedDiskList = null;
             _cachedGpuOptions = null;
+            _cachedCpuTempOptions = null;
             _cachedMoboTempList = null;
         }
 
@@ -172,6 +181,68 @@ namespace LiteMonitor.src.SystemServices
             return source
                 .Select(x => new GpuOption { Label = x.Label, Value = x.Value, Name = x.Name })
                 .ToList();
+        }
+
+        private static List<SensorOption> CloneSensorOptions(List<SensorOption> source)
+        {
+            return source
+                .Select(x => new SensorOption { Label = x.Label, Value = x.Value, Name = x.Name })
+                .ToList();
+        }
+
+        /// <summary>
+        /// 列出所有 CPU 温度传感器，供用户在 AMD/多 CPU/多 CCD 场景下手动选择 Entry。
+        /// </summary>
+        public static List<SensorOption> ListAllCpuTempOptions(IComputer computer, object syncLock)
+        {
+            if (_cachedCpuTempOptions != null && _cachedCpuTempOptions.Count > 0)
+                return CloneSensorOptions(_cachedCpuTempOptions);
+
+            var list = new List<SensorOption>();
+            lock (syncLock)
+            {
+                var cpus = computer.Hardware.Where(h => h.HardwareType == HardwareType.Cpu).ToList();
+                var nameCounts = cpus
+                    .GroupBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+                var nameIndexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var cpu in cpus)
+                {
+                    string cpuName = cpu.Name ?? "";
+                    nameIndexes.TryGetValue(cpuName, out int currentIndex);
+                    currentIndex++;
+                    nameIndexes[cpuName] = currentIndex;
+
+                    bool duplicatedName = nameCounts.TryGetValue(cpuName, out int count) && count > 1;
+                    string cpuLabel = duplicatedName ? $"{cpuName} #{currentIndex}" : cpuName;
+
+                    foreach (var s in cpu.Sensors)
+                    {
+                        if (s.SensorType != SensorType.Temperature) continue;
+                        if (SensorMap.Has(s.Name, "Distance")) continue;
+
+                        string label = $"{s.Name} [{cpuLabel}]";
+                        string value = s.Identifier?.ToString() ?? "";
+                        if (string.IsNullOrWhiteSpace(value)) value = label;
+
+                        list.Add(new SensorOption
+                        {
+                            Label = label,
+                            Value = value,
+                            Name = s.Name ?? ""
+                        });
+                    }
+                }
+            }
+
+            var final = list
+                .GroupBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+
+            if (final.Count > 0) _cachedCpuTempOptions = CloneSensorOptions(final);
+            return CloneSensorOptions(final);
         }
 
         /// <summary>

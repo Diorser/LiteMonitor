@@ -223,6 +223,7 @@
     "DiskSource": "Disco",
     "NetworkSource": "Red",
     "GpuSource": "GPU",
+    "CpuTempSource": "Fuente temp. CPU",
     "Auto": "Auto",
     "UseWinPerCounters": "Contadores Sistema",
     "UseWinPerCountersTip": "⚠️Desactiva si no es exacto. CPU/GPU/RAM/DISCO leídos desde sensores.",

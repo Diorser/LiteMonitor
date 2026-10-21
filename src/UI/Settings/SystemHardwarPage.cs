@@ -16,7 +16,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         private Panel _container;
         
         // ★★★ 修复：类型更正为 LiteComboBox ★★★
-        private LiteComboBox _cbDisk, _cbNet, _cbGpu, _cbMobo;
+        private LiteComboBox _cbDisk, _cbNet, _cbGpu, _cbCpuTemp, _cbMobo;
         private LiteComboBox _cbFanCpu, _cbFanPump, _cbFanCase;
 
         public SystemHardwarPage()
@@ -55,10 +55,11 @@ namespace LiteMonitor.src.UI.SettingsPage
                 var taskDisks = Task.Run(() => HardwareScanner.ListAllDisks(HardwareMonitor.Instance.ComputerInstance));
                 var taskNets  = Task.Run(() => HardwareScanner.ListAllNetworks(HardwareMonitor.Instance.ComputerInstance));
                 var taskGpus  = Task.Run(() => HardwareMonitor.ListAllGpuOptions());
+                var taskCpuTemps = Task.Run(() => HardwareScanner.ListAllCpuTempOptions(HardwareMonitor.Instance.ComputerInstance, HardwareMonitor.Instance.SyncLock));
                 var taskFans  = Task.Run(() => HardwareScanner.ListAllFans(HardwareMonitor.Instance.ComputerInstance, HardwareMonitor.Instance.SyncLock));
                 var taskMobo  = Task.Run(() => HardwareScanner.ListAllMoboTemps(HardwareMonitor.Instance.ComputerInstance, HardwareMonitor.Instance.SyncLock));
 
-                await Task.WhenAll(taskDisks, taskNets, taskGpus, taskFans, taskMobo);
+                await Task.WhenAll(taskDisks, taskNets, taskGpus, taskCpuTemps, taskFans, taskMobo);
 
                 // 2. ★★★ 锁定全局布局 (防止每填一个框就重绘一次) ★★★
                 this.SuspendLayout();
@@ -111,10 +112,24 @@ namespace LiteMonitor.src.UI.SettingsPage
                     combo.Inner.EndUpdate();
                 }
 
+                void FillSensorSync(LiteComboBox combo, List<HardwareScanner.SensorOption> data, string currentVal)
+                {
+                    if (combo == null || combo.Inner.Items.Count > 2) return;
+
+                    combo.Inner.BeginUpdate();
+                    combo.Inner.Items.Clear();
+                    combo.AddItem(strAuto, "");
+                    foreach (var item in data) combo.AddItem(item.Label, item.Value);
+
+                    combo.SelectValue(currentVal ?? "");
+                    combo.Inner.EndUpdate();
+                }
+
                 // 3. 瞬间填入所有数据 (因为布局被挂起，用户看不见中间过程)
                 FillSync(_cbDisk, taskDisks.Result, Config.PreferredDisk);
                 FillSync(_cbNet, taskNets.Result, Config.PreferredNetwork);
                 FillGpuSync(_cbGpu, taskGpus.Result, Config.PreferredGpu);
+                FillSensorSync(_cbCpuTemp, taskCpuTemps.Result, Config.PreferredCpuTemp);
                 FillSync(_cbMobo, taskMobo.Result, Config.PreferredMoboTemp);
                 
                 // Fan 的数据是复用的
@@ -174,6 +189,11 @@ namespace LiteMonitor.src.UI.SettingsPage
                 new[] { new { Label = strAuto, Value = "" } },
                 () => Config?.PreferredGpu ?? "",
                 v => { if (Config != null) Config.PreferredGpu = v ?? ""; });
+
+            _cbCpuTemp = (LiteComboBox)group.AddComboPair(this, LanguageManager.T("Menu.CpuTempSource"),
+                new[] { new { Label = strAuto, Value = "" } },
+                () => Config?.PreferredCpuTemp ?? "",
+                v => { if (Config != null) Config.PreferredCpuTemp = v ?? ""; });
 
             _cbMobo = (LiteComboBox)group.AddCombo(this, "Items.MOBO.Temp", new List<string> { strAuto },
                 () => Config?.PreferredMoboTemp ?? strAuto, v => { if (Config != null) Config.PreferredMoboTemp = (v == strAuto ? "" : v); });

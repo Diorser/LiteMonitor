@@ -31,8 +31,10 @@ namespace LiteMonitor.src.SystemServices
 
         private const float AutoMoboTempHardMax = 95f;
         private const float ManualMoboTempHardMax = 125f;
+        private const float CpuTempHardMax = 125f;
 
         // 配置版本追踪，用于自动触发预热
+        private string _lastPrefCpuTemp = "";
         private string _lastPrefCpuFan = "";
         private string _lastPrefCpuPump = "";
         private string _lastPrefCaseFan = "";
@@ -63,6 +65,7 @@ namespace LiteMonitor.src.SystemServices
             var newCache = map.GetInternalMap();
 
             // 记录当前预热的配置版本
+            _lastPrefCpuTemp = _cfg.PreferredCpuTemp;
             _lastPrefCpuFan = _cfg.PreferredCpuFan;
             _lastPrefCpuPump = _cfg.PreferredCpuPump;
             _lastPrefCaseFan = _cfg.PreferredCaseFan;
@@ -71,15 +74,16 @@ namespace LiteMonitor.src.SystemServices
             _lastPrefNet = _cfg.PreferredNetwork;
             _lastPrefGpu = _cfg.PreferredGpu ?? "";
 
-            // 1. 预查找用户指定的首选传感器 (风扇、水泵、主板温度)
-            string[] preferredKeys = { "CPU.Fan", "CPU.Pump", "CASE.Fan", "MOBO.Temp" };
+            // 1. 预查找用户指定的首选传感器 (CPU 温度、风扇、水泵、主板温度)
+            string[] preferredKeys = { "CPU.Temp", "CPU.Fan", "CPU.Pump", "CASE.Fan", "MOBO.Temp" };
             foreach (var key in preferredKeys)
             {
-                string pref = (key == "CPU.Fan") ? _lastPrefCpuFan :
-                             (key == "CPU.Pump") ? _lastPrefCpuPump :
-                             (key == "CASE.Fan") ? _lastPrefCaseFan : _lastPrefMoboTemp;
+                string pref = key == "CPU.Temp" ? _lastPrefCpuTemp :
+                             key == "CPU.Fan" ? _lastPrefCpuFan :
+                             key == "CPU.Pump" ? _lastPrefCpuPump :
+                             key == "CASE.Fan" ? _lastPrefCaseFan : _lastPrefMoboTemp;
 
-                SensorType type = (key == "MOBO.Temp") ? SensorType.Temperature : SensorType.Fan;
+                SensorType type = (key == "CPU.Temp" || key == "MOBO.Temp") ? SensorType.Temperature : SensorType.Fan;
 
                 if (!string.IsNullOrEmpty(pref) && !pref.Contains("自动") && !pref.Contains("Auto"))
                 {
@@ -143,6 +147,30 @@ namespace LiteMonitor.src.SystemServices
             if (string.IsNullOrEmpty(savedString) || savedString.Contains("Auto") || savedString.Contains("自动")) 
                 return null;
 
+            ISensor? SearchByIdentifier(IHardware h)
+            {
+                foreach (var s in h.Sensors)
+                {
+                    if (s.SensorType == type &&
+                        string.Equals(s.Identifier?.ToString(), savedString, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return s;
+                    }
+                }
+                foreach (var sub in h.SubHardware)
+                {
+                    var s = SearchByIdentifier(sub);
+                    if (s != null) return s;
+                }
+                return null;
+            }
+
+            foreach (var hw in _computer.Hardware)
+            {
+                var s = SearchByIdentifier(hw);
+                if (s != null) return s;
+            }
+
             int idx = savedString.LastIndexOf('[');
             if (idx < 0) return null; 
 
@@ -199,8 +227,9 @@ namespace LiteMonitor.src.SystemServices
                     _sensorMap.Rebuild(_computer, _cfg);
                 }
 
-                // 自动检测配置变更：如果用户更改了首选风扇/磁盘/显卡，立即自动预热
+                // 自动检测配置变更：如果用户更改了首选传感器/磁盘/显卡，立即自动预热
                 if (gpuChanged ||
+                    _lastPrefCpuTemp != _cfg.PreferredCpuTemp ||
                     _lastPrefCpuFan != _cfg.PreferredCpuFan ||
                     _lastPrefCpuPump != _cfg.PreferredCpuPump ||
                     _lastPrefCaseFan != _cfg.PreferredCaseFan ||
@@ -319,10 +348,22 @@ namespace LiteMonitor.src.SystemServices
 
                     // 2. CPU.Temp
                     case "CPU.Temp":
-                        result = _componentProcessor.GetCpuTemp();
+                        bool manualCpuTemp = IsManualCpuTemperatureSelected();
+                        bool hasSelectedCpuTempSensor = _manualSensorCache.TryGetValue("CPU.Temp", out var selectedCpuTemp);
+
+                        if (manualCpuTemp && hasSelectedCpuTempSensor)
+                        {
+                            result = ReadCpuTemperature(selectedCpuTemp);
+                        }
+
+                        if (result == null && (!manualCpuTemp || !hasSelectedCpuTempSensor))
+                        {
+                            result = _componentProcessor.GetCpuTemp();
+                        }
+
                         if (result == null && _manualSensorCache.TryGetValue("CPU.Temp", out var fallbackT))
                         {
-                            result = fallbackT.Value;
+                            result = manualCpuTemp ? ReadCpuTemperature(fallbackT) : fallbackT.Value;
                         }
                         if (result == null) result = 0f;
                         break;
@@ -564,6 +605,30 @@ namespace LiteMonitor.src.SystemServices
                    last <= max
                 ? last
                 : null;
+        }
+
+        private float? ReadCpuTemperature(ISensor sensor)
+        {
+            var raw = sensor.Value;
+            if (!raw.HasValue || float.IsNaN(raw.Value) || float.IsInfinity(raw.Value) || raw.Value <= 0f || raw.Value > CpuTempHardMax)
+            {
+                return _lastValidMap.TryGetValue("CPU.Temp", out float last) &&
+                       last > 0f &&
+                       last <= CpuTempHardMax
+                    ? last
+                    : null;
+            }
+
+            _lastValidMap["CPU.Temp"] = raw.Value;
+            return raw.Value;
+        }
+
+        private bool IsManualCpuTemperatureSelected()
+        {
+            string pref = _cfg.PreferredCpuTemp ?? "";
+            return !string.IsNullOrWhiteSpace(pref) &&
+                   !pref.Contains("自动", StringComparison.OrdinalIgnoreCase) &&
+                   !pref.Contains("Auto", StringComparison.OrdinalIgnoreCase);
         }
 
         public void Dispose()

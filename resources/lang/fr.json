@@ -224,6 +224,7 @@
     "DiskSource": "Disque",
     "NetworkSource": "Réseau",
     "GpuSource": "GPU",
+    "CpuTempSource": "Source temp. CPU",
     "Auto": "Auto",
     "UseWinPerCounters": "Compteurs Système",
     "UseWinPerCountersTip": "⚠️Désactiver si inexact. CPU/GPU/RAM/DISK lues depuis capteurs.",
