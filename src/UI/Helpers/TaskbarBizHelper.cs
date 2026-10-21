@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using static LiteMonitor.src.UI.Helpers.TaskbarWinHelper;
@@ -85,14 +86,48 @@ namespace LiteMonitor.src.UI.Helpers
         public void FindHandles()
         {
             var handles = _winHelper.FindHandles(_cfg.TaskbarMonitorDevice);
+            
+            // [Fix] 如果句柄变了（如从主屏切换到副屏），立即重新挂载
+            // 解决 Win10 策略 _hReBar/_hMin 缓存过期导致 SetPosition 无法检测到父窗口变化
+            bool handleChanged = (handles.hTaskbar != _hTaskbar);
+            
             _hTaskbar = handles.hTaskbar;
             _hTray = handles.hTray;
+            
+            if (handleChanged && _hTaskbar != IntPtr.Zero)
+            {
+                _winHelper.AttachToTaskbar(_hTaskbar);
+            }
         }
 
         public bool IsTaskbarValid()
         {
             if (_hTaskbar == IntPtr.Zero) return false;
             return TaskbarWinHelper.IsWindow(_hTaskbar);
+        }
+
+        /// <summary>
+        /// [Fix] 检查当前任务栏句柄是否挂载在正确的屏幕上
+        /// 解决启动时副屏任务栏未就绪导致挂载到错误屏幕的问题
+        /// </summary>
+        public bool IsOnCorrectScreen()
+        {
+            if (_hTaskbar == IntPtr.Zero) return false;
+            // 自动模式（未指定屏幕）不检查
+            if (string.IsNullOrEmpty(_cfg.TaskbarMonitorDevice)) return true;
+
+            // 获取当前任务栏句柄的窗口矩形
+            if (!_winHelper.GetWindowRectWrapper(_hTaskbar, out Rectangle taskbarRect)) return false;
+
+            // 查找目标屏幕
+            var targetScreen = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == _cfg.TaskbarMonitorDevice);
+            // [Fix] 找不到目标屏幕时返回 false，触发重新查找
+            // 之前返回 true 会导致永远不重新查找
+            if (targetScreen == null) return false;
+
+            // 检查任务栏矩形是否在目标屏幕范围内
+            return targetScreen.Bounds.Contains(taskbarRect.Location) ||
+                   targetScreen.Bounds.IntersectsWith(taskbarRect);
         }
 
         public void AttachToTaskbar()
