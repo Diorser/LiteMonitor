@@ -92,6 +92,7 @@ namespace LiteMonitor.src.UI.Helpers
     public class TaskbarWinHelper
     {
         private readonly Form _form;
+        private readonly Settings _cfg;
         private readonly ITaskbarStrategy _strategy;
 
         // ★★★ 性能优化缓存 ★★★
@@ -104,9 +105,10 @@ namespace LiteMonitor.src.UI.Helpers
 
         public bool UsesInternalLayout => _strategy.HasInternalLayout;
         
-        public TaskbarWinHelper(Form form)
+        public TaskbarWinHelper(Form form, Settings cfg)
         {
             _form = form;
+            _cfg = cfg;
             // 策略工厂模式：根据系统版本选择合适的集成策略
             if (_isWin11)
             {
@@ -179,6 +181,11 @@ namespace LiteMonitor.src.UI.Helpers
         public void RestoreTaskbar()
         {
             _strategy.Restore();
+        }
+
+        public void InvalidateCache()
+        {
+            _isCacheValid = false;
         }
 
         // =================================================================
@@ -265,7 +272,8 @@ namespace LiteMonitor.src.UI.Helpers
                             if (!isVertical)
                             {
                                 int dpi = GetTaskbarDpi();
-                                int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
+                                int baseHeight = _cfg?.Win11TaskbarHeight ?? 48;
+                                int standardHeight = (int)Math.Round((double)baseHeight * dpi / 96.0);
 
                                 if (rectPhys.Height > (standardHeight * 0.8))
                                 {
