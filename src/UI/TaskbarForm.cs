@@ -169,8 +169,17 @@ namespace LiteMonitor
             }
         }
 
+        public void EnsureAboveCompositionBridge()
+        {
+            if (IsDisposed) return;
+            _winHelper.EnsureAboveCompositionBridge();
+        }
+
         private void Tick()
         {
+            // 驱动热更新后合成层会盖住监控条，父句柄仍然有效。每次刷新都校正一次 Z 序。
+            _winHelper.EnsureAboveCompositionBridge();
+
             // [Fix] 周期性检查句柄，防止 Explorer 重启后句柄失效
             // 优化：仅在重试期或句柄无效时调用 FindHandles，且限制调用频率
             bool isHandleInvalid = !_bizHelper.IsTaskbarValid();
