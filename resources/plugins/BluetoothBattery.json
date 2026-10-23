@@ -1,0 +1,118 @@
+﻿{
+  "id": "bluetooth_battery",
+  "meta": {
+    "name": "蓝牙设备电量",
+    "version": "1.4.1",
+    "author": "WorkBuddy",
+    "description": "自动只显示当前连接中的蓝牙设备，按电量从低到高排列（最多 6 台），电量低于阈值红色。设备行可在 设置→监控项 中开关。需运行 BluetoothBattery.ps1 本地服务。"
+  },
+  "inputs": [
+    {
+      "key": "warn",
+      "label": "爆红阈值(%)",
+      "type": "text",
+      "default": "20",
+      "placeholder": "低于此值变红, 默认 20",
+      "scope": "global"
+    },
+    {
+      "key": "port",
+      "label": "本地服务端口",
+      "type": "text",
+      "default": "18923",
+      "placeholder": "需与 BluetoothBattery.ps1 -Port 一致",
+      "scope": "global"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 30,
+    "min_interval": 30,
+    "steps": [
+      {
+        "id": "battery",
+        "url": "http://127.0.0.1:{{port ?? '18923'}}/battery?warn={{warn ?? '20'}}",
+        "cache_minutes": 0,
+        "extract": {
+          "ok_count": "ok_count",
+          "dev1_name": "dev1_name",
+          "dev1_text": "dev1_text",
+          "dev1_color": "dev1_color",
+          "dev2_name": "dev2_name",
+          "dev2_text": "dev2_text",
+          "dev2_color": "dev2_color",
+          "dev3_name": "dev3_name",
+          "dev3_text": "dev3_text",
+          "dev3_color": "dev3_color",
+          "dev4_name": "dev4_name",
+          "dev4_text": "dev4_text",
+          "dev4_color": "dev4_color",
+          "dev5_name": "dev5_name",
+          "dev5_text": "dev5_text",
+          "dev5_color": "dev5_color",
+          "dev6_name": "dev6_name",
+          "dev6_text": "dev6_text",
+          "dev6_color": "dev6_color"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "dev1",
+      "label": "{{dev1_name}}",
+      "short_label": "BT1",
+      "format_val": "{{dev1_text}}",
+      "unit": "",
+      "color": "{{dev1_color}}"
+    },
+    {
+      "key": "dev2",
+      "label": "{{dev2_name}}",
+      "short_label": "BT2",
+      "format_val": "{{dev2_text}}",
+      "unit": "",
+      "color": "{{dev2_color}}"
+    },
+    {
+      "key": "dev3",
+      "label": "{{dev3_name}}",
+      "short_label": "BT3",
+      "format_val": "{{dev3_text}}",
+      "unit": "",
+      "color": "{{dev3_color}}"
+    },
+    {
+      "key": "dev4",
+      "label": "{{dev4_name}}",
+      "short_label": "BT4",
+      "format_val": "{{dev4_text}}",
+      "unit": "",
+      "color": "{{dev4_color}}"
+    },
+    {
+      "key": "dev5",
+      "label": "{{dev5_name}}",
+      "short_label": "BT5",
+      "format_val": "{{dev5_text}}",
+      "unit": "",
+      "color": "{{dev5_color}}"
+    },
+    {
+      "key": "dev6",
+      "label": "{{dev6_name}}",
+      "short_label": "BT6",
+      "format_val": "{{dev6_text}}",
+      "unit": "",
+      "color": "{{dev6_color}}"
+    },
+    {
+      "key": "cnt",
+      "label": "蓝牙设备",
+      "short_label": "BTN",
+      "format_val": "{{ok_count}}",
+      "unit": "台",
+      "color": "0"
+    }
+  ]
+}
