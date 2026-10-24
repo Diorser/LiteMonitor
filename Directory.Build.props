@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <!-- 本地构建的版本基线；正式版本由发布计划传入，不回写源码。 -->
+    <Version Condition="'$(ReleaseVersion)' == ''">1.3.8</Version>
+    <Version Condition="'$(ReleaseVersion)' != ''">$(ReleaseVersion)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <ReleaseRepository Condition="'$(ReleaseRepository)' == ''">ChenBit/LiteMonitor</ReleaseRepository>
+    <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="ReleaseRepository" Value="$(ReleaseRepository)" />
+  </ItemGroup>
+</Project>

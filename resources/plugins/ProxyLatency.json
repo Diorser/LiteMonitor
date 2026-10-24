@@ -4,7 +4,7 @@
     "name": "科学节点延迟监控",
     "version": "1.0",
     "author": "LiteMonitor",
-    "description": "一般Clash代理地址为：127.0.0.1:7890 (默认端口，一般无需修改)，如测试本地延迟则全部留空"
+    "description": "测试服务器支持两种方式：填 http(s):// 地址按 HTTP 延迟（可经本地代理）；填裸 IP/域名（如 1.2.3.4 或 icmp://1.2.3.4）则使用 ICMP Ping。Clash 代理地址一般为 127.0.0.1:7890（ICMP 模式会忽略代理），如测试本地延迟则全部留空"
   },
   "inputs": [
     {
@@ -20,7 +20,7 @@
       "label": "测试服务器",
       "default": "http://www.gstatic.com/generate_204",
       "type": "text",
-      "placeholder": "留空则国内服务器",
+      "placeholder": "如 1.2.3.4（ICMP Ping）；留空/填 http:// 地址则为 HTTP 延迟",
       "scope": "target"
     }
   ],

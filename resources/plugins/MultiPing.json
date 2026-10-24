@@ -1,0 +1,126 @@
+{
+  "id": "MultiPing",
+  "meta": {
+    "name": "多目标延迟监控",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "并行监控多个地址的延迟。每个目标可单独设置地址、协议（ICMP/TCP/HTTP/HTTPS）、端口、测量间隔与显示名称；下方“目标”可增删以调整数量。流量路径：自动（检测到系统/本地代理则走代理）、代理（可留空自动识别，识别失败用 127.0.0.1:7890）、直连（不走代理）、网卡（强制物理网卡收发，规避 WinTun/TUN 接管；ICMP 网卡模式使用原始套接字，需要管理员权限）。注意：ICMP 无法通过代理，代理仅对 TCP(CONNECT)/HTTP 生效。全局刷新间隔建议保持 1 秒，各目标的实际测量频率由“测量间隔”单独控制。"
+  },
+  "inputs": [
+    {
+      "key": "mode",
+      "label": "流量路径",
+      "type": "select",
+      "default": "auto",
+      "options": [
+        { "label": "自动（有代理则走代理）", "value": "auto" },
+        { "label": "代理模式", "value": "proxy" },
+        { "label": "直连模式", "value": "direct" },
+        { "label": "网卡模式", "value": "nic" }
+      ]
+    },
+    {
+      "key": "proxy_addr",
+      "label": "代理地址（仅代理/自动模式）",
+      "type": "text",
+      "default": "",
+      "placeholder": "如 127.0.0.1:7890；留空自动识别，识别不到用默认"
+    },
+    {
+      "key": "timeout_ms",
+      "label": "超时（毫秒）",
+      "type": "text",
+      "default": "3000"
+    },
+    {
+      "key": "rounds",
+      "label": "每次发包数",
+      "type": "text",
+      "default": "3"
+    },
+    {
+      "key": "address",
+      "label": "地址",
+      "type": "text",
+      "default": "223.5.5.5",
+      "placeholder": "IP/域名，HTTP 可填完整 URL",
+      "scope": "target"
+    },
+    {
+      "key": "protocol",
+      "label": "协议",
+      "type": "select",
+      "default": "icmp",
+      "scope": "target",
+      "options": [
+        { "label": "ICMP Ping", "value": "icmp" },
+        { "label": "TCP 连接", "value": "tcp" },
+        { "label": "HTTP 请求", "value": "http" },
+        { "label": "HTTPS 请求", "value": "https" }
+      ]
+    },
+    {
+      "key": "port",
+      "label": "端口",
+      "type": "text",
+      "default": "443",
+      "placeholder": "TCP/HTTP 须填",
+      "scope": "target"
+    },
+    {
+      "key": "interval",
+      "label": "测量间隔（秒）",
+      "type": "text",
+      "default": "5",
+      "scope": "target"
+    },
+    {
+      "key": "name",
+      "label": "显示名称",
+      "type": "text",
+      "default": "",
+      "placeholder": "留空以显示 地址",
+      "scope": "target"
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 1,
+    "min_interval": 1,
+    "steps": [
+      {
+        "id": "multiping",
+        "url": "native://multiping?host={{address}}&protocol={{protocol}}&port={{port}}&interval={{interval}}&mode={{mode}}&proxy={{proxy_addr}}&timeout={{timeout_ms}}&rounds={{rounds}}",
+        "response_format": "json",
+        "cache_minutes": 0,
+        "extract": {
+          "lat": "lat",
+          "path": "path",
+          "status": "status"
+        },
+        "process": [
+          {
+            "var": "lat_color",
+            "source": "lat",
+            "function": "threshold_switch",
+            "value_map": {
+              "0": "0",
+              "100": "1",
+              "300": "2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "ms",
+      "label": "{{name ?? address}}",
+      "short_label": "{{name ?? address}}",
+      "format_val": "{{lat}}",
+      "unit": " ms",
+      "color": "{{lat_color}}"
+    }
+  ]
+}

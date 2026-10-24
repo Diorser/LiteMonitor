@@ -17,8 +17,8 @@ namespace LiteMonitor
             bool isZh = LanguageManager.CurrentLang == "zh";
 
             string strTitle = LanguageManager.T("Menu.About");
-            string strDesc = isZh ? "一款开源的轻量级硬件监控软件。\n© 2025 Diorser / LiteMonitor Project" 
-                                  : "A lightweight desktop hardware monitor.\n© 2025 Diorser / LiteMonitor Project";
+            string strDesc = isZh ? "一款开源的轻量级硬件监控软件。\n© 2025 Diorser / LiteMonitor Project\n© 2026 ChenBit / LiteMonitor Fork"
+                                  : "A lightweight desktop hardware monitor.\n© 2025 Diorser / LiteMonitor Project\n© 2026 ChenBit / LiteMonitor Fork";
             string strWebPrefix = isZh ? "官网" : "Website";
             string strUpdate = LanguageManager.T("Menu.CheckUpdate");
             string strClose = LanguageManager.T("Menu.OK");
@@ -83,7 +83,7 @@ namespace LiteMonitor
                 LinkColor = Color.SkyBlue,
                 ActiveLinkColor = Color.LightSkyBlue,
                 VisitedLinkColor = Color.DeepSkyBlue,
-                Location = new Point(UIUtils.S(32), UIUtils.S(150)),
+                Location = new Point(UIUtils.S(32), UIUtils.S(160)),
                 AutoSize = true
             };
             websiteLink.LinkClicked += (_, __) =>
@@ -99,18 +99,18 @@ namespace LiteMonitor
             // === GitHub 链接 ===
             var githubLink = new LinkLabel
             {
-                Text = "GitHub: github.com/Diorser/LiteMonitor",
+                Text = "GitHub: github.com/ChenBit/LiteMonitor",
                 LinkColor = Color.SkyBlue,
                 ActiveLinkColor = Color.LightSkyBlue,
                 VisitedLinkColor = Color.DeepSkyBlue,
-                Location = new Point(UIUtils.S(32), UIUtils.S(175)),
+                Location = new Point(UIUtils.S(32), UIUtils.S(185)),
                 AutoSize = true
             };
             githubLink.LinkClicked += (_, __) =>
             {
                 try
                 {
-                    Process.Start(new ProcessStartInfo("https://github.com/Diorser/LiteMonitor")
+                    Process.Start(new ProcessStartInfo("https://github.com/ChenBit/LiteMonitor")
                     { UseShellExecute = true });
                 }
                 catch { }
@@ -135,7 +135,7 @@ namespace LiteMonitor
             {
                 try
                 {
-                    Process.Start(new ProcessStartInfo("https://github.com/Diorser/LiteMonitor/issues")
+                    Process.Start(new ProcessStartInfo("https://github.com/ChenBit/LiteMonitor/issues")
                     { UseShellExecute = true });
                 }
                 catch { }

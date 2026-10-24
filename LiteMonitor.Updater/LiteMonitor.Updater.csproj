@@ -9,6 +9,7 @@
 		<!-- Updater 应该是一个完全独立可执行程序 -->
 		<SelfContained>true</SelfContained>
 		<PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
 		<PublishTrimmed>false</PublishTrimmed>
 		<DebugType>none</DebugType>
@@ -20,9 +21,7 @@
 		<Company>LiteMonitor</Company>
 		<Product>LiteMonitor Auto Updater</Product>
 		<Description>Automatic update component for LiteMonitor system monitoring tool.</Description>
-		<Copyright>Copyright © 2025-2026 LiteMonitor Team</Copyright>
-		<FileVersion>1.2.5.0</FileVersion>
-		<AssemblyVersion>1.2.5.0</AssemblyVersion>
+		<Copyright>Copyright © 2025-2026 LiteMonitor Team, © 2026 ChenBit (https://github.com/ChenBit/LiteMonitor)</Copyright>
 
 		<!-- 禁用顶级语句 -->
 		<UseMaui>false</UseMaui>

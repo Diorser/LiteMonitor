@@ -23,6 +23,9 @@ namespace LiteMonitor.src.UI
         private Dictionary<string, SettingsPageBase> _pages = new Dictionary<string, SettingsPageBase>();
         private string _currentKey = "";
 
+        // 设置窗口不置顶：记录是否已临时取消 Owner 置顶，关闭时恢复
+        private bool _ownerTopMostSaved;
+
         // 恢复 WS_EX_COMPOSITED 以防止闪烁，同时配合页面卸载机制解决卡顿
         protected override CreateParams CreateParams
         {
@@ -44,6 +47,36 @@ namespace LiteMonitor.src.UI
         {
             base.OnResizeEnd(e);
             this.ResumeLayout(true);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+
+            // 设置窗口本身不置顶
+            this.TopMost = false;
+
+            // 若主窗口置顶，其拥有的窗口会被系统强制处于最上层；
+            // 因此在设置窗口打开期间临时取消 Owner 的置顶，关闭后恢复。
+            var owner = this.Owner;
+            if (owner != null && !_ownerTopMostSaved)
+            {
+                _ownerTopMostSaved = true;
+                if (owner.TopMost) owner.TopMost = false;
+            }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            var owner = this.Owner;
+            if (owner != null && _ownerTopMostSaved)
+            {
+                // 按最新配置恢复主窗口置顶状态（可能已被用户关闭置顶）
+                try { owner.TopMost = _cfg.TopMost; } catch { }
+            }
+            _ownerTopMostSaved = false;
+
+            base.OnFormClosed(e);
         }
 
         public SettingsForm(Settings cfg, UIController ui, MainForm mainForm)
@@ -244,6 +277,12 @@ namespace LiteMonitor.src.UI
             
             // 4. 应用副作用 (刷新界面)
             AppActions.ApplyAllSettings(_cfg, _mainForm, _ui, autoStartChanged);
+
+            // 应用后主窗口可能被重新置顶，设置窗口期间需再次取消，避免窗口被顶到最前
+            if (_ownerTopMostSaved && _mainForm != null && _mainForm.TopMost)
+            {
+                _mainForm.TopMost = false;
+            }
 
             // 5. [Fix] Rebase Draft to match Live
             // 将 Live 环境中由插件生成的最新监控项同步回 Draft，并保留动态显示属性

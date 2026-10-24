@@ -460,6 +460,15 @@ namespace LiteMonitor.src.SystemServices
                         }
                         else if (key.StartsWith("DISK"))
                         {
+                            // ★★★ [新增] 多磁盘温度：DISK.Temp@<磁盘名> 直接读取指定磁盘 ★★★
+                            if (key.StartsWith(DiskManager.TempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                            {
+                                result = _diskManager.GetTempByDiskName(
+                                    DiskManager.GetDiskNameFromTempKey(key),
+                                    _computer, key, _lastValidMap, _lock);
+                                break;
+                            }
+
                             bool isSpecificDisk = !string.IsNullOrEmpty(_cfg.PreferredDisk);
                             if (useCounter && !isSpecificDisk)
                             {

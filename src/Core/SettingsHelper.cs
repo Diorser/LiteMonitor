@@ -265,6 +265,12 @@ namespace LiteMonitor
                     {
                         continue; // 保留所有 DASH.*
                     }
+
+                    // 3. 多磁盘温度项：DISK.Temp@<磁盘名> 由用户按需添加，必须保留
+                    if (item.Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
                     keysToRemove.Add(item);
                 }
                 
@@ -319,8 +325,11 @@ namespace LiteMonitor
 
             // 3. [Fix] 找回插件项：追加 DASH 开头且不在标准列表中的配置
             // 必须过滤掉 DASH.HOST/DASH.Time 等标准项，否则会重复！
+            // 同时找回用户添加的多磁盘温度项 (DISK.Temp@<磁盘名>)
             migratedList.AddRange(settings.MonitorItems
-                .Where(x => x.Key.StartsWith("DASH.", StringComparison.OrdinalIgnoreCase) && !standardKeys.Contains(x.Key))
+                .Where(x => (x.Key.StartsWith("DASH.", StringComparison.OrdinalIgnoreCase) ||
+                             x.Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase)) &&
+                            !standardKeys.Contains(x.Key))
                 .Select(x => { 
                     if (x.TaskbarSortIndex == 0) x.TaskbarSortIndex = x.SortIndex; 
                     return x; 

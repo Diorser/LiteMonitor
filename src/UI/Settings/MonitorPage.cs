@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using LiteMonitor.src.UI.Controls;
 using LiteMonitor.src.Core.Actions;
+using LiteMonitor.src.SystemServices;
 
 namespace LiteMonitor.src.UI.SettingsPage
 {
@@ -22,6 +23,7 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private Button _btnTabMain;
         private Button _btnTabBar;
+        private Button _btnAddDisk;
         private LiteCheck _chkLinkHorizontal;
         private LiteCheck _chkOnlyVisible;
         
@@ -73,9 +75,21 @@ namespace LiteMonitor.src.UI.SettingsPage
             // [Fix] 动态跟随：防止 HighDPI 下 AutoSize 尚未计算完成导致重叠
             _btnTabMain.SizeChanged += (s, e) => {
                  _btnTabBar.Location = new Point(_btnTabMain.Right + UIUtils.S(10), UIUtils.S(8));
+                 if (_btnAddDisk != null)
+                     _btnAddDisk.Location = new Point(_btnTabBar.Right + UIUtils.S(16), UIUtils.S(8));
             };
             // 初始也设置一次 (虽然此时 Width 可能不准，但有了 SizeChanged 兜底)
             _btnTabBar.Location = new Point(_btnTabMain.Right + UIUtils.S(10), UIUtils.S(8));
+
+            // ★★★ 新增：多磁盘温度添加入口（仅主界面 Tab 显示）★★★
+            _btnAddDisk = CreateTabButton(IsChineseUI() ? "＋ 磁盘温度" : "＋ Disk Temp", false);
+            _btnAddDisk.ForeColor = UIColors.Primary;
+            _btnAddDisk.Click += (s, e) => ShowAddDiskTempDialog();
+            _btnTabBar.SizeChanged += (s, e) =>
+            {
+                _btnAddDisk.Location = new Point(_btnTabBar.Right + UIUtils.S(16), UIUtils.S(8));
+            };
+            _btnAddDisk.Location = new Point(_btnTabBar.Right + UIUtils.S(16), UIUtils.S(8));
 
             _chkLinkHorizontal = new LiteCheck(false, LanguageManager.T("Menu.HorizontalFollowsTaskbar")) 
             {
@@ -103,7 +117,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 _chkOnlyVisible.Location = new Point(_chkLinkHorizontal.Left - _chkOnlyVisible.Width - UIUtils.S(20), UIUtils.S(10));
             };
 
-            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _chkLinkHorizontal, _chkOnlyVisible });
+            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _btnAddDisk, _chkLinkHorizontal, _chkOnlyVisible });
 
             _headerPanel = new Panel
             {
@@ -150,6 +164,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             
             _chkLinkHorizontal.Visible = _isTaskbarTab;
             _chkOnlyVisible.Visible = _isTaskbarTab;
+            if (_btnAddDisk != null) _btnAddDisk.Visible = !_isTaskbarTab;
             
             if (_isTaskbarTab && Config != null)
                 _chkLinkHorizontal.Checked = Config.HorizontalFollowsTaskbar;
@@ -518,6 +533,153 @@ namespace LiteMonitor.src.UI.SettingsPage
             
             // Delegate logic to SettingsOperations
             SettingsChanger.UpdateMonitorList(Config, _workingList, _chkLinkHorizontal.Checked);
+        }
+
+        // =====================================================================
+        // ★★★ 多磁盘温度：添加多个磁盘的温度监控项 ★★★
+        // =====================================================================
+        private bool IsChineseUI()
+        {
+            string lang = Config?.Language;
+            if (!string.IsNullOrEmpty(lang))
+                return lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+            return System.Globalization.CultureInfo.CurrentUICulture.Name
+                .StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void ShowAddDiskTempDialog()
+        {
+            if (Config == null) return;
+
+            List<string> disks;
+            try
+            {
+                var computer = HardwareMonitor.Instance?.ComputerInstance;
+                if (computer == null) return;
+                disks = HardwareScanner.ListAllDisks(computer);
+            }
+            catch { return; }
+
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Config.MonitorItems != null)
+            {
+                foreach (var it in Config.MonitorItems)
+                {
+                    if (it.Key != null && it.Key.StartsWith(DiskManager.TempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                        existing.Add(DiskManager.GetDiskNameFromTempKey(it.Key));
+                }
+            }
+
+            var candidates = disks.Where(d => !existing.Contains(d)).ToList();
+            bool zh = IsChineseUI();
+
+            if (candidates.Count == 0)
+            {
+                MessageBox.Show(this,
+                    zh ? "所有磁盘都已添加温度监控项。" : "All disks already have temperature items.",
+                    zh ? "提示" : "Info");
+                return;
+            }
+
+            using var dlg = new Form
+            {
+                Text = zh ? "添加磁盘温度" : "Add Disk Temperature",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                ClientSize = new Size(UIUtils.S(440), UIUtils.S(340)),
+                BackColor = UIColors.MainBg,
+                ForeColor = UIColors.TextMain,
+                Font = new Font("Microsoft YaHei UI", 9F)
+            };
+
+            var list = new CheckedListBox
+            {
+                Dock = DockStyle.Fill,
+                CheckOnClick = true,
+                BackColor = UIColors.CardBg,
+                ForeColor = UIColors.TextMain,
+                BorderStyle = BorderStyle.FixedSingle,
+                IntegralHeight = false
+            };
+            foreach (var d in candidates) list.Items.Add(d);
+
+            var bottom = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = UIUtils.S(52),
+                BackColor = UIColors.MainBg,
+                Padding = UIUtils.S(new Padding(12, 10, 12, 10))
+            };
+
+            var ok = new Button
+            {
+                Text = zh ? "确定" : "OK",
+                DialogResult = DialogResult.OK,
+                Dock = DockStyle.Right,
+                Width = UIUtils.S(90),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UIColors.Primary,
+                ForeColor = Color.White
+            };
+            var cancel = new Button
+            {
+                Text = zh ? "取消" : "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Dock = DockStyle.Right,
+                Width = UIUtils.S(90),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UIColors.CardBg,
+                ForeColor = UIColors.TextMain
+            };
+            bottom.Controls.Add(ok);
+            bottom.Controls.Add(cancel);
+
+            dlg.Controls.Add(list);
+            dlg.Controls.Add(bottom);
+            dlg.AcceptButton = ok;
+            dlg.CancelButton = cancel;
+
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            var selected = list.CheckedItems.Cast<string>().ToList();
+            if (selected.Count == 0) return;
+
+            AddDiskTempItems(selected);
+        }
+
+        private void AddDiskTempItems(List<string> diskNames)
+        {
+            if (Config == null || diskNames == null || diskNames.Count == 0) return;
+            if (Config.MonitorItems == null) Config.MonitorItems = new List<MonitorItemConfig>();
+
+            int sort = Config.MonitorItems.Count == 0 ? 0 : Config.MonitorItems.Max(x => x.SortIndex) + 1;
+            int taskbarSort = Config.MonitorItems.Count == 0 ? 0 : Config.MonitorItems.Max(x => x.TaskbarSortIndex) + 1;
+
+            foreach (var name in diskNames)
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (Config.MonitorItems.Any(x => x.Key.Equals(DiskManager.MakeTempKey(name), StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                Config.MonitorItems.Add(new MonitorItemConfig
+                {
+                    Key = DiskManager.MakeTempKey(name),
+                    UserLabel = name,
+                    TaskbarLabel = name,
+                    SortIndex = sort++,
+                    TaskbarSortIndex = taskbarSort++,
+                    VisibleInPanel = true,
+                    VisibleInTaskbar = false
+                });
+            }
+
+            // 重建列表（OnShow 会从 Config.MonitorItems 重新加载）
+            _isLoaded = false;
+            _lastDataSignature = "";
+            OnShow();
         }
 
         private List<MonitorItemConfig> GetLCS(List<MonitorItemConfig> list1, List<MonitorItemConfig> list2)

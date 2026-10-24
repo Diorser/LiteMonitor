@@ -1,0 +1,140 @@
+name: Windows CI and Release
+
+on:
+  pull_request:
+    branches: [master]
+  merge_group:
+  push:
+    branches: [master, 'ci/**']
+  workflow_dispatch:
+  schedule:
+    # 补偿临时服务故障；无待发布变化时只运行轻量检查。
+    - cron: '43 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delivery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+
+jobs:
+  plan:
+    name: Plan and automation tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      commit: ${{ steps.plan.outputs.commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test versioning and release transactions
+        run: node --test automation/release.test.mjs
+      - name: Select changes and version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node automation/release.mjs plan
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: steps.plan.outputs.build == 'true'
+        with:
+          name: release-plan
+          path: |
+            artifacts/plan.json
+            artifacts/notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    name: Build, regressions and package
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-plan
+          path: artifacts
+      - name: Compile, run all regressions, publish and verify ZIP
+        run: ./automation/build.ps1
+      - name: Check artifact metadata and checksum
+        run: node --input-type=module -e "import {verifyArtifacts} from './automation/release.mjs'; import {readFileSync} from 'node:fs'; verifyArtifacts(JSON.parse(readFileSync('artifacts/plan.json')), 'artifacts');"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-x64-${{ needs.plan.outputs.version }}
+          path: |
+            artifacts/*.zip
+            artifacts/*.sha256
+            artifacts/version.json
+            artifacts/plan.json
+            artifacts/notes.md
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+  ci:
+    name: CI
+    needs: [plan, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all applicable checks
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          BUILD_REQUIRED: ${{ needs.plan.outputs.build }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          if ($env:PLAN_RESULT -ne 'success') { throw '发布计划或自动化测试失败' }
+          if ($env:BUILD_REQUIRED -eq 'true' -and $env:BUILD_RESULT -ne 'success') { throw '编译、回归或打包验证失败' }
+          Write-Output '所有适用检查通过。'
+
+  release:
+    name: Publish verified release
+    needs: [plan, build, ci]
+    if: >-
+      needs.plan.outputs.release == 'true' &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: windows-x64-${{ needs.plan.outputs.version }}
+          path: artifacts
+      - name: Resume draft, verify assets, create tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node automation/release.mjs publish artifacts
