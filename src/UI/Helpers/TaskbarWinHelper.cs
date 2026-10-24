@@ -57,10 +57,14 @@ namespace LiteMonitor.src.UI.Helpers
         public const int WS_EX_LAYERED = 0x80000;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
         public const uint LWA_COLORKEY = 0x00000001;
+        public const uint SWP_NOSIZE = 0x0001;
+        public const uint SWP_NOMOVE = 0x0002;
         public const uint SWP_NOZORDER = 0x0004;
         public const uint SWP_NOACTIVATE = 0x0010;
+        public const uint SWP_SHOWWINDOW = 0x0040;
         public const int WS_EX_TRANSPARENT = 0x00000020;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+        public static readonly IntPtr HWND_TOP = IntPtr.Zero;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT { public int X, Y; }
@@ -98,6 +102,11 @@ namespace LiteMonitor.src.UI.Helpers
         private Rectangle _lastWindowRect = Rectangle.Empty;
         private Rectangle _cachedResult = Rectangle.Empty;
         private bool _isCacheValid = false;
+        private IntPtr _lastTaskbarHandle = IntPtr.Zero;
+        private string _lastTargetDevice = string.Empty;
+        private Rectangle _lastScreenBounds = Rectangle.Empty;
+        private Rectangle _lastWorkingArea = Rectangle.Empty;
+        private uint _lastTaskbarDpi = 96;
 
         // [Optimization] 静态缓存系统版本检测结果
         private static readonly bool _isWin11 = Environment.OSVersion.Version.Major == 10 && Environment.OSVersion.Version.Build >= 22000;
@@ -160,6 +169,36 @@ namespace LiteMonitor.src.UI.Helpers
         public void AttachToTaskbar(IntPtr taskbarHandle)
         {
             _strategy.Attach(taskbarHandle);
+
+            // Explorer 在启动/唤醒时可能保留父子关系，却把窗口排到新的任务栏层后面。
+            // 每次恢复集成时重新确认可见性和同级 Z 序，但不激活窗口。
+            if (_form.IsHandleCreated && IsWindow(_form.Handle))
+            {
+                SetWindowPos(
+                    _form.Handle,
+                    HWND_TOP,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
+        }
+
+        public bool IsAttachedToTaskbar(IntPtr taskbarHandle)
+        {
+            if (taskbarHandle == IntPtr.Zero || !_form.IsHandleCreated || !IsWindow(_form.Handle))
+                return false;
+
+            IntPtr expectedParent = _strategy.GetExpectedParent(taskbarHandle);
+            return expectedParent != IntPtr.Zero &&
+                   IsWindow(expectedParent) &&
+                   GetParent(_form.Handle) == expectedParent;
+        }
+
+        public void InvalidateTaskbarRectCache()
+        {
+            _isCacheValid = false;
         }
 
         public void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, int manualOffset = 0, bool alignLeft = true)
@@ -226,8 +265,40 @@ namespace LiteMonitor.src.UI.Helpers
             if (!GetWindowRect(hTaskbar, out RECT r)) return Rectangle.Empty;
             var rectPhys = Rectangle.FromLTRB(r.left, r.top, r.right, r.bottom);
 
-            // 缓存检查
-            if (_isCacheValid && rectPhys == _lastWindowRect) return _cachedResult;
+            Screen? screen = null;
+            Rectangle screenBounds = Rectangle.Empty;
+            Rectangle workingArea = Rectangle.Empty;
+            uint taskbarDpi = 96;
+
+            try
+            {
+                if (!string.IsNullOrEmpty(targetDevice))
+                    screen = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice);
+                screen ??= Screen.FromHandle(hTaskbar);
+
+                if (screen != null)
+                {
+                    screenBounds = screen.Bounds;
+                    workingArea = screen.WorkingArea;
+                }
+
+                taskbarDpi = GetDpiForWindow(hTaskbar);
+                if (taskbarDpi == 0) taskbarDpi = 96;
+            }
+            catch { }
+
+            // 任务栏 HWND 可能在显示器、DPI、工作区变化后继续有效。
+            // 旧缓存只比较物理矩形，会一直复用过期坐标，直到整个程序重启。
+            if (_isCacheValid &&
+                hTaskbar == _lastTaskbarHandle &&
+                string.Equals(targetDevice, _lastTargetDevice, StringComparison.Ordinal) &&
+                rectPhys == _lastWindowRect &&
+                screenBounds == _lastScreenBounds &&
+                workingArea == _lastWorkingArea &&
+                taskbarDpi == _lastTaskbarDpi)
+            {
+                return _cachedResult;
+            }
 
             Rectangle finalRect = rectPhys;
 
@@ -236,22 +307,14 @@ namespace LiteMonitor.src.UI.Helpers
             // =========================================================================
             try
             {
-                Screen screen = null;
-                if (!string.IsNullOrEmpty(targetDevice)) 
-                    screen = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == targetDevice);
-                if (screen == null) 
-                    screen = Screen.FromHandle(hTaskbar);
-
                 if (screen != null)
                 {
-                    Rectangle workArea = screen.WorkingArea;
-                    Rectangle screenBounds = screen.Bounds;
-                    int reservedBottom = screenBounds.Bottom - workArea.Bottom;
+                    int reservedBottom = screenBounds.Bottom - workingArea.Bottom;
 
                     // 场景 A: 锚定模式
                     if (reservedBottom > 2) 
                     {
-                        finalRect = new Rectangle(rectPhys.Left, workArea.Bottom, rectPhys.Width, reservedBottom);
+                        finalRect = new Rectangle(rectPhys.Left, workingArea.Bottom, rectPhys.Width, reservedBottom);
                     }
                     // 场景 B: 悬浮模式
                     else
@@ -264,8 +327,7 @@ namespace LiteMonitor.src.UI.Helpers
 
                             if (!isVertical)
                             {
-                                int dpi = GetTaskbarDpi();
-                                int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
+                                int standardHeight = (int)Math.Round(48.0 * taskbarDpi / 96.0);
 
                                 if (rectPhys.Height > (standardHeight * 0.8))
                                 {
@@ -284,6 +346,11 @@ namespace LiteMonitor.src.UI.Helpers
 
             _lastWindowRect = rectPhys;
             _cachedResult = finalRect;
+            _lastTaskbarHandle = hTaskbar;
+            _lastTargetDevice = targetDevice ?? string.Empty;
+            _lastScreenBounds = screenBounds;
+            _lastWorkingArea = workingArea;
+            _lastTaskbarDpi = taskbarDpi;
             _isCacheValid = true;
 
             return _cachedResult;
