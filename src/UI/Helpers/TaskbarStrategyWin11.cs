@@ -7,8 +7,8 @@ namespace LiteMonitor.src.UI.Helpers
 {
     /// <summary>
     /// Win11 任务栏策略
-    /// 机制：使用 SetParent 将窗口挂载到 Shell_TrayWnd 或 Shell_SecondaryTrayWnd
-    /// 特点：依赖系统自身的布局，不需要手动挤占空间
+    /// 机制：使用独立的顶层窗口覆盖任务栏
+    /// 特点：沿用业务层计算出的屏幕坐标定位，避免任务栏子窗口的 DPI/透明合成问题。
     /// </summary>
     public class TaskbarStrategyWin11 : ITaskbarStrategy
     {
@@ -25,9 +25,8 @@ namespace LiteMonitor.src.UI.Helpers
 
         public void Attach(IntPtr taskbarHandle)
         {
-            // Win11 直接挂载到任务栏句柄
-            SetParent(_form.Handle, taskbarHandle);
-            TaskbarWinHelper.ApplyChildWindowStyle(_form.Handle);
+            // Keep the form top-level. Per-pixel layered surfaces are reliably
+            // composed by DWM for top-level windows on current Windows 11.
         }
 
         public void SetPosition(IntPtr taskbarHandle, int left, int top, int w, int h, int manualOffset, bool alignLeft)
@@ -36,39 +35,13 @@ namespace LiteMonitor.src.UI.Helpers
             // 这里只负责转换坐标系，忽略 manualOffset 参数以避免重复偏移。
             // 如果已经 Attach，需要将屏幕坐标转换为 Client 坐标
             
-            IntPtr currentParent = GetParent(_form.Handle);
-            bool isAttached = (currentParent == taskbarHandle);
-
-            int finalX = left;
-            int finalY = top;
-
-            if (isAttached)
-            {
-                // [Fix #292] Use GetWindowRect for manual relative coordinate calculation
-                // This avoids potential ScreenToClient drift issues on multi-monitor setups during startup
-                // ScreenToClient relies on the window's internal state which might be unstable during init
-                if (GetWindowRect(taskbarHandle, out RECT parentRect))
-                {
-                    finalX = left - parentRect.left;
-                    finalY = top - parentRect.top;
-                }
-                else
-                {
-                    // Fallback mechanism
-                    POINT pt = new POINT { X = left, Y = top };
-                    ScreenToClient(taskbarHandle, ref pt);
-                    finalX = pt.X;
-                    finalY = pt.Y;
-                }
-
-                SetWindowPos(_form.Handle, IntPtr.Zero, finalX, finalY, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-            else
-            {
-                // 如果意外脱离，尝试使用 HWND_TOPMOST 保持可见
-                IntPtr HWND_TOPMOST = (IntPtr)(-1);
-                SetWindowPos(_form.Handle, HWND_TOPMOST, finalX, finalY, w, h, SWP_NOACTIVATE);
-            }
+            // Screen coordinates are intentional because this is a top-level
+            // overlay rather than a child of Shell_TrayWnd.
+            // HWND_TOPMOST places the overlay at the front of the topmost
+            // group; Shell_TrayWnd itself is topmost and otherwise covers it.
+            IntPtr insertAfter = (IntPtr)(-1);
+            SetWindowPos(_form.Handle, insertAfter, left, top, w, h,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
 
         public void Restore()
@@ -78,7 +51,7 @@ namespace LiteMonitor.src.UI.Helpers
 
         public IntPtr GetExpectedParent(IntPtr taskbarHandle)
         {
-            return taskbarHandle;
+            return IntPtr.Zero;
         }
     }
 }
