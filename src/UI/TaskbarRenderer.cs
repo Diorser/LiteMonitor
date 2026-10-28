@@ -35,14 +35,10 @@ namespace LiteMonitor
         {     
             var s = cfg.GetStyle();
 
-            // ★★★ 修复：先释放旧字体资源，防止 GDI 句柄泄漏 ★★★
-            if (_cachedFont != null)
-            {
-                try { _cachedFont.Dispose(); } catch { }
-                _cachedFont = null;
-            }
-
-            // 无论开关怎么变，这里拿到的永远是正确参数
+            // [Fix] UIUtils.GetFont 返回的是全局共享缓存实例，调用方不得 Dispose。
+            // 原实现先释放旧字体，实际释放的是 UIUtils._fontCache 中仍被其他控件引用的对象，
+            // 会导致缓存被污染，后续命中该缓存时抛 ObjectDisposedException。
+            // 字体生命周期统一由 UIUtils 缓存管理，这里只做引用替换。
             _cachedFont = UIUtils.GetFont(s.Font, s.Size, s.Bold);
 
             // 颜色依然允许自定义
