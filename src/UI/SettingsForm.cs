@@ -91,7 +91,7 @@ namespace LiteMonitor.src.UI
 
             // 底部按钮
             var pnlBottom = new Panel { Dock = DockStyle.Bottom, Height = UIUtils.S(60), BackColor = UIColors.MainBg };
-            pnlBottom.Paint += (s, e) => e.Graphics.DrawLine(new Pen(UIColors.Border), 0, 0, Width, 0);
+            pnlBottom.Paint += (s, e) => { using var pen = new Pen(UIColors.Border); e.Graphics.DrawLine(pen, 0, 0, Width, 0); };
 
             var flowBtns = new FlowLayoutPanel 
             { 

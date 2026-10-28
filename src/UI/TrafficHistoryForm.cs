@@ -396,8 +396,8 @@ namespace LiteMonitor
                             float pctUp = total > 0 ? (float)up / total : 0;
                             int wUp = (int)(wTotal * pctUp);
                             int wDown = wTotal - wUp;
-                            if (wUp > 0) e.Graphics.FillRectangle(new SolidBrush(C_Up), new Rectangle(r.X, r.Y, wUp, r.Height));
-                            if (wDown > 0) e.Graphics.FillRectangle(new SolidBrush(C_Down), new Rectangle(r.X + wUp, r.Y, wDown, r.Height));
+                            if (wUp > 0) { using var brUp = new SolidBrush(C_Up); e.Graphics.FillRectangle(brUp, new Rectangle(r.X, r.Y, wUp, r.Height)); }
+                            if (wDown > 0) { using var brDown = new SolidBrush(C_Down); e.Graphics.FillRectangle(brDown, new Rectangle(r.X + wUp, r.Y, wDown, r.Height)); }
                         }
                     }
                 }
