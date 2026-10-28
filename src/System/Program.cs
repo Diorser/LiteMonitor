@@ -85,6 +85,7 @@ namespace LiteMonitor
             try
             {
                 // ★★★ 3. 启动应用 ★★★
+                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 ApplicationConfiguration.Initialize();
                 if (!DriverInstaller.CheckPawnIOBeforeHardware(Settings.Load()))
                 {

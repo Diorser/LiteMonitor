@@ -176,6 +176,13 @@ namespace LiteMonitor.src.UI.Helpers
             _strategy.SetPosition(taskbarHandle, left, top, w, h, manualOffset, alignLeft);
         }
 
+        public void InvalidateCache()
+        {
+            _isCacheValid = false;
+            _lastWindowRect = Rectangle.Empty;
+            _cachedResult = Rectangle.Empty;
+        }
+
         public void RestoreTaskbar()
         {
             _strategy.Restore();
@@ -264,7 +271,7 @@ namespace LiteMonitor.src.UI.Helpers
 
                             if (!isVertical)
                             {
-                                int dpi = GetTaskbarDpi();
+                                int dpi = GetTaskbarDpi(hTaskbar);
                                 int standardHeight = (int)Math.Round(48.0 * dpi / 96.0);
 
                                 if (rectPhys.Height > (standardHeight * 0.8))
@@ -312,9 +319,10 @@ namespace LiteMonitor.src.UI.Helpers
             catch { return false; }
         }
 
-        public static int GetTaskbarDpi()
+        public static int GetTaskbarDpi(IntPtr taskbar = default)
         {
-            IntPtr taskbar = FindWindow("Shell_TrayWnd", null);
+            if (taskbar == IntPtr.Zero)
+                taskbar = FindWindow("Shell_TrayWnd", null);
             if (taskbar != IntPtr.Zero)
             {
                 try { return (int)GetDpiForWindow(taskbar); } catch { }
