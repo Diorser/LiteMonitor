@@ -102,6 +102,25 @@ namespace LiteMonitor.src.UI.Helpers
             _winHelper.AttachToTaskbar(_hTaskbar);
         }
 
+        public void Invalidate()
+        {
+            _winHelper.InvalidateCache();
+            _hTaskbar = IntPtr.Zero;
+            _hTray = IntPtr.Zero;
+            _taskbarRect = Rectangle.Empty;
+        }
+
+        public void Rebuild(bool reattach = true)
+        {
+            Invalidate();
+            FindHandles();
+            if (reattach && _hTaskbar != IntPtr.Zero)
+            {
+                _winHelper.AttachToTaskbar(_hTaskbar);
+            }
+            UpdateTaskbarRect();
+        }
+
         public void UpdateTaskbarRect()
         {
             _taskbarRect = _winHelper.GetTaskbarRect(_hTaskbar, _cfg.TaskbarMonitorDevice);

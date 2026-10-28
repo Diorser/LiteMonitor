@@ -1,0 +1,43 @@
+# 构建输出
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Visual Studio / Rider
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+.idea/
+
+# 编译产物
+*.exe
+*.dll
+*.pdb
+*.cache
+*.ilk
+*.log
+*.tlog
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 本地临时脚本
+fix_csproj.py
+
+# Updater 构建产物
+LiteMonitor.Updater/bin/
+LiteMonitor.Updater/obj/

@@ -35,6 +35,8 @@ namespace LiteMonitor
         private const int WM_RBUTTONDOWN = 0x0204;
         private const int WM_RBUTTONUP = 0x0205;
         private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_DPICHANGED = 0x02E0;
+        private const int WM_DISPLAYCHANGE = 0x007E;
         private bool _isWin11;
 
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
@@ -73,6 +75,61 @@ namespace LiteMonitor
             _tooltipHelper = new TaskbarTooltipHelper(this, _cfg, _ui);
 
             Tick();
+
+            // [Fix] 启动后延迟重试，处理 Explorer 尚未就绪导致的无法显示
+            TryRetryAttach(500);
+            TryRetryAttach(1000);
+            TryRetryAttach(2000);
+        }
+
+        private void TryRetryAttach(int delayMs)
+        {
+            try
+            {
+                this.BeginInvoke(new Action(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(delayMs);
+                        if (IsDisposed) return;
+                        if (!_bizHelper.IsTaskbarValid() || !IsHandleCreated)
+                        {
+                            RebuildForDisplayChange();
+                            return;
+                        }
+                        // 如果已挂载但还不可见，尝试重新定位
+                        _bizHelper.UpdateTaskbarRect();
+                        _bizHelper.UpdatePlacement(Width > 0 ? Width : _layout?.PanelWidth ?? 300);
+                    }
+                    catch { }
+                }));
+            }
+            catch { }
+        }
+
+        public void RebuildForDisplayChange()
+        {
+            try
+            {
+                if (IsDisposed) return;
+                _winHelper.InvalidateCache();
+                _bizHelper.Rebuild(true);
+                _winHelper.ApplyLayeredStyle(_bizHelper.TransparentKey, _cfg.TaskbarClickThrough);
+                _lastFindHandleTime = DateTime.Now;
+                _lastLayoutSignature = "";
+                ReloadLayout();
+                _bizHelper.UpdateTaskbarRect();
+                if (_cols != null && _cols.Count > 0)
+                {
+                    _layout.Build(_cols, _bizHelper.Height);
+                    Width = _layout.PanelWidth;
+                    Height = _bizHelper.Height;
+                    _lastLayoutSignature = _layout.GetLayoutSignature(_cols) + "_" + _bizHelper.Height;
+                }
+                _bizHelper.UpdatePlacement(Width > 0 ? Width : 300);
+                Invalidate();
+            }
+            catch { }
         }
 
         public void ReloadLayout()
@@ -111,6 +168,29 @@ namespace LiteMonitor
 
         protected override void WndProc(ref Message m)
         {
+            // [Fix] 多显示器不同缩放比例时，DPI 变化后重新适配任务栏
+            if (m.Msg == WM_DPICHANGED)
+            {
+                try
+                {
+                    RebuildForDisplayChange();
+                }
+                catch { }
+                base.WndProc(ref m);
+                return;
+            }
+
+            if (m.Msg == WM_DISPLAYCHANGE)
+            {
+                try
+                {
+                    this.BeginInvoke(new Action(() => RebuildForDisplayChange()));
+                }
+                catch { }
+                base.WndProc(ref m);
+                return;
+            }
+
             // [Fix] 兼容性修复：在 Win11 25H2 + StartAllBack 环境下，
             // 右键事件会穿透到原生任务栏。
             // 因此不再区分系统版本，统一拦截右键按下和抬起消息。

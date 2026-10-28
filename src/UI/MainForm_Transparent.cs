@@ -103,6 +103,10 @@ namespace LiteMonitor
                         _taskbar.Show();
                         _taskbar.ReloadLayout();
                     }
+                    else
+                    {
+                        try { _taskbar.RebuildForDisplayChange(); } catch { }
+                    }
                 }
             }
             else
@@ -270,7 +274,21 @@ namespace LiteMonitor
                 {
                     if (!t.IsCanceled)
                     {
-                        this.BeginInvoke(new Action(() => _bizHelper?.RestorePos()));
+                        this.BeginInvoke(new Action(() => {
+                            try
+                            {
+                                _bizHelper?.RestorePos();
+                                if (_cfg != null && _cfg.ShowTaskbar && _taskbar != null && !_taskbar.IsDisposed)
+                                {
+                                    _taskbar.RebuildForDisplayChange();
+                                }
+                                else if (_cfg != null && _cfg.ShowTaskbar && (_taskbar == null || _taskbar.IsDisposed))
+                                {
+                                    ToggleTaskbar(true);
+                                }
+                            }
+                            catch { }
+                        }));
                     }
                 });
             }
