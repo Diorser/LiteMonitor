@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Principal;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32; // ★★★ 新增引用 ★★★
 
@@ -25,6 +26,13 @@ namespace LiteMonitor.src.SystemServices
         
         // ★★★ [新增] 静态关机标志 ★★★
         private static bool _isSystemShuttingDown = false;
+
+        // [Fix] 后台循环的取消令牌。
+        // 原实现的两个 while(true) 任务没有任何取消机制，Dispose() 只把 _isRunning 置 false，
+        // 循环仍会永久运行并持续调用 CalculateFps()/CheckHealth()，造成任务与线程泄漏。
+        // 注意：这里只 Cancel 不 Dispose，避免与仍在进行的循环迭代竞争 CancellationTokenSource.Token
+        // 的访问（CTS 释放后访问 .Token 会抛 ObjectDisposedException）。
+        private readonly CancellationTokenSource _loopCts = new CancellationTokenSource();
 
         static FpsCounter()
         {
@@ -117,9 +125,10 @@ namespace LiteMonitor.src.SystemServices
             Task.Run(async () =>
             {
                 _cycleTimer.Start(); 
-                while (true)
+                while (!_loopCts.IsCancellationRequested)
                 {
-                    await Task.Delay(500); 
+                    try { await Task.Delay(500, _loopCts.Token); }
+                    catch (OperationCanceledException) { break; }
                     CalculateFps();
                 }
             });
@@ -127,9 +136,10 @@ namespace LiteMonitor.src.SystemServices
             // 3秒检查一次服务健康状态和生命周期
             Task.Run(async () =>
             {
-                while (true)
+                while (!_loopCts.IsCancellationRequested)
                 {
-                    await Task.Delay(3000);
+                    try { await Task.Delay(3000, _loopCts.Token); }
+                    catch (OperationCanceledException) { break; }
                     CheckHealth();
                 }
             });
@@ -576,6 +586,9 @@ namespace LiteMonitor.src.SystemServices
         /// </summary>
         public void Dispose()
         {
+            // [Fix] 先取消后台循环，让两个 while 任务退出，避免任务/线程泄漏
+            try { _loopCts.Cancel(); } catch { }
+
             try { 
                 // 终止 PresentMon 进程并清理僵尸进程
                 _presentMonProc?.Kill(); 
