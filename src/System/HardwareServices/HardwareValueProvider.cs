@@ -513,6 +513,14 @@ namespace LiteMonitor.src.SystemServices
                     }
                 }
 
+                // 10.1 GPU 温度兜底：部分新平台（如 Intel Panther Lake）的 IGCL 不提供
+                // GPU 温度遥测，LibreHardwareMonitor 因此不会创建温度传感器；
+                // 此时直接读取 MCHBAR 的 THERM_STATUS_GT 寄存器（需要管理员 + PawnIO）。
+                if (result == null && key == "GPU.Temp")
+                {
+                    result = IntelGpuTemperature.GetTemperature();
+                }
+
                 // ★★★ [新增 4] 写入缓存并返回 ★★★
                 if (result.HasValue)
                 {

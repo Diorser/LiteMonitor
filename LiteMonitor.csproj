@@ -40,6 +40,12 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
             <CopyToPublishDirectory>Always</CopyToPublishDirectory>
         </Content>
+
+        <!-- PawnIO 模块：MCHBAR 读 GT 温度兜底使用（需要随程序分发） -->
+        <Content Include="resources\PawnIo\*.bin">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        </Content>
     </ItemGroup>
 	<ItemGroup>
 		<Content Include="resources\LiteMonitor.Updater.exe">
