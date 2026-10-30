@@ -13,7 +13,8 @@ namespace LiteMonitor.src.SystemServices
     /// 上已被验证（LHM PR #2551 / Intel 寄存器文档 819323），本类把它作为 GPU.Temp 的兜底。
     ///
     /// 依赖：管理员权限 + PawnIO 2.x 驱动 + 随程序附带的 IntelMSR.bin / IntelMCHBAR.bin。
-    /// 任何一步失败都会静默禁用，不影响其他监控项。
+    /// 注意：PawnIO 驱动每个设备句柄只允许加载一个模块，所以两个模块必须使用各自独立的句柄。
+    /// 任何一步失败都会静默禁用，不影响其他监控项，并写入 GpuTemp.log 便于排错。
     /// </summary>
     internal static class IntelGpuTemperature
     {
@@ -26,7 +27,8 @@ namespace LiteMonitor.src.SystemServices
         private static bool _initTried;
         private static bool _available;
         private static string _status = "not initialized";
-        private static PawnIoDevice? _device;
+        private static PawnIoDevice? _msrDevice;
+        private static PawnIoDevice? _mchbarDevice;
         private static uint _tjMax = 100;
         private static bool _tjMaxFromMsr;
         private static float? _lastValue;
@@ -55,7 +57,7 @@ namespace LiteMonitor.src.SystemServices
                     _lastReadUtc = DateTime.UtcNow;
                     _lastValue = ReadOnce(out uint raw, out string? error);
                     if (_lastValue == null && !string.IsNullOrEmpty(error))
-                        Log("read failed: " + error);
+                        Log("read failed: " + error + " raw=0x" + raw.ToString("X8"));
                     else if (_lastValue.HasValue && _loggedReads < 10)
                     {
                         _loggedReads++;
@@ -86,23 +88,24 @@ namespace LiteMonitor.src.SystemServices
                     return;
                 }
 
-                PawnIoDevice? device = PawnIoDevice.TryOpen(out string openError);
-                if (device == null)
+                // 1) MSR 模块（独立句柄）
+                PawnIoDevice? msrDevice = PawnIoDevice.TryOpen(out string openError1);
+                if (msrDevice == null)
                 {
-                    _status = "PawnIO device unavailable (" + openError + ")";
+                    _status = "PawnIO device unavailable (" + openError1 + ")";
                     Log("disabled: " + _status);
                     return;
                 }
 
-                if (!device.TryLoadModule(File.ReadAllBytes(msrPath)))
+                if (!msrDevice.TryLoadModule(File.ReadAllBytes(msrPath), out int msrLoadError))
                 {
-                    _status = "IntelMSR.bin load failed";
+                    _status = "IntelMSR.bin load failed (Win32=" + msrLoadError + ")";
                     Log("disabled: " + _status);
-                    device.Dispose();
+                    msrDevice.Dispose();
                     return;
                 }
 
-                if (device.TryExecute("ioctl_read_msr", new long[] { MSR_IA32_TEMPERATURE_TARGET }, 1, out long[] msrOut) && msrOut.Length > 0)
+                if (msrDevice.TryExecute("ioctl_read_msr", new long[] { MSR_IA32_TEMPERATURE_TARGET }, 1, out long[] msrOut) && msrOut.Length > 0)
                 {
                     uint eax = (uint)(msrOut[0] & 0xFFFFFFFF);
                     uint tjMax = (eax >> 16) & 0xFF;
@@ -113,15 +116,27 @@ namespace LiteMonitor.src.SystemServices
                     }
                 }
 
-                if (!device.TryLoadModule(File.ReadAllBytes(mchbarPath)))
+                // 2) MCHBAR 模块（必须使用另一个独立句柄，PawnIO 每句柄只能加载一个模块）
+                PawnIoDevice? mchbarDevice = PawnIoDevice.TryOpen(out string openError2);
+                if (mchbarDevice == null)
                 {
-                    _status = "IntelMCHBAR.bin load failed (cpu msr " + (_tjMaxFromMsr ? "ok" : "unavailable") + ")";
+                    _status = "PawnIO device unavailable for MCHBAR (" + openError2 + ")";
                     Log("disabled: " + _status);
-                    device.Dispose();
+                    msrDevice.Dispose();
                     return;
                 }
 
-                _device = device;
+                if (!mchbarDevice.TryLoadModule(File.ReadAllBytes(mchbarPath), out int mchbarLoadError))
+                {
+                    _status = "IntelMCHBAR.bin load failed (Win32=" + mchbarLoadError + "; cpu msr " + (_tjMaxFromMsr ? "ok" : "unavailable") + ")";
+                    Log("disabled: " + _status);
+                    mchbarDevice.Dispose();
+                    msrDevice.Dispose();
+                    return;
+                }
+
+                _msrDevice = msrDevice;
+                _mchbarDevice = mchbarDevice;
                 _available = true;
                 _status = "enabled (tjMax=" + _tjMax + (_tjMaxFromMsr ? ", from MSR" : ", default") + ")";
                 Log("initialized: " + _status);
@@ -156,10 +171,13 @@ namespace LiteMonitor.src.SystemServices
         {
             try
             {
+                if (_mchbarDevice == null)
+                    return;
+
                 var sb = new System.Text.StringBuilder();
                 for (uint offset = 0x5800; offset <= 0x5FFF; offset += 4)
                 {
-                    if (!_device.TryExecute("ioctl_read_dword", new long[] { offset }, 1, out long[] output) || output.Length == 0)
+                    if (!_mchbarDevice.TryExecute("ioctl_read_dword", new long[] { offset }, 1, out long[] output) || output.Length == 0)
                         continue;
 
                     uint value = (uint)(output[0] & 0xFFFFFFFF);
@@ -186,13 +204,13 @@ namespace LiteMonitor.src.SystemServices
         {
             raw = 0;
             error = null;
-            if (_device == null)
+            if (_mchbarDevice == null)
             {
-                error = "device not open";
+                error = "MCHBAR device not open";
                 return null;
             }
 
-            if (!_device.TryExecute("ioctl_read_dword", new long[] { MCHBAR_THERM_STATUS_GT }, 1, out long[] output) ||
+            if (!_mchbarDevice.TryExecute("ioctl_read_dword", new long[] { MCHBAR_THERM_STATUS_GT }, 1, out long[] output) ||
                 output.Length == 0)
             {
                 error = "ioctl_read_dword(0x" + MCHBAR_THERM_STATUS_GT.ToString("X") + ") failed";

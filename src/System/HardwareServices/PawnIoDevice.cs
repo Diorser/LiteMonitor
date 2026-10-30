@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -7,8 +6,10 @@ using Microsoft.Win32.SafeHandles;
 namespace LiteMonitor.src.SystemServices
 {
     /// <summary>
-    /// 极简 PawnIO 客户端：直接通过 \.GLOBALROOTDevicePawnIO 设备加载并执行已签名模块。
-    /// 说明：仅在管理员权限下可用；失败时静默返回 false，不影响其他功能。
+    /// 极简 PawnIO 客户端：直接通过 \\.\GLOBALROOT\Device\PawnIO 设备加载并执行已签名模块。
+    /// 重要：PawnIO 驱动每个设备句柄只允许加载一个模块（第二个模块会返回 STATUS_ALREADY_INITIALIZED），
+    /// 因此每个模块必须使用独立的 PawnIoDevice 实例。
+    /// 仅在管理员权限下可用；失败时静默返回 false，不影响其他功能。
     /// </summary>
     internal sealed class PawnIoDevice : IDisposable
     {
@@ -86,21 +87,28 @@ namespace LiteMonitor.src.SystemServices
             }
         }
 
-        public bool TryLoadModule(byte[] binary)
+        public bool TryLoadModule(byte[] binary, out int win32Error)
         {
+            win32Error = 0;
             if (_handle == null || _handle.IsInvalid || binary == null || binary.Length == 0)
+            {
+                win32Error = -1;
                 return false;
+            }
 
             try
             {
-                return DeviceIoControlNoOut(_handle,
-                                            DEVICE_TYPE | IOCTL_PIO_LOAD_BINARY,
-                                            binary,
-                                            (uint)binary.Length,
-                                            IntPtr.Zero,
-                                            0,
-                                            out _,
-                                            IntPtr.Zero);
+                bool ok = DeviceIoControlNoOut(_handle,
+                                               DEVICE_TYPE | IOCTL_PIO_LOAD_BINARY,
+                                               binary,
+                                               (uint)binary.Length,
+                                               IntPtr.Zero,
+                                               0,
+                                               out _,
+                                               IntPtr.Zero);
+                if (!ok)
+                    win32Error = Marshal.GetLastWin32Error();
+                return ok;
             }
             catch
             {
