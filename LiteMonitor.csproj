@@ -19,7 +19,8 @@
 
 
 	<ItemGroup>
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <!-- 0.9.7-pre744: 新增 Intel Panther Lake (CPUID 0xCC) 支持，且仍保持 Data/SmallData 的 GB/MB 单位 -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.7-pre744" />
     <PackageReference Include="System.Text.Json" Version="9.0.10" />
   </ItemGroup>
 
@@ -36,6 +37,12 @@
         </Content>
 
         <Content Include="resources\plugins\*.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        </Content>
+
+        <!-- PawnIO 模块：MCHBAR 读 GT 温度兜底使用（需要随程序分发） -->
+        <Content Include="resources\PawnIo\*.bin">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
             <CopyToPublishDirectory>Always</CopyToPublishDirectory>
         </Content>

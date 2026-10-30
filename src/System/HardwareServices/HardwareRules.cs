@@ -43,6 +43,10 @@ namespace LiteMonitor.src.SystemServices
             // 4. Intel 显卡
             if (hw.HardwareType == HardwareType.GpuIntel)
             {
+                // 内核/LHM 明确标记为集成的 Intel 显卡（如 Panther Lake 的 Arc B390），
+                // 名字启发式会把 "B390" 误判成独显，这里优先采用硬件 Identifier。
+                if (IsIntegratedGpu(hw)) return 1;
+
                 // Arc 系列
                 if (name.Contains("Arc", StringComparison.OrdinalIgnoreCase))
                 {
@@ -61,6 +65,18 @@ namespace LiteMonitor.src.SystemServices
 
             // 其他 -> 优先级 4
             return 4;
+        }
+
+        /// <summary>
+        /// 判断是否为 Intel 核显 (集成显卡)。
+        /// LHM 对集显使用 /gpu-intel-integrated/ 作为 Identifier 前缀，
+        /// 比按名字猜 "A/B/Pro" 更可靠 (Arc B390 是核显，却被名字误判为独显)。
+        /// </summary>
+        public static bool IsIntegratedGpu(IHardware hw)
+        {
+            if (hw.HardwareType != HardwareType.GpuIntel) return false;
+            string id = hw.Identifier?.ToString() ?? "";
+            return Has(id, "gpu-intel-integrated");
         }
 
         /// <summary>
@@ -86,6 +102,8 @@ namespace LiteMonitor.src.SystemServices
             // Intel 独显 (Arc A/B/Pro) 和其他厂商 (Nvidia/AMD) 都使用专用显存 (Dedicated)
             if (hw.HardwareType == HardwareType.GpuIntel)
             {
+                // Identifier 已明确是核显 (Arc B390 等) -> 直接使用 Shared
+                if (IsIntegratedGpu(hw)) return true;
                 // 如果是 Discrete Arc，则不使用 Shared (即使用 Dedicated)
                 if (IsDiscreteArc(hw.Name)) return false;
                 
