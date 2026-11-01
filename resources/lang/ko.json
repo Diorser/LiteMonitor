@@ -79,6 +79,7 @@
     "DATA.DayDown": "⏬"
   },
   "Menu": {
+    "GameMode": "게임 모드",
     "__Comment_Global__": "--- Global ---",
     "SettingsPanel": "설정 패널",
     "About": "정보",

@@ -291,6 +291,41 @@ namespace LiteMonitor.Updater
                 }
                 Thread.Sleep(200);
             }
+
+            // ★★★ [Fix BF6] 硬杀主程序后清理残留的 FPS 采集组件与 ETW 会话：
+            // Process.Kill 不会执行主程序的 finally，LiteMonitorFPS.exe（独立子进程）会继续
+            // 持有名为 LiteMonitor_Golden_Session 的系统级 ETW 会话，该会话追踪受反作弊
+            // 保护的游戏（如战地6）会导致游戏被反作弊静默闪退 ★★★
+            CleanupFpsResidue();
+        }
+
+        /// <summary>
+        /// [Fix BF6] 清理残留的 LiteMonitorFPS 进程与 ETW 追踪会话
+        /// 注意：会话名必须与主程序 FpsCounter.SESSION_NAME 保持一致
+        /// </summary>
+        private static void CleanupFpsResidue()
+        {
+            try
+            {
+                foreach (var p in Process.GetProcessesByName("LiteMonitorFPS"))
+                {
+                    try { if (!p.HasExited) p.Kill(); } catch { }
+                    finally { try { p.Dispose(); } catch { } }
+                }
+            }
+            catch { }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "logman",
+                    Arguments = "stop LiteMonitor_Golden_Session -ets",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                })?.WaitForExit(100);
+            }
+            catch { }
         }
 
         private static void LogError(string dir, string msg)

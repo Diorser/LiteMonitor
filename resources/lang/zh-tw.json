@@ -76,6 +76,7 @@
     "DATA.DayDown": "⏬"
   },
   "Menu": {
+    "GameMode": "遊戲模式",
         "__Comment_Global__": "--- 全域/按鈕/右鍵選單 ---",
         "SettingsPanel": "設定面板",
         "About": "關於 LiteMonitor",

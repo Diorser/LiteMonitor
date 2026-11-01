@@ -79,6 +79,7 @@
     "BAT.Current": "🔋"
   },
   "Menu": {
+    "GameMode": "游戏模式",
     "__Comment_Global__": "--- 全局/按钮/右键菜单 ---",
     "SettingsPanel": "设置面板",
     "About": "关于 LiteMonitor",

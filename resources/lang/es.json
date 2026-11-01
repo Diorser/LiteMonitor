@@ -79,6 +79,7 @@
     "DATA.DayDown": "⏬"
   },
   "Menu": {
+    "GameMode": "Modo de juego",
     "__Comment_Global__": "--- Global ---",
     "SettingsPanel": "Ajustes",
     "About": "Acerca de",
