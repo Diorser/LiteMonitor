@@ -1,0 +1,31 @@
+LiteMonitor 使用说明（必读）
+================================
+
+1. 运行要求
+   - Windows 10 / 11（x64）
+   - 首次运行需管理员权限（用于读取 CPU 温度/频率/功耗等传感器数据，
+     程序将自动下载并静默安装 PawnIO 驱动）
+   - FPS 帧率计数基于 PresentMon（ETW），同样需要管理员权限
+
+2. 快速上手
+   - 解压后直接运行 LiteMonitor.exe，右键悬浮窗即可打开全部菜单
+   - 支持悬浮窗 / 横条 / 任务栏嵌入 / 网页监控四种显示形态
+   - 主题位于 resources\themes\，语言位于 resources\lang\，
+     插件位于 resources\plugins\（插件开发见 PLUGIN_DEV_GUIDE.md）
+
+3. 反作弊保护游戏提示（重要）
+   - 程序内置反作弊守卫：检测到受保护游戏（战地6、Apex、无畏契约、
+     绝地求生、逃离塔科夫、堡垒之夜、三角洲行动等）时，会自动停止
+     FPS 帧率 ETW 会话，避免与内核反作弊冲突导致游戏闪退
+   - 若使用第三方修改版或新游戏出现兼容问题，可在
+     src\System\HardwareServices\FpsCounter.cs 的 ProtectedGames
+     黑名单中补充进程名
+
+4. 常见问题
+   - 无 CPU 温度：等待 PawnIO 驱动安装完成并重启程序
+   - FPS 显示 0：确认以管理员身份运行，且正在前台游玩（非受保护）游戏
+   - 网页监控无法访问：确认防火墙放行，或在设置中检查端口
+
+5. 开源与反馈
+   - 项目主页：https://github.com/Diorser/LiteMonitor
+   - 问题反馈请到 GitHub Issues
