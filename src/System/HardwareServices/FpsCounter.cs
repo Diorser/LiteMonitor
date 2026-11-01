@@ -62,10 +62,35 @@ namespace LiteMonitor.src.SystemServices
         private readonly ConcurrentDictionary<int, string> _processNameCache = new();
 
         // ★★★ [新增] 排除进程列表，减少字符串比较开销 ★★★
-        private static readonly HashSet<string> ExcludedProcesses = new(StringComparer.OrdinalIgnoreCase) 
-        { 
-            "LiteMonitor", "LiteMonitorFPS", "PresentMon", "Unknown" 
+        private static readonly HashSet<string> ExcludedProcesses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "LiteMonitor", "LiteMonitorFPS", "PresentMon", "Unknown"
         };
+
+        // ★★★ [Fix BF6] 反作弊保护游戏黑名单：这些游戏使用内核级反作弊（EA Javelin/EAC/BattlEye/Vanguard/ACE），
+        // 会检测并干扰 PresentMon 的系统级 ETW 帧率追踪会话，导致游戏被反作弊静默终止（表现为随机闪退、无报错）。
+        // 命中黑名单时立即停止 ETW 会话并在冷却期内不再拉起。可按需继续补充进程名（不含 .exe 后缀）。
+        private static readonly HashSet<string> ProtectedGames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "bf6", "bf2042",            // EA Javelin（战地系列）
+            "r5apex", "apex",           // EAC（Apex 英雄）
+            "valorant",                 // Vanguard（无畏契约）
+            "tslgame", "pubg",          // BattlEye（绝地求生）
+            "escapefromtarkov",         // BattlEye（逃离塔科夫）
+            "fortnite",                 // EAC/BattlEye（堡垒之夜）
+            "deltaforce"                // ACE（三角洲行动）
+        };
+
+        // ★★★ [Fix BF6] 反作弊守卫冷却期：命中黑名单后，此时间点之前 GetFps/StartService 一律拒绝拉起会话 ★★★
+        private DateTime _protectedGuardUntil = DateTime.MinValue;
+
+        // ★★★ [Fix BF6] 崩溃熔断：PresentMon 连续启动失败计数与冷却期（如被反作弊拒绝建会话时避免无限重启） ★★★
+        private int _consecutiveFailures = 0;
+        private DateTime _cooldownUntil = DateTime.MinValue;
+
+        // ★★★ [Fix BF6] 启动时间与主动停止标志：区分"PresentMon 自行崩溃退出"与"程序主动 Dispose 杀进程" ★★★
+        private DateTime _presentStartTime = DateTime.MinValue;
+        private volatile bool _intentionalStop = false;
         
         // 锁定机制变量，用于实现粘性锁定逻辑
         private int _currentFocusPid = 0;       // 当前聚焦的进程 PID
@@ -151,6 +176,9 @@ namespace LiteMonitor.src.SystemServices
         {
             // ★★★ [修改] 记录本次访问时间，并触发惰性启动 ★★★
             _lastAccessTime = DateTime.Now;
+
+            // ★★★ [Fix BF6] 反作弊守卫/崩溃熔断冷却期内：不拉起会话，直接返回 ★★★
+            if (DateTime.Now < _protectedGuardUntil || DateTime.Now < _cooldownUntil) return 0f;
 
             // 如果没运行且没在启动中，尝试启动服务
             if (!_isRunning && !_isStarting && !_isRestarting)
@@ -270,12 +298,73 @@ namespace LiteMonitor.src.SystemServices
             if (_isRunning && (DateTime.Now - _lastAccessTime).TotalSeconds <= 5)
             {
                 // 判断服务是否异常：超过3秒没有收到数据或进程已退出
-                bool isDead = (DateTime.Now - _lastDataTime).TotalSeconds > 3;
-                if (_presentMonProc == null || _presentMonProc.HasExited) isDead = true;
-                
-                // 异常时重启服务
-                if (isDead) Task.Run(() => RestartService());
+                bool procDead = _presentMonProc == null || _presentMonProc.HasExited;
+                bool isStale = (DateTime.Now - _lastDataTime).TotalSeconds > 3;
+
+                if (procDead)
+                {
+                    // [Fix BF6] 进程死亡由 WaitForExitAsync 任务统一记录熔断计数，这里只负责重启
+                    Task.Run(() => RestartService());
+                }
+                else if (isStale)
+                {
+                    // [Fix BF6] 进程存活但 3 秒无数据（僵死），计入熔断计数后重启
+                    RecordStartFailure("进程存活但超过 3 秒无数据");
+                    Task.Run(() => RestartService());
+                }
             }
+        }
+
+        /// <summary>
+        /// [Fix BF6] 记录一次 PresentMon 启动失败；连续 3 次失败触发熔断（10 分钟内不再尝试启动 ETW 会话）。
+        /// 典型场景：反作弊（如 EA Javelin）拒绝外部 ETW 会话导致 PresentMon 秒退，形成"崩溃-重启"循环
+        /// </summary>
+        private void RecordStartFailure(string reason)
+        {
+            _consecutiveFailures++;
+            if (_consecutiveFailures >= 3)
+            {
+                _cooldownUntil = DateTime.Now.AddMinutes(10);
+                _consecutiveFailures = 0;
+                Log($"[熔断] PresentMon 连续 3 次启动失败（最近原因：{reason}），熔断 10 分钟内不再启动 ETW 会话");
+                Dispose();
+            }
+            else
+            {
+                Log($"[诊断] PresentMon 启动失败（第 {_consecutiveFailures} 次）：{reason}，将自动重试");
+            }
+        }
+
+        /// <summary>
+        /// [Fix BF6] 判断是否有受反作弊保护的游戏正在运行（用于启动会话前的预扫描）
+        /// </summary>
+        private static bool IsProtectedGameRunning()
+        {
+            try
+            {
+                foreach (var p in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (ProtectedGames.Contains(p.ProcessName)) return true;
+                    }
+                    catch { }
+                    finally { try { p.Dispose(); } catch { } }
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        /// <summary>
+        /// [Fix BF6] 检测到 ETW 会话正在追踪受保护游戏：立即停止会话并进入冷却期，
+        /// 游戏退出约 30 秒后自动恢复。这是战地6等内核反作弊游戏被静默闪退的核心防护点
+        /// </summary>
+        private void OnProtectedGameDetected(string gameName)
+        {
+            _protectedGuardUntil = DateTime.Now.AddSeconds(30);
+            Log($"[反作弊守卫] 检测到 ETW 会话正在追踪受保护游戏 {gameName}，已立即停止帧率会话（避免反作弊冲突闪退）");
+            Dispose();
         }
 
         /// <summary>
@@ -306,6 +395,10 @@ namespace LiteMonitor.src.SystemServices
             {
                 _isStarting = true;
 
+                // ★★★ [Fix BF6] 熔断/反作弊守卫冷却期内不再启动会话 ★★★
+                if (DateTime.Now < _cooldownUntil) return;
+                if (DateTime.Now < _protectedGuardUntil) return;
+
                 // 检查是否有管理员权限（PresentMon 需要管理员权限）
                 if (!IsAdministrator()) return;
                 
@@ -317,6 +410,16 @@ namespace LiteMonitor.src.SystemServices
                 }
                 
                 if (!File.Exists(ExePath)) return;
+
+                // ★★★ [Fix BF6] 启动前预扫描：受保护游戏已在运行则不建 ETW 会话，
+                // 关闭"会话先于游戏启动"的竞态窗口（游戏启动瞬间反作弊初始化最敏感）。
+                // 每 10 秒放行一次复检，游戏持续运行时自动持续压制 ★★★
+                if (IsProtectedGameRunning())
+                {
+                    _protectedGuardUntil = DateTime.Now.AddSeconds(10);
+                    Log("[反作弊守卫] 检测到受保护游戏正在运行，跳过 ETW 帧率会话启动（10 秒后自动复检）");
+                    return;
+                }
 
                 // 清理可能存在的僵尸进程
                 ForceKillZombies();
@@ -338,13 +441,30 @@ namespace LiteMonitor.src.SystemServices
 
                 // 更新服务状态
                 _isRunning = true;
-                _lastDataTime = DateTime.Now; 
+                _intentionalStop = false;          // [Fix BF6] 新进程的退出按"非主动停止"处理，用于熔断计数
+                _presentStartTime = DateTime.Now;  // [Fix BF6] 记录启动时间，用于识别秒退
+                _lastDataTime = DateTime.Now;
+                Log("[Fix BF6] ETW 帧率会话已启动: " + SESSION_NAME);
                 // 忽略错误输出
                 _presentMonProc.ErrorDataReceived += (s, e) => { };
                 _presentMonProc.BeginErrorReadLine();
 
                 // 监控进程退出状态
-                Task.Run(async () => { await _presentMonProc.WaitForExitAsync(); _isRunning = false; });
+                Task.Run(async () =>
+                {
+                    await _presentMonProc.WaitForExitAsync();
+                    _isRunning = false;
+                    // ★★★ [Fix BF6] 非主动停止且启动后 3 秒内退出 = 秒退（典型：反作弊拒绝建会话），计入熔断 ★★★
+                    if (!_intentionalStop && (DateTime.Now - _presentStartTime).TotalSeconds < 3)
+                    {
+                        RecordStartFailure("PresentMon 启动后 3 秒内退出");
+                    }
+                    else if (!_intentionalStop)
+                    {
+                        // 运行超过 3 秒后才退出，视为曾正常工作，重置失败计数
+                        _consecutiveFailures = 0;
+                    }
+                });
 
                 // 异步处理 PresentMon 输出数据
                 Task.Run(async () =>
@@ -358,6 +478,8 @@ namespace LiteMonitor.src.SystemServices
                             {
                                 // 解析输出数据
                                 ParseLine(line);
+                                // [Fix BF6] 收到有效数据 = 启动成功，重置熔断计数
+                                if (_consecutiveFailures != 0) _consecutiveFailures = 0;
                                 // 更新最后数据时间
                                 _lastDataTime = DateTime.Now;
                             }
@@ -435,6 +557,15 @@ namespace LiteMonitor.src.SystemServices
 
                 // 获取进程名称，过滤不需要监控的进程
                 string pName = GetProcessName(pid);
+
+                // ★★★ [Fix BF6] 反作弊守卫（核心防护）：检测到 ETW 会话正在追踪受保护游戏，
+                // 立即拆除会话并进入冷却期，避免内核反作弊（EA Javelin 等）因外部 ETW 追踪而静默杀游戏 ★★★
+                if (ProtectedGames.Contains(pName))
+                {
+                    OnProtectedGameDetected(pName);
+                    return;
+                }
+
                 if (ExcludedProcesses.Contains(pName))
                 {
                     _calculatedProcessFps.TryRemove(pid, out _);
@@ -576,11 +707,16 @@ namespace LiteMonitor.src.SystemServices
         /// </summary>
         public void Dispose()
         {
-            try { 
+            try {
+                // [Fix BF6] 标记主动停止，避免 Kill 被误计为 PresentMon 崩溃
+                _intentionalStop = true;
                 // 终止 PresentMon 进程并清理僵尸进程
-                _presentMonProc?.Kill(); 
-                ForceKillZombies(); 
+                _presentMonProc?.Kill();
+                ForceKillZombies();
                 _isRunning = false; // 同步重置状态
+                // [Fix BF6] 清空本会话的帧数据，防止残留 PID 计数影响下次会话
+                _processFrameCounts.Clear();
+                _calculatedProcessFps.Clear();
             } catch { }
         }
     }
