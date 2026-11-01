@@ -7,6 +7,7 @@ using LibreHardwareMonitor.Hardware;
 using LiteMonitor.src.Core;
 using System.Linq;
 using System.Threading;
+using System.Diagnostics; // [Fix BF6] 游戏模式需要 Process 启动 sc.exe 控制 PawnIO 服务
 
 namespace LiteMonitor.src.SystemServices
 {
@@ -45,12 +46,20 @@ namespace LiteMonitor.src.SystemServices
         private double _secondAccumulator = 0;
         private long _secondsCounter = 0;
         private DateTime _lastTrafficTime = DateTime.Now;
+
+        // ★★★ [Fix BF6] 游戏模式：检测到受反作弊保护的游戏时切换无内核采集 ★★★
+        private volatile bool _gameModeActive = false;             // 当前是否处于无内核模式（PawnIO 已卸载）
+        private DateTime _gameExitGraceUntil = DateTime.MinValue;  // 游戏退出后的恢复宽限期（防游戏收尾期间抖动）
+        private CancellationTokenSource? _gameModeCts;             // 检测循环取消源
         #endregion
 
         #region Public Properties
         // [新增] 允许 UI 层访问原始硬件树（用于硬件信息面板）
         public IComputer ComputerInstance => _computer;
         public object SyncLock => _lock;
+
+        // [Fix BF6] 当前是否处于游戏模式（供设置页/后续 UI 显示）
+        public bool IsGameModeActive => _gameModeActive;
         #endregion
 
         #region Constructor
@@ -86,6 +95,11 @@ namespace LiteMonitor.src.SystemServices
                 IsPsuEnabled = false
             };
 
+            // ★★★ [Fix BF6] 启动即检测：受保护游戏已在运行则直接以无内核模式打开硬件树
+            // （不打开 CPU/主板/内存SPD/磁盘温度组 → 彻底不加载 PawnIO 内核驱动） ★★★
+            _gameModeActive = cfg.GameModeEnabled && FpsCounter.IsProtectedGameRunning();
+            ConfigureKernelGroups(_gameModeActive);
+
             // ★★★ [新增] 1. 初始化计数器管理器 (必须在 ValueProvider 之前) ★★★
             _perfCounterManager = new PerformanceCounterManager();
 
@@ -95,6 +109,9 @@ namespace LiteMonitor.src.SystemServices
             _diskManager = new DiskManager();
             _driverInstaller = new DriverInstaller(cfg, ReloadComputerSafe, ReleaseComputerForDriverInstall);
             _fpsCounter = new FpsCounter(_driverInstaller); // <--- 新增
+
+            // [Fix BF6] 启动即处于游戏模式时，豁免 FpsCounter 的"检测到受保护游戏即停会话"守卫
+            _fpsCounter.SuppressGameGuard = _gameModeActive;
 
             // ★★★ [修改] 2. 将 Manager 注入给 ValueProvider ★★★
             _valueProvider = new HardwareValueProvider(
@@ -111,6 +128,10 @@ namespace LiteMonitor.src.SystemServices
 
             // 3. 异步启动 (唯一优化：不卡UI)
             InitializeAsync();
+
+            // ★★★ [Fix BF6] 启动游戏模式自动检测循环（2 秒一轮） ★★★
+            _gameModeCts = new CancellationTokenSource();
+            _ = Task.Run(() => GameModeWatchLoop(_gameModeCts.Token));
         }
         #endregion
 
@@ -284,6 +305,9 @@ namespace LiteMonitor.src.SystemServices
 
         public void Dispose()
         {
+            // [Fix BF6] 停止游戏模式检测循环
+            try { _gameModeCts?.Cancel(); } catch { }
+
             // ★★★ 核心修复：加锁！防止与正在运行的 UpdateAll() 冲突 ★★★
             lock (_lock)
             {
@@ -316,6 +340,9 @@ namespace LiteMonitor.src.SystemServices
                 _isOpening = true;
                 try
                 {
+                    // [Fix BF6] 完整模式下确保 PawnIO 服务在位（上一次游戏模式退出时可能已停止）
+                    if (!_gameModeActive) SetPawnIOLoaded(true);
+
                     // ★★★ [新增] 启动计数器预热 (不阻塞主 UI) ★★★
                     _perfCounterManager.InitializeAsync();
 
@@ -332,6 +359,11 @@ namespace LiteMonitor.src.SystemServices
                         
                         // ★★★ [新增] 静态化预热：将所有传感器对象存入 Provider 缓存 ★★★
                         _valueProvider.PreCacheAllSensors(_sensorMap);
+
+                        // [Fix BF6] 记录启动时的采集模式（游戏模式/完整模式）
+                        _fpsCounter.Log("[游戏模式] 启动状态: " + (_gameModeActive
+                            ? "受保护游戏运行中，已以无内核模式启动（不加载 PawnIO）"
+                            : "完整模式"));
                     }
 
                     _isOpening = false;
@@ -498,7 +530,10 @@ namespace LiteMonitor.src.SystemServices
                         // LHM 的 Close() 不会清空列表，必须手动 Clear，否则再次 Open 会追加重复硬件
                         _computer.Hardware.Clear();
                     }
-                    
+
+                    // [Fix BF6] 重开前按当前游戏模式重设内核硬件组开关（进入/退出游戏模式都走这里）
+                    ConfigureKernelGroups(_gameModeActive);
+
                     _computer.Open();
                     WarmUpMotherboardSensors();
                     WarmUpBatterySensors();
@@ -544,6 +579,112 @@ namespace LiteMonitor.src.SystemServices
             }
             catch { }
         }
+
+        #region Game Mode (游戏模式 · Fix BF6)
+        // 背景：EA Javelin 等内核反作弊会检测第三方内核驱动的使用（实测 PawnIO 触发静默终止游戏）。
+        // 关键实验结论：PawnIO 服务不支持运行期停止（sc stop → 1052），驱动模块加载后常驻直到重启；
+        // 但用户关闭 LiteMonitor（驱动仍加载、零使用）时游戏 30 分钟稳定 —— 证明触发条件是
+        // "驱动的句柄/IO 活动"而非"模块存在"。因此游戏模式的实现是：
+        // 关闭全部内核依赖硬件组（CPU/主板/内存SPD/磁盘温度）→ LHM 释放所有内核句柄、零 IO，
+        // 驱动模块允许保持加载。恢复时重新打开硬件组并确保 PawnIO 服务在位。
+
+        private async Task GameModeWatchLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(2000, token);
+                    if (_isOpening || _isReloading) continue;
+
+                    if (!_cfg.GameModeEnabled)
+                    {
+                        if (_gameModeActive) ExitGameMode("游戏模式已关闭");
+                        continue;
+                    }
+
+                    if (FpsCounter.IsProtectedGameRunning())
+                    {
+                        // 游戏在跑：持续刷新宽限期，并确保处于无内核模式
+                        _gameExitGraceUntil = DateTime.Now.AddSeconds(30);
+                        if (!_gameModeActive) EnterGameMode();
+                    }
+                    else if (_gameModeActive && DateTime.Now > _gameExitGraceUntil)
+                    {
+                        ExitGameMode("游戏已退出");
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch { }
+            }
+        }
+
+        private void EnterGameMode()
+        {
+            _gameModeActive = true;
+            _fpsCounter.SuppressGameGuard = true; // 游戏模式下保留 FPS ETW 会话（实测 ETW 非闪退诱因）
+            _fpsCounter.Log("[游戏模式] 检测到受保护游戏，切换无内核采集：断开内核驱动访问，暂停 CPU 温度/功耗、主板、磁盘温度（CPU占用/频率、GPU、网速、FPS 不受影响）");
+            ReloadComputerSafe();
+        }
+
+        private void ExitGameMode(string reason)
+        {
+            _gameModeActive = false;
+            _fpsCounter.SuppressGameGuard = false;
+            // 先把 PawnIO 服务拉起来，再重开硬件树（LHM 打开 CPU 组时会按需加载，这里提前启动降低失败率）
+            SetPawnIOLoaded(true);
+            _fpsCounter.Log("[游戏模式] " + reason + "，恢复正常采集：重新加载 PawnIO，恢复 CPU 温度/功耗、主板、磁盘温度");
+            ReloadComputerSafe();
+        }
+
+        /// <summary>[Fix BF6] 设置开关变更时立即响应（检测循环 2 秒内也会自行收敛）</summary>
+        public void OnGameModeSettingChanged()
+        {
+            try
+            {
+                if (_isOpening || _isReloading) return;
+                if (!_cfg.GameModeEnabled && _gameModeActive) ExitGameMode("游戏模式已关闭");
+                else if (_cfg.GameModeEnabled && !_gameModeActive && FpsCounter.IsProtectedGameRunning()) EnterGameMode();
+            }
+            catch { }
+        }
+
+        /// <summary>[Fix BF6] 按当前游戏模式设置内核硬件组开关。
+        /// 无内核模式关闭 CPU/主板/内存SPD/磁盘温度（PawnIO 依赖组，零内核句柄/IO），
+        /// 保留 GPU(厂商用户态API)/网络(计数器)/电池</summary>
+        private void ConfigureKernelGroups(bool gameMode)
+        {
+            bool kernel = !gameMode;
+            _computer.IsCpuEnabled = kernel;
+            _computer.IsMotherboardEnabled = kernel;
+            _computer.IsMemoryEnabled = kernel;
+            _computer.IsStorageEnabled = kernel;
+            _computer.IsGpuEnabled = true;
+            _computer.IsNetworkEnabled = true;
+            _computer.IsBatteryEnabled = true;
+            // 控制器扫描仅服务风扇/水泵（依赖主板组），游戏模式下无意义，强制关闭
+            _computer.IsControllerEnabled = kernel && ShouldEnableController();
+        }
+
+        /// <summary>[Fix BF6] 确保 PawnIO 服务在位（恢复完整模式前调用）。
+        /// 注意：该服务不支持运行期停止（sc stop → 1052），只做启动方向的保障</summary>
+        private static void SetPawnIOLoaded(bool load)
+        {
+            if (!load) return; // 运行期无法卸载，跳过
+            try
+            {
+                using var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "sc.exe",
+                    Arguments = "start PawnIO",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                p?.WaitForExit(3000);
+            }
+            catch { }
+        }
+        #endregion
 
         // =========================================================
         // ★★★ 核心修复：禁用所有传感器的历史记录 ★★★

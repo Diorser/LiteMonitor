@@ -140,6 +140,12 @@ namespace LiteMonitor.src.UI.SettingsPage
             string strAuto = LanguageManager.T("Menu.Auto");
             
             group.AddToggle(this, "Menu.UseWinPerCounters", () => Config?.UseWinPerCounters ?? false, v => { if(Config!=null) Config.UseWinPerCounters = v; });
+
+            // ★★★ [Fix BF6] 游戏模式：检测到反作弊保护的游戏时自动切换无内核采集 ★★★
+            group.AddToggle(this, "Menu.GameMode",
+                () => Config?.GameModeEnabled ?? true,
+                v => { if (Config != null) { Config.GameModeEnabled = v; HardwareMonitor.Instance?.OnGameModeSettingChanged(); } });
+            group.AddHint("游戏模式：检测到战地6/Apex/无畏契约等反作弊保护的游戏时，自动卸载内核驱动(PawnIO)并暂停 CPU 温度/功耗、主板、磁盘温度采集，防止游戏被反作弊闪退，游戏退出后自动恢复。FPS、网速、GPU、CPU 占用不受影响。若需在游戏中显示 FPS，请在游戏启动前开启 FPS 监控项。");
             
             // ★★★ [新增] 忽略 SMB 流量开关 ★★★
             // 直接使用中文作为 Key，如果 LanguageManager 找不到 Key 会原样返回

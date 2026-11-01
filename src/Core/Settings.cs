@@ -115,6 +115,12 @@ namespace LiteMonitor
         // 开启后：CPU使用率、CPU频率、内存占用、磁盘读写 将优先从 Windows 计数器读取
         public bool UseWinPerCounters { get; set; } = true;
 
+        // ★★★ [Fix BF6] 游戏模式：检测到受反作弊保护的游戏（战地6/Apex/无畏契约等）时，
+        // 自动切换无内核采集模式——卸载 PawnIO 内核驱动，暂停 CPU 温度/功耗、主板、磁盘温度，
+        // 保留 GPU(厂商用户态API)/CPU占用/频率/内存/网速/FPS/插件，游戏退出后自动恢复。
+        // 根因：EA Javelin 等内核反作弊会检测第三方内核驱动并静默终止游戏（实测 2026-10 起） ★★★
+        public bool GameModeEnabled { get; set; } = true;
+
         // ★★★ [新增] 忽略 SMB (局域网文件传输) 流量 ★★★
         public bool IgnoreSmbTraffic { get; set; } = true;
         

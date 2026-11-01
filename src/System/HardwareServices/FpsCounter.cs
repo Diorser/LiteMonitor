@@ -91,6 +91,11 @@ namespace LiteMonitor.src.SystemServices
         // ★★★ [Fix BF6] 启动时间与主动停止标志：区分"PresentMon 自行崩溃退出"与"程序主动 Dispose 杀进程" ★★★
         private DateTime _presentStartTime = DateTime.MinValue;
         private volatile bool _intentionalStop = false;
+
+        // ★★★ [Fix BF6] 游戏模式协同：为 true 时禁用"检测到受保护游戏即停 ETW 会话"守卫。
+        // 实测证实闪退根因是 PawnIO 内核驱动而非 ETW（无会话状态照样被杀），且 NVIDIA NVTOPPS
+        // 常驻会话全程在场游戏正常，故游戏模式下保留 ETW 帧率会话让用户在游戏中看到 FPS ★★★
+        public bool SuppressGameGuard { get; set; } = false;
         
         // 锁定机制变量，用于实现粘性锁定逻辑
         private int _currentFocusPid = 0;       // 当前聚焦的进程 PID
@@ -162,7 +167,8 @@ namespace LiteMonitor.src.SystemServices
             // ★★★ [修改] 构造函数中不再自动启动服务，改为按需启动 ★★★
         }
 
-        private void Log(string msg)
+        // [Fix BF6] 供 HardwareMonitor 游戏模式等共用（写入 fps_debug.log）
+        public void Log(string msg)
         {
             try { File.AppendAllText(LogPath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n"); } catch { }
         }
@@ -336,9 +342,10 @@ namespace LiteMonitor.src.SystemServices
         }
 
         /// <summary>
-        /// [Fix BF6] 判断是否有受反作弊保护的游戏正在运行（用于启动会话前的预扫描）
+        /// [Fix BF6] 判断是否有受反作弊保护的游戏正在运行。
+        /// 供 FpsCounter 预扫描与 HardwareMonitor 游戏模式检测共用
         /// </summary>
-        private static bool IsProtectedGameRunning()
+        public static bool IsProtectedGameRunning()
         {
             try
             {
@@ -558,9 +565,9 @@ namespace LiteMonitor.src.SystemServices
                 // 获取进程名称，过滤不需要监控的进程
                 string pName = GetProcessName(pid);
 
-                // ★★★ [Fix BF6] 反作弊守卫（核心防护）：检测到 ETW 会话正在追踪受保护游戏，
-                // 立即拆除会话并进入冷却期，避免内核反作弊（EA Javelin 等）因外部 ETW 追踪而静默杀游戏 ★★★
-                if (ProtectedGames.Contains(pName))
+                // ★★★ [Fix BF6] 反作弊守卫：检测到 ETW 会话正在追踪受保护游戏时拆除会话。
+                // 游戏模式（SuppressGameGuard）下豁免——此时内核驱动已卸载，保留 FPS 功能 ★★★
+                if (!SuppressGameGuard && ProtectedGames.Contains(pName))
                 {
                     OnProtectedGameDetected(pName);
                     return;

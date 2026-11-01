@@ -79,6 +79,7 @@
     "DATA.DayDown": "⏬"
   },
   "Menu": {
+    "GameMode": "Игровой режим",
     "__Comment_Global__": "--- Global ---",
     "SettingsPanel": "Настройки",
     "About": "О прог.",

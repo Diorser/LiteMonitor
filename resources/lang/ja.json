@@ -80,6 +80,7 @@
     "DATA.DayDown": "⏬"
   },
   "Menu": {
+    "GameMode": "ゲームモード",
     "__Comment_Global__": "--- Global ---",
     "SettingsPanel": "設定パネル",
     "About": "アプリについて",

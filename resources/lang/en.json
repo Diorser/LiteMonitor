@@ -79,6 +79,7 @@
     "BAT.Current": "BCUR"
   },
   "Menu": {
+    "GameMode": "Game Mode",
     "__Comment_Global__": "--- Global ---",
     "SettingsPanel": "Settings",
     "About": "About",
