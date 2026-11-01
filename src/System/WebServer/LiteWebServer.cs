@@ -207,8 +207,11 @@ namespace LiteMonitor.src.WebServer
                 }
                 else
                 {
-                    // 硬件监控项
-                    float? val = hw.Get(item.Key);
+                    // ★★★ [Fix BF6] 可见性门控：仅当监控项在桌面端（面板/任务栏）可见时才向采集层取值。
+                    // 否则即使 FPS 在所有界面隐藏，网页快照也会每秒触发 FpsCounter.GetFps()
+                    // 惰性启动 PresentMon ETW 会话（该会话追踪受反作弊保护的游戏会导致游戏闪退） ★★★
+                    bool visibleAnywhere = item.VisibleInPanel || item.VisibleInTaskbar;
+                    float? val = visibleAnywhere ? hw.Get(item.Key) : (float?)null;
 
                     // [Fix] 恢复过滤逻辑：跳过没有数据的监控项（如台式机的电池），以符合业务屏蔽需求
                     // 布局顺序问题已由 CSS order (gidx) 机制解决，即使数据晚到也会插入正确位置
