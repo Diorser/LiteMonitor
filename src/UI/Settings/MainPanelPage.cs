@@ -96,12 +96,18 @@ namespace LiteMonitor.src.UI.SettingsPage
                 () => Config.PanelWidth + " px",
                 s => Config.PanelWidth = MetricUtils.ParseInt(s));
 
-            // 4. Opacity
+            // 4. Background Opacity
             double[] opacities = { 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6, 0.5, 0.4, 0.3 };
             group.AddCombo(this, "Menu.Opacity",
                 opacities.Select(o => Math.Round(o * 100) + "%"),
                 () => Math.Round(Config.Opacity * 100) + "%",
                 s => Config.Opacity = MetricUtils.ParseDouble(s) / 100.0);
+
+            // 5. Text Opacity
+            group.AddCombo(this, "Menu.TextOpacity",
+                opacities.Select(o => Math.Round(o * 100) + "%"),
+                () => Math.Round(Config.TextOpacity * 100) + "%",
+                s => Config.TextOpacity = MetricUtils.ParseDouble(s) / 100.0);
 
             // 5. Scale
             double[] scales = { 2.0, 1.75, 1.5, 1.25, 1.0, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6, 0.5 };

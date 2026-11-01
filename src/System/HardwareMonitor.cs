@@ -82,8 +82,9 @@ namespace LiteMonitor.src.SystemServices
                 // 开启电池监控
                 IsBatteryEnabled = true,
 
-                // 顺便确保 PSU 也关闭（通常不需要监控电源模块，除非是高端 Corsair 电源）
-                IsPsuEnabled = false
+                // 电源适配器输入功率/电压/电流：PSU 与功率计（无对应硬件的机器会自然跳过）
+                IsPsuEnabled = true,
+                IsPowerMonitorEnabled = true
             };
 
             // ★★★ [新增] 1. 初始化计数器管理器 (必须在 ValueProvider 之前) ★★★
@@ -215,8 +216,15 @@ namespace LiteMonitor.src.SystemServices
                             continue; 
                         }
 
-                        if (hw.HardwareType == HardwareType.Memory && requirements.NeedMem) { hw.Update(); continue; }
-                        if (hw.HardwareType == HardwareType.Battery && requirements.NeedBat) { hw.Update(); continue; }
+                        // 内存条温度可能位于 Memory 的子硬件中，必须整枝更新
+                        if (hw.HardwareType == HardwareType.Memory && requirements.NeedMem) { UpdateWithSubHardware(hw); continue; }
+                        if ((hw.HardwareType == HardwareType.Battery ||
+                             hw.HardwareType == HardwareType.Psu ||
+                             hw.HardwareType == HardwareType.PowerMonitor) && requirements.NeedBat)
+                        {
+                            hw.Update();
+                            continue;
+                        }
 
                         if (hw.HardwareType == HardwareType.Network && requirements.NeedNet)
                         {
@@ -389,11 +397,13 @@ namespace LiteMonitor.src.SystemServices
 
         private void WarmUpBatterySensors()
         {
-            // 电池传感器在新版硬件库中可能需要先 Update 才会稳定暴露数值。
-            // 只预热 Battery，避免恢复启动时全硬件 Update 带来的多显卡/磁盘卡顿。
+            // 电池/电源传感器在新版硬件库中可能需要先 Update 才会稳定暴露数值。
+            // 只预热相关硬件，避免恢复启动时全硬件 Update 带来的多显卡/磁盘卡顿。
             foreach (var hw in _computer.Hardware)
             {
-                if (hw.HardwareType == HardwareType.Battery)
+                if (hw.HardwareType == HardwareType.Battery ||
+                    hw.HardwareType == HardwareType.Psu ||
+                    hw.HardwareType == HardwareType.PowerMonitor)
                 {
                     try { hw.Update(); }
                     catch { }
@@ -444,7 +454,9 @@ namespace LiteMonitor.src.SystemServices
             bool needGpu = forceAll || _cfg.IsAnyEnabled("GPU");
             
             // 4. ★★★ [优化 1] 内存: 如果走了计数器，就不需要 LHM 轮询了 ★★★
-            bool needMem = forceAll || (_cfg.IsAnyEnabled("MEM") && !useCounter);
+            // 但多内存温度 (MEM.Temp@...) 只能从 LHM 读取，必须始终更新
+            bool needMemTemp = forceAll || _cfg.IsAnyEnabled("MEM.Temp");
+            bool needMem = forceAll || needMemTemp || (_cfg.IsAnyEnabled("MEM") && !useCounter);
             
             // 5. 网络: 保持不变
             bool needNet = forceAll || _cfg.IsAnyEnabled("NET") || _cfg.IsAnyEnabled("DATA");
@@ -659,6 +671,8 @@ namespace LiteMonitor.src.SystemServices
         public static List<string> ListAllFans() => HardwareScanner.ListAllFans(Instance!._computer, Instance!._lock);
 
         public static List<string> ListAllMoboTemps() => HardwareScanner.ListAllMoboTemps(Instance!._computer, Instance!._lock);
+
+        public static List<string> ListAllMemoryTemps() => HardwareScanner.ListAllMemoryTemps(Instance!._computer, Instance!._lock);
         #endregion
 
         #region Inner Visitors

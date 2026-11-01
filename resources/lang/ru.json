@@ -8,7 +8,7 @@
     "DISK": "💽Диск",
     "NET": "🌐Сеть",
     "DATA": "📈Трафик",
-    "BAT": "🔋Батарея"
+    "BAT": "🔌Питание"
   },
   "Items": {
     "DASH.HOST": "Хост",
@@ -19,6 +19,9 @@
     "BAT.Power": "Ватты Бат",
     "BAT.Voltage": "Вольт Бат",
     "BAT.Current": "Ампер Бат",
+    "BAT.InputPower": "Мощн. вход",
+    "BAT.InputVoltage": "Напряж. вход",
+    "BAT.InputCurrent": "Ток вход",
     "CPU.Load": "Загрузка CPU",
     "CPU.Temp": "Темп CPU",
     "CPU.Clock": "Частота CPU",
@@ -53,6 +56,9 @@
     "BAT.Power": "🔋",
     "BAT.Voltage": "🔋",
     "BAT.Current": "🔋",
+    "BAT.InputPower": "🔌",
+    "BAT.InputVoltage": "🔌",
+    "BAT.InputCurrent": "🔌",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",
@@ -138,7 +144,8 @@
     "Horizontal": "Полоса",
     "Width": "Ширина",
     "Scale": "Масштаб",
-    "Opacity": "Прозр.",
+    "Opacity": "Прозр. фона",
+    "TextOpacity": "Прозр. текста",
     "Percent": "Процент",
     "UsedSize": "Размер",
 

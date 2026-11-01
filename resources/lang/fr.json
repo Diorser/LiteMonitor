@@ -9,7 +9,7 @@
     "DISK": "💽Disque",
     "NET": "🌐Réseau",
     "DATA": "📈Données",
-    "BAT": "🔋Batterie"
+    "BAT": "🔌Alimentation"
   },
   "Items": {
     "DASH.HOST": "Hôte",
@@ -20,6 +20,9 @@
     "BAT.Power": "Watts Batt",
     "BAT.Voltage": "Volt Batt",
     "BAT.Current": "Amp Batt",
+    "BAT.InputPower": "Puiss. Entrée",
+    "BAT.InputVoltage": "Tens. Entrée",
+    "BAT.InputCurrent": "Cour. Entrée",
     "CPU.Load": "Usage CPU",
     "CPU.Temp": "Temp CPU",
     "CPU.Clock": "Fréq CPU",
@@ -54,6 +57,9 @@
     "BAT.Power": "🔋",
     "BAT.Voltage": "🔋",
     "BAT.Current": "🔋",
+    "BAT.InputPower": "🔌",
+    "BAT.InputVoltage": "🔌",
+    "BAT.InputCurrent": "🔌",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",
@@ -139,7 +145,8 @@
     "Horizontal": "Barre",
     "Width": "Largeur",
     "Scale": "Échelle",
-    "Opacity": "Opacité",
+    "Opacity": "Opacité fond",
+    "TextOpacity": "Opacité texte",
     "Percent": "Pourcent",
     "UsedSize": "Taille",
 

@@ -118,8 +118,7 @@ namespace LiteMonitor
             _form.BackColor = ThemeManager.ParseColor(t.Color.Background);
 
             _timer.Interval = Math.Max(80, _cfg.RefreshMs);
-            _form.Invalidate();
-            _form.Update();
+            MainForm.RenderNow();
         }
 
         public void RebuildLayout()
@@ -127,51 +126,61 @@ namespace LiteMonitor
             BuildMetrics();
             BuildHorizontalColumns(); 
             _layoutDirty = true;
-            _form.Invalidate();
-            _form.Update();
+            MainForm.RenderNow();
         }
 
         public void SetDragging(bool dragging) => _dragging = dragging;
 
-        public void Render(Graphics g)
+        /// <summary>
+        /// 确保布局已按最新数据计算，并同步窗口尺寸。
+        /// 分层窗口渲染必须在创建位图前调用，以获得最终尺寸。
+        /// </summary>
+        public Size EnsureLayout()
         {
             var t = ThemeManager.Current;
             _layout ??= new UILayout(t);
 
-            // === 横屏模式 ===
             if (_cfg.HorizontalMode)
             {
                 _hxLayout ??= new HorizontalLayout(t, _form.Width, LayoutMode.Horizontal);
-
-                // [通用方案] 动态检测是否需要重新计算布局
-                // 移至 Tick() 中低频检查，避免 Render 高频调用
                 if (_layoutDirty)
                 {
                     int h = _hxLayout.Build(_hxColsHorizontal);
-                    // 同样建议横屏模式也使用 ClientSize
-                    // _form.Width = ... 
-                    // _form.Height = h;
                     _form.ClientSize = new Size(_hxLayout.PanelWidth, h);
                     _layoutDirty = false;
                 }
-                HorizontalRenderer.Render(g, t, _hxColsHorizontal, _hxLayout.PanelWidth);
-                return;
             }
-
-            // === 竖屏模式 ===
-            if (_layoutDirty)
+            else if (_layoutDirty)
             {
                 int h = _layout.Build(_groups);
-                // [修复2补充] 设置高度时也使用 ClientSize，确保高度精准
                 _form.ClientSize = new Size(_form.ClientSize.Width, h);
                 _layoutDirty = false;
             }
 
-            // === [关键修改] 获取布局中的看板信息 ===
-            // var dashboard = _layout.Dashboard; // 已移除
-            // ==========================================
+            return _form.ClientSize;
+        }
 
-            UIRenderer.Render(g, _groups, t);
+        /// <param name="fadeAlpha">启动渐入系数（0-1），同时作用于背景与文字</param>
+        public void Render(Graphics g, double fadeAlpha = 1.0)
+        {
+            var t = ThemeManager.Current;
+            EnsureLayout();
+
+            double fade = Math.Clamp(fadeAlpha, 0.0, 1.0);
+
+            // 背景与文字透明度分离：背景走面板填充，文字单独控制
+            double bgAlpha = Math.Clamp(_cfg.Opacity, 0.0, 1.0) * fade;
+            double textAlpha = Math.Clamp(_cfg.TextOpacity, 0.0, 1.0) * fade;
+
+            // === 横屏模式 ===
+            if (_cfg.HorizontalMode)
+            {
+                HorizontalRenderer.Render(g, t, _hxColsHorizontal, _hxLayout!.PanelWidth, bgAlpha, textAlpha);
+                return;
+            }
+
+            // === 竖屏模式 ===
+            UIRenderer.Render(g, _groups, t, bgAlpha, textAlpha);
         }
 
         private bool _busy = false;
@@ -249,7 +258,8 @@ namespace LiteMonitor
                     }
                 }
 
-                _form.Invalidate();   
+                // 分层窗口不接收 WM_PAINT，必须直接渲染
+                MainForm.RenderNow();
             }
             finally
             {

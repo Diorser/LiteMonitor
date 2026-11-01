@@ -164,11 +164,25 @@ namespace LiteMonitor.src.SystemServices
                 return null;
             }
 
+            // 硬件可能位于子硬件中（如内存条 DIMM），因此按名称递归查找
+            IHardware? FindByName(IHardware h)
+            {
+                if (string.Equals(h.Name, targetHardwareName, StringComparison.OrdinalIgnoreCase))
+                    return h;
+                foreach (var sub in h.SubHardware)
+                {
+                    var found = FindByName(sub);
+                    if (found != null) return found;
+                }
+                return null;
+            }
+
             foreach (var hw in _computer.Hardware)
             {
-                if (hw.Name == targetHardwareName)
+                var target = FindByName(hw);
+                if (target != null)
                 {
-                    return SearchBranch(hw);
+                    return SearchBranch(target);
                 }
             }
             return null;
@@ -441,6 +455,10 @@ namespace LiteMonitor.src.SystemServices
                     case "BAT.Power":
                     case "BAT.Voltage":
                     case "BAT.Current":
+                    // 电源适配器输入
+                    case "BAT.InputPower":
+                    case "BAT.InputVoltage":
+                    case "BAT.InputCurrent":
                         result = BatteryService.GetBatteryValue(key, _manualSensorCache);
                         break;
 
@@ -489,6 +507,16 @@ namespace LiteMonitor.src.SystemServices
                             if (result == null)
                             {
                                 result = _diskManager.GetBestValue(key, _computer, _cfg, _lastValidMap, _lock);
+                            }
+                        }
+                        else if (key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // ★★★ [新增] 多内存温度：按智能名定位内存条温度传感器，读取交给通用兜底 ★★★
+                            if (!_manualSensorCache.ContainsKey(key))
+                            {
+                                var memSensor = FindSensorReverse(
+                                    Settings.GetMemoryNameFromTempKey(key), SensorType.Temperature);
+                                if (memSensor != null) _manualSensorCache[key] = memSensor;
                             }
                         }
                         else if (key.Contains("Clock") || key.Contains("Power"))

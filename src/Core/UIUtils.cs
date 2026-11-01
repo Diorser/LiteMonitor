@@ -51,6 +51,7 @@ namespace LiteMonitor.src.Core
         private static readonly Dictionary<string, SolidBrush> _brushCache = new(16);
         private static readonly Dictionary<string, Pen> _penCache = new(16);
         private static readonly Dictionary<string, Font> _fontCache = new(16);
+        private static readonly Dictionary<string, StringFormat> _formatCache = new(8);
         private static readonly object _brushLock = new object();
         private const int MAX_BRUSH_CACHE = 32;
 
@@ -154,6 +155,53 @@ namespace LiteMonitor.src.Core
         // 5. Drawing Helpers
         // ============================================================
 
+        /// <summary>
+        /// 按比例调整颜色的不透明度（保留原有 Alpha）
+        /// </summary>
+        public static Color WithAlpha(Color c, double alpha)
+        {
+            int a = (int)Math.Round(Math.Clamp(alpha, 0.0, 1.0) * 255 * c.A / 255.0);
+            return Color.FromArgb(Math.Clamp(a, 0, 255), c.R, c.G, c.B);
+        }
+
+        private static StringFormat GetStringFormat(StringAlignment align, StringAlignment lineAlign)
+        {
+            string key = $"{align}_{lineAlign}";
+            lock (_brushLock)
+            {
+                if (!_formatCache.TryGetValue(key, out var sf))
+                {
+                    sf = new StringFormat(StringFormat.GenericTypographic)
+                    {
+                        Alignment = align,
+                        LineAlignment = lineAlign,
+                        Trimming = StringTrimming.None,
+                        FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip
+                    };
+                    _formatCache[key] = sf;
+                }
+                return sf;
+            }
+        }
+
+        /// <summary>
+        /// 使用 GDI+ 绘制文本（支持逐像素 Alpha，用于分层窗口）。
+        /// 注意：TextRenderer 属于 GDI，不会写入 Alpha 通道，因此透明文字必须走 DrawString。
+        /// </summary>
+        public static void DrawText(Graphics g, string text, Font font, Rectangle bounds, Color color,
+            StringAlignment align = StringAlignment.Near,
+            StringAlignment lineAlign = StringAlignment.Center,
+            double alpha = 1.0)
+        {
+            if (string.IsNullOrEmpty(text) || bounds.Width <= 0 || bounds.Height <= 0) return;
+
+            Color c = WithAlpha(color, alpha);
+            if (c.A == 0) return;
+
+            using var brush = new SolidBrush(c);
+            g.DrawString(text, font, brush, bounds, GetStringFormat(align, lineAlign));
+        }
+
         public static GraphicsPath RoundRect(Rectangle r, int radius)
         {
             GraphicsPath p = new GraphicsPath();
@@ -177,22 +225,23 @@ namespace LiteMonitor.src.Core
             return p;
         }
 
-        public static void FillRoundRect(Graphics g, Rectangle r, int radius, Color c)
+        public static void FillRoundRect(Graphics g, Rectangle r, int radius, Color c, double alpha = 1.0)
         {
             if (r.Width <= 0 || r.Height <= 0) return;
-            using var brush = new SolidBrush(c);
+            using var brush = new SolidBrush(WithAlpha(c, alpha));
             using var path = RoundRect(r, radius);
             g.FillPath(brush, path);
         }
 
-        public static void DrawBar(Graphics g, MetricItem item, Theme t)
+        public static void DrawBar(Graphics g, MetricItem item, Theme t, double alpha = 1.0)
         {
             if (item.BarRect.Width <= 0 || item.BarRect.Height <= 0) return;
 
             // Background
             using (var bgPath = RoundRect(item.BarRect, item.BarRect.Height / 2))
+            using (var bgBrush = new SolidBrush(WithAlpha(ThemeManager.ParseColor(t.Color.BarBackground), alpha)))
             {
-                g.FillPath(GetBrush(t.Color.BarBackground), bgPath);
+                g.FillPath(bgBrush, bgPath);
             }
 
             // 2. Value Bar
@@ -211,7 +260,7 @@ namespace LiteMonitor.src.Core
                 if (bar.Width > 0 && bar.Height > 0)
                 {
                     using (var fgPath = RoundRect(bar, bar.Height / 2))
-                    using (var brush = new SolidBrush(barColor))
+                    using (var brush = new SolidBrush(WithAlpha(barColor, alpha)))
                     {
                         g.FillPath(brush, fgPath);
                     }

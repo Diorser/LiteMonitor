@@ -1,7 +1,6 @@
 {
   "version": 1,
   "dependencies": {
-    "net8.0": {},
-    "net8.0/win-x64": {}
+    "net8.0": {}
   }
 }

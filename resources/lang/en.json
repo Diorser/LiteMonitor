@@ -8,7 +8,7 @@
     "DISK": "💽Disk",
     "NET": "🌐Net",
     "DATA": "📈Traffic",
-    "BAT": "🔋Battery"
+    "BAT": "🔌Power"
   },
   "Items": {
     "DASH.HOST": "Hostname",
@@ -19,6 +19,9 @@
     "BAT.Power": "Bat Pwr",
     "BAT.Voltage": "Bat Volt",
     "BAT.Current": "Bat Curr",
+    "BAT.InputPower": "Pwr In",
+    "BAT.InputVoltage": "Volt In",
+    "BAT.InputCurrent": "Curr In",
     "CPU.Load": "CPU Usage",
     "CPU.Temp": "CPU Temp",
     "CPU.Clock": "CPU Clock",
@@ -76,7 +79,10 @@
     "BAT.Percent": "BAT",
     "BAT.Power": "BPWR",
     "BAT.Voltage": "BVOL",
-    "BAT.Current": "BCUR"
+    "BAT.Current": "BCUR",
+    "BAT.InputPower": "IPWR",
+    "BAT.InputVoltage": "IVOL",
+    "BAT.InputCurrent": "ICUR"
   },
   "Menu": {
     "__Comment_Global__": "--- Global ---",
@@ -138,7 +144,8 @@
     "Horizontal": "Bar",
     "Width": "Width",
     "Scale": "Scale",
-    "Opacity": "Opacity",
+    "Opacity": "Background Opacity",
+    "TextOpacity": "Text Opacity",
     "Percent": "Percent",
     "UsedSize": "Used Size",
 

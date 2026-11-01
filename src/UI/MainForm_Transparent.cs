@@ -4,6 +4,8 @@ using LiteMonitor.src.UI;
 using LiteMonitor.src.UI.Helpers;
 using System;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -26,6 +28,12 @@ namespace LiteMonitor
         private Point _dragOffset;
         private bool _uiDragging = false;
 
+        // ==== 分层窗口渲染 ====
+        // 背景与文字透明度需要逐像素 Alpha，Form.Opacity 只能整体淡化，因此改用 UpdateLayeredWindow。
+        private Bitmap? _renderBitmap;
+        private float _renderBitmapDpi = 0f;
+        private double _fadeAlpha = 0.0;
+
         // 防止 Win11 自动隐藏无边框 + 无任务栏窗口
         protected override CreateParams CreateParams
         {
@@ -34,6 +42,8 @@ namespace LiteMonitor
                 var cp = base.CreateParams;
                 cp.ExStyle |= 0x80; // WS_EX_TOOLWINDOW
                 cp.ExStyle &= ~0x00040000; // WS_EX_APPWINDOW
+                // 始终启用分层窗口（逐像素 Alpha 的前提）
+                cp.ExStyle |= 0x80000; // WS_EX_LAYERED
                 if (_cfg != null && _cfg.TopMost)
                 {
                     cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST，防止句柄重建后丢失置顶样式
@@ -43,7 +53,6 @@ namespace LiteMonitor
                 if (_cfg != null && _cfg.ClickThrough)
                 {
                     cp.ExStyle |= 0x20; // WS_EX_TRANSPARENT
-                    cp.ExStyle |= 0x80000; // WS_EX_LAYERED (必须配合才能实现完整穿透)
                 }
 
                 return cp;
@@ -157,17 +166,14 @@ namespace LiteMonitor
 
             _winHelper.InitializeStyle(_cfg.TopMost, _cfg.ClickThrough);
 
-            // 原始代码还原：这里需要手动设置 Opacity = 0，
-            // 但是要在构造函数里设置，和原始代码保持一致的位置
-            this.Opacity = 0; 
+            // 分层窗口：初始完全透明，由渐入动画逐帧提高 Alpha
+            _fadeAlpha = 0.0;
 
             _bizHelper = new MainFormBizHelper(this, _cfg, _ui, _winHelper);
             _bizHelper.Initialize();
 
-            // === 渐入透明度 (还原原始代码逻辑) ===
-            // 原始代码是在构造函数末尾启动 Task
-            // 之前解耦时移到了 OnShown 里，这可能导致时序差异（OnShown 之前会有一瞬间的默认绘制）
-            _winHelper.StartFadeIn(_cfg.Opacity);
+            // === 渐入透明度 ===
+            _winHelper.StartFadeIn();
 
             // 3. 事件绑定
             BindEvents();
@@ -211,8 +217,9 @@ namespace LiteMonitor
             
             // DPI / Resize
             this.Resize += (_, __) => _winHelper.ApplyRoundedCorners();
-            this.VisibleChanged += (_, __) => { if (Visible) _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true); };
-            this.HandleCreated += (_, __) => _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true);
+            this.VisibleChanged += (_, __) => { if (Visible) { _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true); RenderNow(); } };
+            // 句柄重建会丢失分层窗口内容，必须立即重绘
+            this.HandleCreated += (_, __) => { _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true); RenderNow(); };
         }
 
         public void ShowMainWindow()
@@ -280,18 +287,74 @@ namespace LiteMonitor
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
-            _ui?.Render(e.Graphics);
+            // 分层窗口的内容由 UpdateLayeredWindow 提供，这里不再使用 e.Graphics
+            RenderLayered();
         }
 
         protected override void OnPaintBackground(PaintEventArgs e) { }
+
+        /// <summary>
+        /// 由渐入动画调用，设置整体淡入系数并重绘
+        /// </summary>
+        public void SetFadeAlpha(double alpha)
+        {
+            _fadeAlpha = Math.Clamp(alpha, 0.0, 1.0);
+            RenderNow();
+        }
+
+        /// <summary>
+        /// 透明度设置变更后立即重绘（背景/文字均由渲染层读取配置）
+        /// </summary>
+        public void RefreshAppearance() => RenderNow();
+
+        /// <summary>
+        /// 立即渲染一帧。
+        /// UpdateLayeredWindow 分层窗口不会再收到 WM_PAINT，因此所有刷新都必须直接驱动渲染，
+        /// 不能依赖 Invalidate()/Update()。
+        /// </summary>
+        public void RenderNow() => RenderLayered();
+
+        /// <summary>
+        /// 渲染到 32bpp 位图并通过 UpdateLayeredWindow 提交，实现文字与背景独立透明度
+        /// </summary>
+        private void RenderLayered()
+        {
+            if (_ui == null || _winHelper == null || IsDisposed || !IsHandleCreated) return;
+
+            // 布局可能改变窗口尺寸，必须在创建位图前完成
+            var size = _ui.EnsureLayout();
+            if (size.Width <= 0 || size.Height <= 0) return;
+
+            // 字体只按 UIScale 缩放，DPI 缩放由绘制表面承担，
+            // 因此位图必须使用窗体当前 DPI，否则高 DPI 下文字会偏小、与布局错位。
+            float dpi = DeviceDpi > 0 ? DeviceDpi : 96f;
+
+            if (_renderBitmap == null || _renderBitmap.Size != size || Math.Abs(_renderBitmapDpi - dpi) > 0.1f)
+            {
+                _renderBitmap?.Dispose();
+                // PArgb：像素为预乘 Alpha，符合 UpdateLayeredWindow(AC_SRC_ALPHA) 的要求
+                _renderBitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppPArgb);
+                _renderBitmap.SetResolution(dpi, dpi);
+                _renderBitmapDpi = dpi;
+            }
+
+            using (var g = Graphics.FromImage(_renderBitmap))
+            {
+                g.Clear(Color.Transparent);
+                // 透明表面上使用 GDI+ 抗锯齿，避免 ClearType 产生有色边缘
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                _ui.Render(g, _fadeAlpha);
+            }
+
+            _winHelper.UpdateLayeredWindow(_renderBitmap);
+        }
 
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
             _ui?.ApplyTheme(_cfg.Skin);
             _winHelper.ApplyRoundedCorners();
-            this.Invalidate();
+            RenderNow();
         }
 
         protected override void OnShown(EventArgs e)
@@ -301,7 +364,8 @@ namespace LiteMonitor
             // 恢复可见性
             if (_cfg.HideMainForm) this.Hide();
             
-            this.Update();
+            // 分层窗口没有 WM_PAINT，用直接渲染代替 Update()
+            RenderNow();
             
             // 恢复位置
             _bizHelper.RestorePos();
@@ -355,6 +419,9 @@ namespace LiteMonitor
             
             _ui?.Dispose();
             _bizHelper.Dispose();
+
+            _renderBitmap?.Dispose();
+            _renderBitmap = null;
         }
     }
 }

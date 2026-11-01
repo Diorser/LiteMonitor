@@ -27,6 +27,12 @@ namespace LiteMonitor.src.SystemServices
             {
                 float val = sensor.Value.Value;
 
+                // 电源适配器输入值不需要符号修正，保持原始读数
+                if (key == "BAT.InputPower" || key == "BAT.InputVoltage" || key == "BAT.InputCurrent")
+                {
+                    return val;
+                }
+
                 // 符号修正：充电时功耗/电流应为正号，放电时为负号
                 if (key == "BAT.Power" || key == "BAT.Current")
                 {

@@ -24,6 +24,7 @@ namespace LiteMonitor.src.UI.SettingsPage
         private Button _btnTabMain;
         private Button _btnTabBar;
         private Button _btnAddDisk;
+        private Button _btnAddMemory;
         private LiteCheck _chkLinkHorizontal;
         private LiteCheck _chkOnlyVisible;
         
@@ -91,6 +92,15 @@ namespace LiteMonitor.src.UI.SettingsPage
             };
             _btnAddDisk.Location = new Point(_btnTabBar.Right + UIUtils.S(16), UIUtils.S(8));
 
+            // ★★★ 新增：多内存温度添加入口（仅主界面 Tab 显示）★★★
+            _btnAddMemory = CreateTabButton(IsChineseUI() ? "＋ 内存温度" : "＋ RAM Temp", false);
+            _btnAddMemory.ForeColor = UIColors.Primary;
+            _btnAddMemory.Click += (s, e) => ShowAddMemoryTempDialog();
+            // 跟随磁盘温度按钮位置（磁盘按钮会随 Tab 布局变化）
+            _btnAddDisk.LocationChanged += (s, e) => RepositionMemoryButton();
+            _btnAddDisk.SizeChanged += (s, e) => RepositionMemoryButton();
+            RepositionMemoryButton();
+
             _chkLinkHorizontal = new LiteCheck(false, LanguageManager.T("Menu.HorizontalFollowsTaskbar")) 
             {
                 AutoSize = true, Visible = false, ForeColor = UIColors.TextSub, Font = UIFonts.Bold(9F)
@@ -117,7 +127,7 @@ namespace LiteMonitor.src.UI.SettingsPage
                 _chkOnlyVisible.Location = new Point(_chkLinkHorizontal.Left - _chkOnlyVisible.Width - UIUtils.S(20), UIUtils.S(10));
             };
 
-            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _btnAddDisk, _chkLinkHorizontal, _chkOnlyVisible });
+            _tabPanel.Controls.AddRange(new Control[] { _btnTabMain, _btnTabBar, _btnAddDisk, _btnAddMemory, _chkLinkHorizontal, _chkOnlyVisible });
 
             _headerPanel = new Panel
             {
@@ -136,6 +146,12 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private Label CreateHeaderLabel() => new Label { AutoSize = true, ForeColor = UIColors.TextSub, Font = UIFonts.Bold(8F), Visible = true };
         
+        private void RepositionMemoryButton()
+        {
+            if (_btnAddDisk == null || _btnAddMemory == null) return;
+            _btnAddMemory.Location = new Point(_btnAddDisk.Right + UIUtils.S(8), UIUtils.S(8));
+        }
+
         private Button CreateTabButton(string text, bool active)
         {
             // [Fix] Scale Padding for High DPI
@@ -165,6 +181,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             _chkLinkHorizontal.Visible = _isTaskbarTab;
             _chkOnlyVisible.Visible = _isTaskbarTab;
             if (_btnAddDisk != null) _btnAddDisk.Visible = !_isTaskbarTab;
+            if (_btnAddMemory != null) _btnAddMemory.Visible = !_isTaskbarTab;
             
             if (_isTaskbarTab && Config != null)
                 _chkLinkHorizontal.Checked = Config.HorizontalFollowsTaskbar;
@@ -680,6 +697,160 @@ namespace LiteMonitor.src.UI.SettingsPage
             _isLoaded = false;
             _lastDataSignature = "";
             OnShow();
+        }
+
+        private void ShowAddMemoryTempDialog()
+        {
+            if (Config == null) return;
+
+            List<string> temps;
+            try
+            {
+                if (HardwareMonitor.Instance == null) return;
+                temps = HardwareMonitor.ListAllMemoryTemps();
+            }
+            catch { return; }
+
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Config.MonitorItems != null)
+            {
+                foreach (var it in Config.MonitorItems)
+                {
+                    if (it.Key != null && it.Key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                        existing.Add(Settings.GetMemoryNameFromTempKey(it.Key));
+                }
+            }
+
+            var candidates = temps.Where(t => !existing.Contains(t)).ToList();
+            bool zh = IsChineseUI();
+
+            if (candidates.Count == 0)
+            {
+                MessageBox.Show(this,
+                    zh ? (temps.Count == 0
+                        ? "未检测到内存温度传感器（内存条需支持 SPD 温度读取）。"
+                        : "所有内存温度传感器都已添加监控项。")
+                    : (temps.Count == 0
+                        ? "No memory temperature sensors detected (DIMM SPD thermal sensor required)."
+                        : "All memory temperature sensors already have items."),
+                    zh ? "提示" : "Info");
+                return;
+            }
+
+            using var dlg = new Form
+            {
+                Text = zh ? "添加内存温度" : "Add RAM Temperature",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                ClientSize = new Size(UIUtils.S(440), UIUtils.S(340)),
+                BackColor = UIColors.MainBg,
+                ForeColor = UIColors.TextMain,
+                Font = new Font("Microsoft YaHei UI", 9F)
+            };
+
+            var list = new CheckedListBox
+            {
+                Dock = DockStyle.Fill,
+                CheckOnClick = true,
+                BackColor = UIColors.CardBg,
+                ForeColor = UIColors.TextMain,
+                BorderStyle = BorderStyle.FixedSingle,
+                IntegralHeight = false
+            };
+            foreach (var t in candidates) list.Items.Add(t);
+
+            var bottom = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = UIUtils.S(52),
+                BackColor = UIColors.MainBg,
+                Padding = UIUtils.S(new Padding(12, 10, 12, 10))
+            };
+
+            var ok = new Button
+            {
+                Text = zh ? "确定" : "OK",
+                DialogResult = DialogResult.OK,
+                Dock = DockStyle.Right,
+                Width = UIUtils.S(90),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UIColors.Primary,
+                ForeColor = Color.White
+            };
+            var cancel = new Button
+            {
+                Text = zh ? "取消" : "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Dock = DockStyle.Right,
+                Width = UIUtils.S(90),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UIColors.CardBg,
+                ForeColor = UIColors.TextMain
+            };
+            bottom.Controls.Add(ok);
+            bottom.Controls.Add(cancel);
+
+            dlg.Controls.Add(list);
+            dlg.Controls.Add(bottom);
+            dlg.AcceptButton = ok;
+            dlg.CancelButton = cancel;
+
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            var selected = list.CheckedItems.Cast<string>().ToList();
+            if (selected.Count == 0) return;
+
+            AddMemoryTempItems(selected);
+        }
+
+        private void AddMemoryTempItems(List<string> smartNames)
+        {
+            if (Config == null || smartNames == null || smartNames.Count == 0) return;
+            if (Config.MonitorItems == null) Config.MonitorItems = new List<MonitorItemConfig>();
+
+            int sort = Config.MonitorItems.Count == 0 ? 0 : Config.MonitorItems.Max(x => x.SortIndex) + 1;
+            int taskbarSort = Config.MonitorItems.Count == 0 ? 0 : Config.MonitorItems.Max(x => x.TaskbarSortIndex) + 1;
+
+            foreach (var name in smartNames)
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (Config.MonitorItems.Any(x => x.Key.Equals(Settings.MakeMemoryTempKey(name), StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                string label = MakeMemoryLabel(name);
+                Config.MonitorItems.Add(new MonitorItemConfig
+                {
+                    Key = Settings.MakeMemoryTempKey(name),
+                    UserLabel = label,
+                    TaskbarLabel = label,
+                    SortIndex = sort++,
+                    TaskbarSortIndex = taskbarSort++,
+                    // 默认隐藏，由用户在设置中自行勾选显示
+                    VisibleInPanel = false,
+                    VisibleInTaskbar = false
+                });
+            }
+
+            // 重建列表（OnShow 会从 Config.MonitorItems 重新加载）
+            _isLoaded = false;
+            _lastDataSignature = "";
+            OnShow();
+        }
+
+        /// <summary>
+        /// 智能名 "SensorName [HardwareName]" 转成更适合显示的标签
+        /// </summary>
+        private static string MakeMemoryLabel(string smartName)
+        {
+            int idx = smartName.LastIndexOf('[');
+            string sensorName = idx > 0 ? smartName.Substring(0, idx).Trim() : smartName;
+            if (string.IsNullOrWhiteSpace(sensorName) ||
+                sensorName.Equals("Temperature", StringComparison.OrdinalIgnoreCase))
+                return smartName;
+            return sensorName;
         }
 
         private List<MonitorItemConfig> GetLCS(List<MonitorItemConfig> list1, List<MonitorItemConfig> list2)

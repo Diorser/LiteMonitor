@@ -68,7 +68,11 @@ namespace LiteMonitor.src.Core
         public static MetricType GetType(string key)
         {
             if (string.IsNullOrEmpty(key)) return MetricType.Unknown;
-            
+
+            // 多内存温度 MEM.Temp@<内存条名>：必须先于 MEM 判断，否则会被识别为内存负载
+            if (key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                return MetricType.Temperature;
+
             if (key.Equals("FPS", StringComparison.OrdinalIgnoreCase)) return MetricType.FPS;
             if (key.StartsWith("BAT", StringComparison.OrdinalIgnoreCase))
             {
@@ -239,6 +243,7 @@ namespace LiteMonitor.src.Core
             var pStatus = GetPowerStatus();
             string suffix = (
                 key.StartsWith("BAT", StringComparison.OrdinalIgnoreCase) 
+                && key.IndexOf("Input", StringComparison.OrdinalIgnoreCase) < 0
                 && pStatus.AcOnline 
                 && pStatus.IsCharging // <--- 新增条件
                 && context != UnitContext.SettingsPanel 
@@ -426,6 +431,9 @@ namespace LiteMonitor.src.Core
             else if (key == "BAT.Power") max = 100f;
             else if (key == "BAT.Voltage") max = 20f;
             else if (key == "BAT.Current") max = 5f;
+            else if (key == "BAT.InputPower") max = 300f;
+            else if (key == "BAT.InputVoltage") max = 24f;
+            else if (key == "BAT.InputCurrent") max = 15f;
 
             if (max < 1) max = 1;
             double pct = val / max;

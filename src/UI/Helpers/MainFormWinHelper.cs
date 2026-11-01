@@ -94,28 +94,89 @@ namespace LiteMonitor.src.UI.Helpers
         // =================================================================
         // 透明度渐变
         // =================================================================
-        public void StartFadeIn(double targetOpacity)
+        public void StartFadeIn()
         {
-            targetOpacity = Math.Clamp(targetOpacity, 0.1, 1.0);
             _ = Task.Run(async () =>
             {
                 try
                 {
+                    // 构造阶段句柄可能还没创建：等待句柄可用后再开始，否则会直接退出导致整窗 Alpha 停在 0
+                    for (int i = 0; i < 60; i++)
+                    {
+                        if (_form.IsDisposed) return;
+                        if (_form.IsHandleCreated) break;
+                        await Task.Delay(16).ConfigureAwait(false);
+                    }
+                    if (_form.IsDisposed || !_form.IsHandleCreated) return;
+
                     double current = 0;
-                    while (current < targetOpacity)
+                    while (current < 1.0)
                     {
                         await Task.Delay(16).ConfigureAwait(false);
-                        _form.BeginInvoke(new Action(() => 
+                        current += 0.05;
+                        if (current > 1.0) current = 1.0;
+                        double value = current;
+
+                        if (_form.IsDisposed || !_form.IsHandleCreated) break;
+                        try
                         {
-                            current += 0.05;
-                            if (current > targetOpacity) current = targetOpacity;
-                            _form.Opacity = current;
-                        }));
-                        if (current >= targetOpacity) break;
+                            _form.BeginInvoke(new Action(() =>
+                            {
+                                // 分层窗口使用自维护 Alpha，不再依赖 Form.Opacity
+                                if (_form is MainForm main) main.SetFadeAlpha(value);
+                            }));
+                        }
+                        catch { break; }
+
+                        if (value >= 1.0) break;
                     }
                 }
                 catch { }
             });
+        }
+
+        // =================================================================
+        // 分层窗口提交 (逐像素 Alpha)
+        // =================================================================
+        public void UpdateLayeredWindow(Bitmap bitmap)
+        {
+            if (bitmap == null || _form.IsDisposed || !_form.IsHandleCreated) return;
+
+            IntPtr screenDc = GetDC(IntPtr.Zero);
+            IntPtr memDc = CreateCompatibleDC(screenDc);
+            IntPtr hBitmap = IntPtr.Zero;
+            IntPtr oldBitmap = IntPtr.Zero;
+
+            try
+            {
+                hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+                oldBitmap = SelectObject(memDc, hBitmap);
+
+                SIZE size = new SIZE(bitmap.Width, bitmap.Height);
+                POINT srcPoint = new POINT(0, 0);
+                POINT topPoint = new POINT(_form.Left, _form.Top);
+                BLENDFUNCTION blend = new BLENDFUNCTION
+                {
+                    BlendOp = AC_SRC_OVER,
+                    BlendFlags = 0,
+                    SourceConstantAlpha = 255,
+                    AlphaFormat = AC_SRC_ALPHA
+                };
+
+                UpdateLayeredWindow(_form.Handle, screenDc, ref topPoint, ref size,
+                    memDc, ref srcPoint, 0, ref blend, ULW_ALPHA);
+            }
+            catch { }
+            finally
+            {
+                if (hBitmap != IntPtr.Zero)
+                {
+                    SelectObject(memDc, oldBitmap);
+                    DeleteObject(hBitmap);
+                }
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+            }
         }
 
         // =================================================================
@@ -197,6 +258,37 @@ namespace LiteMonitor.src.UI.Helpers
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern int RegisterWindowMessage(string lpString);
         [DllImport("user32.dll", SetLastError = true)] public static extern bool ChangeWindowMessageFilter(uint message, uint dwFlag);
+
+        // 分层窗口
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X; public int Y; public POINT(int x, int y) { X = x; Y = y; } }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SIZE { public int Width; public int Height; public SIZE(int w, int h) { Width = w; Height = h; } }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct BLENDFUNCTION
+        {
+            public byte BlendOp;
+            public byte BlendFlags;
+            public byte SourceConstantAlpha;
+            public byte AlphaFormat;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst,
+            ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
+
+        [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+        [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+        [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr hObject);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
+
+        private const byte AC_SRC_OVER = 0x00;
+        private const byte AC_SRC_ALPHA = 0x01;
+        private const int ULW_ALPHA = 0x00000002;
 
         public const uint MSGFLT_ADD = 1;
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);

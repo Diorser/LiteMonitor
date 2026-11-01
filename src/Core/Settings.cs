@@ -20,7 +20,10 @@ namespace LiteMonitor
         // ====== 界面与行为 ======
         public bool AutoCheckUpdate { get; set; } = true; // ★★★ [新增] 自动检查更新 ★★★
         public bool HorizontalMode { get; set; } = false;
+        // 背景透明度（原整体透明度）
         public double Opacity { get; set; } = 0.85;
+        // 文字透明度，与背景独立
+        public double TextOpacity { get; set; } = 1.0;
         public string Language { get; set; } = "";
         public bool ClickThrough { get; set; } = false;
         public bool AutoHide { get; set; } = true;
@@ -82,6 +85,13 @@ namespace LiteMonitor
         public const int DEFAULT_TB_INNER_BOLD = 8; // 粗字模式标签与值间距默认值（更宽的间距适配粗体）
         public const int DEFAULT_TB_INNER_REGULAR = 6; // 细字模式标签与值间距默认值（紧凑布局）
         public const int DEFAULT_TB_VOFF = 2; // 任务栏垂直内边距默认值（用于垂直居中微调）
+
+        // ★★★ [新增] 多内存温度：监控项 Key 格式 MEM.Temp@<内存条名> ★★★
+        public const string MemoryTempKeyPrefix = "MEM.Temp@";
+        public static string MakeMemoryTempKey(string memoryName) => MemoryTempKeyPrefix + memoryName;
+        public static string GetMemoryNameFromTempKey(string key) =>
+            key != null && key.StartsWith(MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase)
+                ? key.Substring(MemoryTempKeyPrefix.Length) : "";
 
         
         // ★★★ 新增：指定任务栏显示的屏幕设备名 ("" = 自动/主屏) ★★★
@@ -242,7 +252,8 @@ namespace LiteMonitor
                 CachedItemsKey = UIUtils.Intern("Items." + _key);
 
                 if (_key == "MEM.Load" || _key == "MOBO.Temp" || _key == "DISK.Temp" || _key == "CASE.Fan"|| _key == "FPS" ||
-                    _key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase)) 
+                    _key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase) ||
+                    _key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase)) 
                     CachedUIGroup = "HOST"; 
                 else if (_key.StartsWith("DASH."))
                 {
@@ -308,7 +319,8 @@ namespace LiteMonitor
                     Key == "DISK.Temp" || 
                     Key == "CASE.Fan"|| 
                     Key == "FPS" ||
-                    Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase)) 
+                    Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase) ||
+                    Key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase)) 
                 { 
                     return "HOST"; 
                 } 

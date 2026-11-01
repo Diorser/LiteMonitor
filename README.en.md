@@ -31,6 +31,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 | 💻 **CPU** | Real-time usage & temperature (multi-core average + peak). |
 | 🎮 **GPU** | GPU usage, temperature, VRAM usage; supports NVIDIA / AMD / Intel. |
 | 💾 **Memory** | RAM usage overview in percentage. |
+| 🔌 **Power** | Battery level, battery power/voltage/current, plus adapter input power, voltage and current. |
 | 📀 **Disk** | Read/Write throughput (KB/s, MB/s). Auto/manual disk selection supported. |
 | 🌐 **Network** | Upload/Download speed with adaptive unit formatting. Auto/manual NIC selection supported. |
 
@@ -48,7 +49,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 | 📏 **Adjustable Panel Width** | Change width from menu; layout refreshes instantly. |
 | 🔠 **UI Scaling (UIScale)** | Full DPI + user-defined scaling support; fonts and layout resize proportionally. |
 | 🎞️ **Smooth Animations** | Numeric values transition smoothly; speed configurable. |
-| 🪟 **Window Features** | Rounded corners, transparency, high-quality text rendering, always-on-top. |
+| 🪟 **Window Features** | Rounded corners, independent background/text opacity, high-quality text rendering, always-on-top. |
 | 🧭 **Auto Hide on Screen Edge** | Automatically collapses when docked to edges; reappears on mouse hover. Multi-monitor aware. |
 | 🧲 **Clamp to Screen** | Prevents window from being dragged outside visible screen area. |
 | 👆 **Click-Through Mode** | Allows mouse interactions to pass through the window. |

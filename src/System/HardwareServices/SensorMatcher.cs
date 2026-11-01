@@ -156,6 +156,25 @@ namespace LiteMonitor.src.SystemServices
                 if (s.SensorType == SensorType.Current) return "BAT.Current";
             }
 
+            // --- 电源适配器输入 (PSU / 功率计 / 主板适配器传感器) ---
+            if (type == HardwareType.Psu || type == HardwareType.PowerMonitor)
+            {
+                if (s.SensorType == SensorType.Power) return "BAT.InputPower";
+                if (s.SensorType == SensorType.Voltage) return "BAT.InputVoltage";
+                if (s.SensorType == SensorType.Current) return "BAT.InputCurrent";
+            }
+
+            // 主板 / SuperIO 上的适配器输入传感器（部分笔记本、一体机、迷你主机提供）
+            if (type == HardwareType.Motherboard || type == HardwareType.SuperIO)
+            {
+                if (Has(name, "adapter"))
+                {
+                    if (s.SensorType == SensorType.Power) return "BAT.InputPower";
+                    if (s.SensorType == SensorType.Voltage) return "BAT.InputVoltage";
+                    if (s.SensorType == SensorType.Current) return "BAT.InputCurrent";
+                }
+            }
+
             return null;
         }
     }

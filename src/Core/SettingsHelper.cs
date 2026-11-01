@@ -189,11 +189,14 @@ namespace LiteMonitor
                 new MonitorItemConfig { Key = "DISK.Temp", SortIndex = 404, VisibleInPanel = false },
                 new MonitorItemConfig { Key = "CASE.Fan",  SortIndex = 405, VisibleInPanel = false },
                 
-                // [5xx] BATTERY (New Group)
+                // [5xx] POWER / BATTERY (New Group)
                 new MonitorItemConfig { Key = "BAT.Percent", SortIndex = 501, VisibleInPanel = false, VisibleInTaskbar = false },
                 new MonitorItemConfig { Key = "BAT.Power",   SortIndex = 502, VisibleInPanel = false },
                 new MonitorItemConfig { Key = "BAT.Voltage", SortIndex = 503, VisibleInPanel = false },
                 new MonitorItemConfig { Key = "BAT.Current", SortIndex = 504, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "BAT.InputPower",   SortIndex = 505, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "BAT.InputVoltage", SortIndex = 506, VisibleInPanel = false },
+                new MonitorItemConfig { Key = "BAT.InputCurrent", SortIndex = 507, VisibleInPanel = false },
 
                 // [6xx] DISK IO
                 new MonitorItemConfig { Key = "DISK.Read", SortIndex = 601, VisibleInPanel = true },
@@ -271,6 +274,12 @@ namespace LiteMonitor
                     {
                         continue;
                     }
+
+                    // 4. 多内存温度项：MEM.Temp@<内存条名> 由用户按需添加，必须保留
+                    if (item.Key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
                     keysToRemove.Add(item);
                 }
                 
@@ -325,10 +334,11 @@ namespace LiteMonitor
 
             // 3. [Fix] 找回插件项：追加 DASH 开头且不在标准列表中的配置
             // 必须过滤掉 DASH.HOST/DASH.Time 等标准项，否则会重复！
-            // 同时找回用户添加的多磁盘温度项 (DISK.Temp@<磁盘名>)
+            // 同时找回用户添加的多磁盘温度项 (DISK.Temp@<磁盘名>) 与多内存温度项 (MEM.Temp@<内存条名>)
             migratedList.AddRange(settings.MonitorItems
                 .Where(x => (x.Key.StartsWith("DASH.", StringComparison.OrdinalIgnoreCase) ||
-                             x.Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase)) &&
+                             x.Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase) ||
+                             x.Key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase)) &&
                             !standardKeys.Contains(x.Key))
                 .Select(x => { 
                     if (x.TaskbarSortIndex == 0) x.TaskbarSortIndex = x.SortIndex; 

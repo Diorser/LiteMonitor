@@ -8,7 +8,7 @@
     "DISK": "💽磁盘",
     "NET": "🌐网络",
     "DATA": "📈流量统计",
-    "BAT": "🔋电池"
+    "BAT": "🔌电源"
   },
   "Items": {
     "DASH.HOST": "主机名",
@@ -42,7 +42,10 @@
     "BAT.Percent": "电池电量",
     "BAT.Power": "电池功耗",
     "BAT.Voltage": "电池电压",
-    "BAT.Current": "电池电流"
+    "BAT.Current": "电池电流",
+    "BAT.InputPower": "电源功率",
+    "BAT.InputVoltage": "电源电压",
+    "BAT.InputCurrent": "电源电流"
   },
   "Short": {
     "DASH.HOST": " ",
@@ -76,7 +79,10 @@
     "BAT.Percent": "🔋",
     "BAT.Power": "🔋",
     "BAT.Voltage": "🔋",
-    "BAT.Current": "🔋"
+    "BAT.Current": "🔋",
+    "BAT.InputPower": "🔌",
+    "BAT.InputVoltage": "🔌",
+    "BAT.InputCurrent": "🔌"
   },
   "Menu": {
     "__Comment_Global__": "--- 全局/按钮/右键菜单 ---",
@@ -138,7 +144,8 @@
     "Horizontal": "横条模式",
     "Width": "界面宽度",
     "Scale": "界面缩放",
-    "Opacity": "透明度",
+    "Opacity": "背景透明度",
+    "TextOpacity": "文字透明度",
     "Percent": "百分比",
     "UsedSize": "已用容量",
 

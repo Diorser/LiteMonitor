@@ -15,6 +15,7 @@ namespace LiteMonitor.src.SystemServices
         private static List<string>? _cachedDiskList = null;
         private static List<GpuOption>? _cachedGpuOptions = null;
         private static List<string>? _cachedMoboTempList = null;
+        private static List<string>? _cachedMemoryTempList = null;
 
         public sealed class GpuOption
         {
@@ -33,6 +34,7 @@ namespace LiteMonitor.src.SystemServices
             _cachedDiskList = null;
             _cachedGpuOptions = null;
             _cachedMoboTempList = null;
+            _cachedMemoryTempList = null;
         }
 
         /// <summary>
@@ -245,6 +247,40 @@ namespace LiteMonitor.src.SystemServices
             list.Sort();
             var final = list.Distinct().ToList();
             if (final.Count > 0) _cachedMoboTempList = final;
+            return final.ToList();
+        }
+
+        /// <summary>
+        /// 列出所有内存条温度传感器 (MEM.Temp@<智能名>)
+        /// 传感器可能挂在 Memory 硬件或其子硬件上，因此整条内存分支都要扫描。
+        /// </summary>
+        public static List<string> ListAllMemoryTemps(IComputer computer, object syncLock)
+        {
+            if (_cachedMemoryTempList != null && _cachedMemoryTempList.Count > 0)
+                return _cachedMemoryTempList.ToList();
+
+            var list = new List<string>();
+            lock (syncLock)
+            {
+                void Scan(IHardware hw, bool inMemoryBranch)
+                {
+                    bool isMemory = inMemoryBranch || hw.HardwareType == HardwareType.Memory;
+                    if (isMemory)
+                    {
+                        foreach (var s in hw.Sensors)
+                        {
+                            if (s.SensorType == SensorType.Temperature)
+                                list.Add(GenerateSmartName(s, hw, computer));
+                        }
+                    }
+                    foreach (var sub in hw.SubHardware) Scan(sub, isMemory);
+                }
+                foreach (var hw in computer.Hardware) Scan(hw, hw.HardwareType == HardwareType.Memory);
+            }
+
+            list.Sort();
+            var final = list.Distinct().ToList();
+            if (final.Count > 0) _cachedMemoryTempList = final;
             return final.ToList();
         }
     }
