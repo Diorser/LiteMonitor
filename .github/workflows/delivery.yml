@@ -44,6 +44,8 @@ jobs:
           persist-credentials: false
       - name: Test versioning and release transactions
         run: node --test automation/release.test.mjs
+      - name: Validate Windows runtime lock targets
+        run: node automation/release.mjs check-locks
       - name: Select changes and version
         id: plan
         env:

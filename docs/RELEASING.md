@@ -59,4 +59,6 @@ node automation/release.mjs plan
 
 修改 NuGet 引用后由维护者运行 `./automation/build.ps1 -UpdateLocks` 并提交更新的锁文件；普通发布不需要此开关或任何版本编辑。`artifacts/` 是可删除的构建输出，不提交到 Git。
 
+`Directory.Build.props` 默认声明 `win-x64` 还原目标，普通 `dotnet restore` 或 IDE 还原也会保留锁文件中的 Windows x64 依赖。不要手工删除锁文件内的运行时分组。CI 会先在轻量任务中检查所有锁文件，再进行 Windows 构建；如果遗漏目标，需按上述维护流程重新生成锁文件，不能通过关闭 locked mode 绕过检查。
+
 .NET 8 的支持周期和 GitHub 托管 runner、官方 Actions 的平台策略会变化，系统不能替代未来的框架迁移和平台维护。定期检查 .NET 支持状态，并在框架升级时一起运行完整回归与打包链路。

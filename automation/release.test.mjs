@@ -4,12 +4,23 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { version, compare, releasePath, validationPath, selectVersion, notes, hash, publish, verifyArtifacts, GitHub, fingerprint as sourceFingerprint } from './release.mjs';
+import { version, compare, releasePath, validationPath, selectVersion, notes, hash, publish, verifyArtifacts, GitHub, fingerprint as sourceFingerprint, validateRuntimeLock } from './release.mjs';
 
 const commit = 'a'.repeat(40);
 const fingerprint = 'b'.repeat(64);
 const defaults = { baseline: '1.3.8', tags: [], releases: [], commit, fingerprint };
 const managed = (options = {}) => ({ tag_name: 'v1.3.9', draft: true, prerelease: false, body: `<!-- litemonitor-release:${JSON.stringify({ commit, fingerprint, version: '1.3.9' })} -->`, ...options });
+
+test('锁文件保留每个框架的 Windows x64 目标，包括没有 NuGet 包的项目', () => {
+    for (const target of ['net8.0', 'net8.0-windows7.0']) {
+        assert.doesNotThrow(() => validateRuntimeLock({ dependencies: { [target]: {}, [`${target}/win-x64`]: {} } }, 'packages.lock.json'));
+    }
+});
+test('重新生成锁文件时丢失或错用运行时目标会明确失败', () => {
+    for (const dependencies of [{}, { 'net8.0': {} }, { 'net8.0': {}, 'net8.0/linux-x64': {} }, { 'net8.0': {}, 'net8.0/win-x64': {}, 'net8.0-windows7.0': {} }]) {
+        assert.throws(() => validateRuntimeLock({ dependencies }, 'test/packages.lock.json'), /test\/packages.lock.json 缺少 win-x64/);
+    }
+});
 
 test('仅接受 Windows 可表达的三段正式版本', () => {
     assert.deepEqual(version('v1.3.9'), [1, 3, 9]);

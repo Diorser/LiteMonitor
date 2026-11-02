@@ -10,6 +10,8 @@
     <ReleaseRepository Condition="'$(ReleaseRepository)' == ''">ChenBit/LiteMonitor</ReleaseRepository>
     <Deterministic>true</Deterministic>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- 普通还原与 CI 保持相同目标，避免重新生成锁文件时丢失 Windows x64 依赖。 -->
+    <RuntimeIdentifiers Condition="'$(RuntimeIdentifiers)' == ''">win-x64</RuntimeIdentifiers>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <ItemGroup>
