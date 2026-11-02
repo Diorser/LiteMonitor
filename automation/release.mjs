@@ -8,6 +8,20 @@ const marker = /<!-- litemonitor-release:(\{[^\n]*\}) -->/;
 export const hash = data => createHash('sha256').update(data).digest('hex');
 export const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trim();
 
+export function validateRuntimeLock(lock, path) {
+    const targets = Object.keys(lock.dependencies ?? {});
+    const frameworks = targets.filter(target => !target.includes('/'));
+    if (!frameworks.length || frameworks.some(target => !targets.includes(`${target}/win-x64`)))
+        throw new Error(`${path} 缺少 win-x64 依赖目标，请重新生成并提交完整的 NuGet 锁文件。`);
+}
+
+function checkRuntimeLocks() {
+    const paths = git('ls-files', '-z', '--', 'packages.lock.json', '**/packages.lock.json').split('\0').filter(Boolean);
+    if (!paths.length) throw new Error('仓库没有 NuGet 锁文件');
+    for (const path of paths) validateRuntimeLock(JSON.parse(readFileSync(path, 'utf8')), path);
+    console.log(`NuGet 锁文件目标验证通过：${paths.length} 个项目，win-x64。`);
+}
+
 export function version(value) {
     const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value ?? '');
     if (!match) return null;
@@ -241,6 +255,7 @@ async function planRelease() {
 }
 
 async function main() {
+    if (process.argv[2] === 'check-locks') return checkRuntimeLocks();
     if (process.argv[2] === 'plan') return planRelease();
     if (process.argv[2] === 'publish') {
         const directory = resolve(process.argv[3] ?? 'artifacts');
@@ -256,6 +271,6 @@ async function main() {
             }
         }
     }
-    throw new Error(`用法：node ${basename(process.argv[1])} plan|publish [artifacts]`);
+    throw new Error(`用法：node ${basename(process.argv[1])} plan|publish|check-locks [artifacts]`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch(error => { console.error(error); process.exitCode = 1; });
