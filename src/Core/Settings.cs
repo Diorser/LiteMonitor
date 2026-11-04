@@ -86,6 +86,9 @@ namespace LiteMonitor
         
         // ★★★ 新增：指定任务栏显示的屏幕设备名 ("" = 自动/主屏) ★★★
         public string TaskbarMonitorDevice { get; set; } = "";
+        // 在每个具有系统任务栏的显示器上镜像同一组监控数据。
+        // 独立布尔值可保留旧用户最后选择的单屏设备，关闭后能直接恢复。
+        public bool TaskbarShowOnAllMonitors { get; set; } = false;
 
         // 任务栏行为配置
         public bool TaskbarClickThrough { get; set; } = false;     // 鼠标穿透

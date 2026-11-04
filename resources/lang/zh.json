@@ -149,6 +149,7 @@
     "TaskbarHoverShowAll": "鼠标悬停显示详情",
     "TaskbarStyle": "任务栏样式",
     "TaskbarMonitor": "显示器屏幕",
+    "AllMonitors": "所有屏幕",
     "TaskbarStyleBold": "大字模式",
     "TaskbarStyleRegular": "小字模式",
     "TaskbarAlign": "显示位置",
