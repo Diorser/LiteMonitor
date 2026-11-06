@@ -269,6 +269,7 @@ namespace LiteMonitor.src.Core
             {
                 MetricType.Frequency => "9.9",// GHz
                 // MetricType.Voltage => "1.25",// V
+                MetricType.FPS => "999", // FPS 无小数,按整数预留列宽,避免右对齐时标签与数值间距过大
                 MetricType.RPM => "9999", // RPM
                 MetricType.DataSpeed => "9.9.",// MB
                 MetricType.DataSize => "9.9.",// MB
