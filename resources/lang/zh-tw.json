@@ -8,7 +8,7 @@
     "DISK": "💽磁碟",
     "NET": "🌐網路",
     "DATA": "📈流量統計",
-    "BAT": "🔋電池"
+    "BAT": "🔌電源"
   },
   "Items": {
     "DASH.HOST": "主機",
@@ -19,6 +19,9 @@
     "BAT.Power": "電池功耗",
     "BAT.Voltage": "電池電壓",
     "BAT.Current": "電池電流",
+    "BAT.InputPower": "電源功率",
+    "BAT.InputVoltage": "電源電壓",
+    "BAT.InputCurrent": "電源電流",
     "CPU.Load": "CPU使用率",
     "CPU.Temp": "CPU溫度",
     "CPU.Clock": "CPU頻率",
@@ -50,6 +53,9 @@
     "BAT.Power": "🔋",
     "BAT.Voltage": "🔋",
     "BAT.Current": "🔋",
+    "BAT.InputPower": "🔌",
+    "BAT.InputVoltage": "🔌",
+    "BAT.InputCurrent": "🔌",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",
@@ -135,7 +141,8 @@
     "Horizontal": "橫條模式",
     "Width": "介面寬度",
     "Scale": "介面縮放",
-    "Opacity": "透明度",
+    "Opacity": "背景透明度",
+    "TextOpacity": "文字透明度",
     "Percent": "百分比",
     "UsedSize": "已用容量",
 

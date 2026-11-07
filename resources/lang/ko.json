@@ -8,7 +8,7 @@
     "DISK": "💽디스크",
     "NET": "🌐네트워크",
     "DATA": "📈트래픽",
-    "BAT": "🔋배터리"
+    "BAT": "🔌전원"
   },
   "Items": {
     "DASH.HOST": "호스트",
@@ -19,6 +19,9 @@
     "BAT.Power": "배터리 전력",
     "BAT.Voltage": "배터리 전압",
     "BAT.Current": "배터리 전류",
+    "BAT.InputPower": "입력 전력",
+    "BAT.InputVoltage": "입력 전압",
+    "BAT.InputCurrent": "입력 전류",
     "CPU.Load": "CPU 사용량",
     "CPU.Temp": "CPU 온도",
     "CPU.Clock": "CPU 클럭",
@@ -53,6 +56,9 @@
     "BAT.Power": "🔋",
     "BAT.Voltage": "🔋",
     "BAT.Current": "🔋",
+    "BAT.InputPower": "🔌",
+    "BAT.InputVoltage": "🔌",
+    "BAT.InputCurrent": "🔌",
     "CPU.Load": "CPU",
     "CPU.Temp": "CPU",
     "CPU.Clock": "CCLK",
@@ -138,7 +144,8 @@
     "Horizontal": "바형",
     "Width": "너비",
     "Scale": "크기",
-    "Opacity": "투명도",
+    "Opacity": "배경 투명도",
+    "TextOpacity": "텍스트 투명도",
     "Percent": "퍼센트",
     "UsedSize": "사용량",
 

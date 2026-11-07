@@ -95,9 +95,8 @@ namespace LiteMonitor.src.Core.Actions
             if (cfg.AutoHide) form.InitAutoHideTimer();
             else form.StopAutoHideTimer();
 
-            // 透明度
-            if (Math.Abs(form.Opacity - cfg.Opacity) > 0.01)
-                form.Opacity = Math.Clamp(cfg.Opacity, 0.1, 1.0);
+            // 透明度（背景与文字独立，由渲染层直接读取配置，只需重绘）
+            form.RefreshAppearance();
 
             // 5. 刷新菜单 (确保透明度、置顶等勾选状态同步更新)
             form.RebuildMenus();

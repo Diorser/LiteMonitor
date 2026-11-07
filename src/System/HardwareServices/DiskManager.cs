@@ -9,6 +9,13 @@ namespace LiteMonitor.src.SystemServices
 {
     public class DiskManager
     {
+        // ★★★ [新增] 多磁盘温度：监控项 Key 格式 DISK.Temp@<磁盘名> ★★★
+        public const string TempKeyPrefix = "DISK.Temp@";
+        public static string MakeTempKey(string diskName) => TempKeyPrefix + diskName;
+        public static string GetDiskNameFromTempKey(string key) =>
+            key != null && key.StartsWith(TempKeyPrefix, StringComparison.OrdinalIgnoreCase)
+                ? key.Substring(TempKeyPrefix.Length) : "";
+
         // ★★★ [新增] 2. 记录每个硬盘最后一次活跃的时间 (用于判断是否深睡)
         private Dictionary<IHardware, DateTime> _diskLastActiveTime = new Dictionary<IHardware, DateTime>();
         // 磁盘智能缓存
@@ -30,9 +37,14 @@ namespace LiteMonitor.src.SystemServices
         // ===========================================================
         public void ProcessUpdate(IHardware hw, Settings cfg, bool isSlowScanTick, bool needDiskBgScan)
         {
-            // 1. 严格遵守首选磁盘锁定
+            // 1. 严格遵守首选磁盘锁定（但已添加独立温度项的磁盘必须继续更新）
+            bool hasNamedTemp = cfg.MonitorItems != null && cfg.MonitorItems.Any(i =>
+                (i.VisibleInPanel || i.VisibleInTaskbar) &&
+                i.Key.Equals(MakeTempKey(hw.Name), StringComparison.OrdinalIgnoreCase));
+
             if (!string.IsNullOrEmpty(cfg.PreferredDisk) && 
-                !hw.Name.Equals(cfg.PreferredDisk, StringComparison.OrdinalIgnoreCase))
+                !hw.Name.Equals(cfg.PreferredDisk, StringComparison.OrdinalIgnoreCase) &&
+                !hasNamedTemp)
             {
                 return;
             }
@@ -43,7 +55,8 @@ namespace LiteMonitor.src.SystemServices
             // 判断是否是当前 UI 上显示的那个盘
             bool isTarget = (_cachedDiskHw != null && hw == _cachedDiskHw) ||
                             (hw.Name == cfg.LastAutoDisk) ||
-                            (hw.Name == cfg.PreferredDisk);
+                            (hw.Name == cfg.PreferredDisk) ||
+                            hasNamedTemp;
             
             bool shouldUpdate = false;
             double idleMinutes = (DateTime.Now - _diskLastActiveTime[hw]).TotalMinutes;
@@ -196,6 +209,35 @@ namespace LiteMonitor.src.SystemServices
             
             // ★★★ [新增] 温度支持补漏 ★★★
             if (key == "DISK.Temp" && bestHw != null) return ReadDiskSensor(bestHw, key, lastValidMap, syncLock);
+
+            lock (syncLock) { if (lastValidMap.TryGetValue(key, out var last)) return last; }
+            return null;
+        }
+
+        /// <summary>
+        /// 读取指定名称磁盘的温度（用于 DISK.Temp@<磁盘名> 监控项）
+        /// </summary>
+        public float? GetTempByDiskName(string diskName, Computer computer, string key,
+            Dictionary<string, float> lastValidMap, object syncLock)
+        {
+            if (string.IsNullOrEmpty(diskName)) return null;
+
+            var hw = computer.Hardware.FirstOrDefault(h =>
+                h.HardwareType == HardwareType.Storage &&
+                h.Name.Equals(diskName, StringComparison.OrdinalIgnoreCase));
+
+            if (hw == null)
+            {
+                lock (syncLock) { if (lastValidMap.TryGetValue(key, out var old)) return old; }
+                return null;
+            }
+
+            var sensor = FindBestTempSensor(hw);
+            if (sensor?.Value is float v && !float.IsNaN(v))
+            {
+                lock (syncLock) lastValidMap[key] = v;
+                return v;
+            }
 
             lock (syncLock) { if (lastValidMap.TryGetValue(key, out var last)) return last; }
             return null;

@@ -206,7 +206,7 @@ namespace LiteMonitor
             
            
 
-            // === 透明度 ===
+            // === 背景透明度 ===
             var opacityRoot = new ToolStripMenuItem(LanguageManager.T("Menu.Opacity"));
             double[] presetOps = { 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6, 0.5, 0.4, 0.3 };
             
@@ -232,6 +232,30 @@ namespace LiteMonitor
                 opacityRoot.DropDownItems.Add(item);
             }
             modeRoot.DropDownItems.Add(opacityRoot);
+
+            // === 文字透明度 ===
+            var textOpacityRoot = new ToolStripMenuItem(LanguageManager.T("Menu.TextOpacity"));
+            EventHandler onTextOpacityClick = (s, e) =>
+            {
+                if (s is ToolStripMenuItem item && item.Tag is double val)
+                {
+                    cfg.TextOpacity = val;
+                    cfg.Save();
+                    AppActions.ApplyWindowAttributes(cfg, form);
+                }
+            };
+
+            foreach (var val in presetOps)
+            {
+                var item = new ToolStripMenuItem($"{val * 100:0}%")
+                {
+                    Checked = Math.Abs(cfg.TextOpacity - val) < 0.01,
+                    Tag = val
+                };
+                item.Click += onTextOpacityClick;
+                textOpacityRoot.DropDownItems.Add(item);
+            }
+            modeRoot.DropDownItems.Add(textOpacityRoot);
 
             // === 界面宽度 ===
             var widthRoot = new ToolStripMenuItem(LanguageManager.T("Menu.Width"));

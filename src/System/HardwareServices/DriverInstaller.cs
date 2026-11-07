@@ -26,20 +26,16 @@ namespace LiteMonitor.src.SystemServices
         private readonly Action? _onPrepareDriverInstall; // 回调：安装驱动前释放硬件句柄
         private bool _shouldExitAfterDriverOperation;
 
-        // 建议把最快的 Gitee/国内源放在第一个
+        // 完整发布包优先使用随包组件；缺失时从当前仓库对应版本恢复。
         private readonly string[] _driverPackageUrls = new[]
         {
-            "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/driver.zip",
-            "https://litemonitor.cn/update/driver.zip", 
-            "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/driver.zip" 
+            $"https://raw.githubusercontent.com/{ReleaseManifest.Repository}/v{UpdateChecker.GetCurrentVersion()}/resources/assets/driver.zip"
         };
 
         // ★★★ [新增] PresentMon 下载源 (FPS 单独下载用) ★★★
         private readonly string[] _presentMonUrls = new[]
         {
-            "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe",
-            "https://litemonitor.cn/update/LiteMonitorFPS.exe",
-            "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/LiteMonitorFPS.exe"
+            $"https://raw.githubusercontent.com/{ReleaseManifest.Repository}/v{UpdateChecker.GetCurrentVersion()}/resources/assets/LiteMonitorFPS.exe"
         };
         
         // 缓存当前的下载任务，避免并发重复弹窗
@@ -231,6 +227,9 @@ namespace LiteMonitor.src.SystemServices
         {
             string tempZip = Path.Combine(Path.GetTempPath(), $"LiteMonitor_Drivers_{Guid.NewGuid()}.zip");
             string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources");
+
+            if (IsValidExecutable(Path.Combine(targetDir, "PawnIO_setup.exe")))
+                return await ProcessPawnIOInstallation(targetDir, pawnIOCheck, mode);
             
             try 
             {

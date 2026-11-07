@@ -110,7 +110,12 @@ namespace LiteMonitor.src.Core.Actions
             var activeKeys = new HashSet<string>(target.MonitorItems.Select(x => x.Key));
             
             // 3. 获取配置中存在的项 (保留 UI 排序/更改)
-            var mergedList = safeWorkingList.Where(x => activeKeys.Contains(x.Key)).ToList();
+            // ★ 多磁盘温度项 / 多内存温度项允许在 UI 中新增：即使 Live 中尚不存在也要保留 ★
+            var mergedList = safeWorkingList
+                .Where(x => activeKeys.Contains(x.Key) ||
+                            x.Key.StartsWith("DISK.Temp@", StringComparison.OrdinalIgnoreCase) ||
+                            x.Key.StartsWith(Settings.MemoryTempKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             // 4. 添加配置中出现但工作列表中缺失的新项 
             var workingKeys = new HashSet<string>(safeWorkingList.Select(x => x.Key));

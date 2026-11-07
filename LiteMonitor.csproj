@@ -12,9 +12,7 @@
     <DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 	  
-    <Version>1.3.7</Version><!-- 程序主版本（UpdateChecker / About用） -->
-    <AssemblyVersion>1.0.0.0</AssemblyVersion><!-- 稳定不动 -->
-    <FileVersion>1.3.7.0</FileVersion><!-- 文件属性显示 -->
+    <Copyright>Copyright © 2025 Diorser / LiteMonitor Project, © 2026 ChenBit (https://github.com/ChenBit/LiteMonitor)</Copyright>
   </PropertyGroup>
 
 
@@ -41,11 +39,19 @@
         </Content>
     </ItemGroup>
 	<ItemGroup>
-		<Content Include="resources\LiteMonitor.Updater.exe">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</Content>
+    <!-- 硬件组件沿用现有 resources 根目录；图像已嵌入 Resources.resx。 -->
+    <Content Include="resources\assets\*.exe;resources\assets\driver.zip">
+      <Link>resources\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="resources\plugins\PLUGIN_DEV_GUIDE.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <Content Include="使用说明(必读).txt">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
 		</Content>
 	</ItemGroup>
 	

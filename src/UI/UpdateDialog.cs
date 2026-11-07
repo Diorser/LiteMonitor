@@ -24,6 +24,7 @@ namespace LiteMonitor
         public string VersionLabel { get; set; } = "";
         public string ActionButtonText { get; set; } = "Install";
         public bool AutoExitOnSuccess { get; set; } = false; // 更新模式下为 true
+        public string? ExpectedSha256 { get; set; }
     }
 
     public partial class UpdateDialog : Form
@@ -295,6 +296,15 @@ namespace LiteMonitor
                 if (!downloadSuccess)
                 {
                      throw lastError ?? new Exception("Download failed from all mirrors.");
+                }
+
+                // 版本清单与 ZIP 必须来自同一次发布，校验后才允许替换更新器。
+                if (!string.IsNullOrEmpty(_context.ExpectedSha256))
+                {
+                    using var file = File.OpenRead(_context.SavePath);
+                    string actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(file));
+                    if (!actual.Equals(_context.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("SHA256 校验失败，请重新下载更新包。");
                 }
 
                 // 7. 下载完成

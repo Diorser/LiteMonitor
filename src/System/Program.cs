@@ -13,8 +13,13 @@ namespace LiteMonitor
         private static Mutex? _mutex = null;
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--smoke-test")
+            {
+                ReleaseSmokeTest.Run();
+                return;
+            }
             // =================================================================
             // ★★★ 1. 单实例互斥锁 (基于文件路径的版本) - 修正版 ★★★
             // =================================================================

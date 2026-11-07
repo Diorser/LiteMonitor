@@ -12,12 +12,12 @@ namespace LiteMonitor.Updater
     {
         private const string ExeName = "LiteMonitor.exe";
 
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
             // ★★★ [基础] 注册编码支持 (为智能识别做准备) ★★★
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-            if (args.Length == 0) return;
+            if (args.Length == 0 || (args.Length == 1 && args[0] == "--smoke-test")) return 0;
 
             string zipFile = args[0];
             string resourcesDir = AppContext.BaseDirectory;
@@ -30,7 +30,7 @@ namespace LiteMonitor.Updater
             if (baseDir == null)
             {
                 LogError(resourcesDir, "[Fatal] 找不到 LiteMonitor.exe，更新终止！");
-                return;
+                return 1;
             }
 
             // ===========================================================
@@ -59,7 +59,7 @@ namespace LiteMonitor.Updater
             catch (Exception ex)
             {
                 LogError(baseDir, "解压失败： " + ex.Message);
-                return;
+                return 1;
             }
 
             // ===========================================================
@@ -72,34 +72,12 @@ namespace LiteMonitor.Updater
             // ===========================================================
             try
             {
-                foreach (string srcPath in Directory.GetFiles(realFolder, "*", SearchOption.AllDirectories))
-                {
-                    string rel = Path.GetRelativePath(realFolder, srcPath);
-                    string destPath = Path.Combine(baseDir, rel);
-
-                    // ★★★ [恢复] Updater 跳过自我更新 ★★★
-                    // 逻辑：主程序 (PreUpdateUpdater) 已经在 Updater 启动前完成了 Updater 的更新。
-                    // 因此，Updater 运行时，它自己已经是最新版，无需再次覆盖。
-                    // 直接跳过，避免“文件正在使用”错误。
-                    // 兼容旧版 Updater.exe 和新版 LiteMonitor.Updater.exe
-                    if (rel.EndsWith("Updater.exe", StringComparison.OrdinalIgnoreCase) || 
-                        rel.EndsWith("LiteMonitor.Updater.exe", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue; 
-                    }
-
-                    Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-
-                    // 使用带重试机制的复制
-                    if (!TryCopyFile(srcPath, destPath))
-                    {
-                        LogError(baseDir, $"无法覆盖文件 (被占用): {rel}");
-                    }
-                }
+                UpdatePackage.Apply(realFolder, baseDir);
             }
             catch (Exception ex)
             {
                 LogError(baseDir, "复制更新文件失败：" + ex.Message);
+                return 1;
             }
 
             // ===========================================================
@@ -112,6 +90,7 @@ namespace LiteMonitor.Updater
             // 7. 重启 LiteMonitor
             // ===========================================================
             RestartMain(baseDir);
+            return 0;
         }
 
         // ======================================================

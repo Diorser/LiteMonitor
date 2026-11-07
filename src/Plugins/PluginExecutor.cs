@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -328,8 +329,15 @@ namespace LiteMonitor.src.Plugins
 
                 if (!hit)
                 {
+                    // [Feature] ICMP Ping: 支持 icmp:// 前缀，或直接填写 IP/域名（无 http(s):// 时按 Ping 处理）
+                    if (TryGetPingHost(url, out string pingHost))
+                    {
+                        var ms = await PingHostAsync(pingHost, token);
+                        resultRaw = ms.ToString();
+                        context["__latency__"] = ms.ToString();
+                    }
                     // [Feature] Support Native Native Handlers (Weather, Crypto)
-                    if (url.StartsWith("native://"))
+                    else if (url.StartsWith("native://"))
                     {
                         resultRaw = await ExecuteNativeAsync(url, context);
                     }
@@ -445,6 +453,82 @@ namespace LiteMonitor.src.Plugins
         // Proxy Client Cache: Key = "host:port" or "http://host:port"
         private readonly ConcurrentDictionary<string, HttpClient> _proxyClients = new();
 
+        // =====================================================================
+        // ICMP Ping
+        // 支持 "icmp://host"、"ping://host" 或裸主机（IP/域名），不支持 HTTP 代理
+        // =====================================================================
+        private static bool TryGetPingHost(string value, out string host)
+        {
+            host = "";
+            if (string.IsNullOrWhiteSpace(value)) return false;
+
+            string v = value.Trim();
+
+            if (v.StartsWith("icmp://", StringComparison.OrdinalIgnoreCase) ||
+                v.StartsWith("ping://", StringComparison.OrdinalIgnoreCase))
+            {
+                v = v.Substring(7);
+            }
+            else if (v.Contains("://") || v.Contains('/') || v.Contains(' ') || v.Contains('?'))
+            {
+                return false; // 完整 HTTP(S) URL 或非法内容，走普通请求
+            }
+
+            if (v.Length == 0) return false;
+
+            // 借用 Uri 解析 host:port / [IPv6]:port
+            if (!Uri.TryCreate("http://" + v, UriKind.Absolute, out var uri)) return false;
+            if (string.IsNullOrEmpty(uri.Host)) return false;
+
+            host = uri.Host;
+            return true;
+        }
+
+        private async Task<long> PingHostAsync(string host, System.Threading.CancellationToken token)
+        {
+            const int attempts = 3;
+            const int timeoutMs = 2000;
+
+            long best = -1;
+            Exception? lastError = null;
+
+            using var ping = new Ping();
+            for (int i = 0; i < attempts; i++)
+            {
+                if (token.IsCancellationRequested) throw new OperationCanceledException(token);
+
+                try
+                {
+                    var sendTask = ping.SendPingAsync(host, timeoutMs);
+                    var completed = await Task.WhenAny(sendTask, Task.Delay(System.Threading.Timeout.Infinite, token));
+                    if (completed != sendTask) throw new OperationCanceledException(token);
+
+                    var reply = await sendTask;
+                    if (reply.Status == IPStatus.Success)
+                    {
+                        if (best < 0 || reply.RoundtripTime < best) best = reply.RoundtripTime;
+                    }
+                    else
+                    {
+                        lastError = new Exception($"ICMP ping {host} failed: {reply.Status}");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                }
+            }
+
+            if (best < 0)
+                throw lastError ?? new Exception($"ICMP ping {host} failed");
+
+            return best;
+        }
+
         private HttpClient GetClient(string proxy)
         {
             if (string.IsNullOrEmpty(proxy))
@@ -507,8 +591,31 @@ namespace LiteMonitor.src.Plugins
             {
                 return NewYearNative.GetCountdownJson(DateTime.Today);
             }
-            
+            else if (uri.Host.Equals("multiping", StringComparison.OrdinalIgnoreCase))
+            {
+                string host = GetArg(args, "host");
+                string protocol = GetArg(args, "protocol", "icmp");
+                int port = ParseInt(GetArg(args, "port"), 443);
+                int interval = ParseInt(GetArg(args, "interval"), 5);
+                string mode = GetArg(args, "mode", "auto");
+                string proxy = GetArg(args, "proxy");
+                int timeout = ParseInt(GetArg(args, "timeout"), 2000);
+                int rounds = ParseInt(GetArg(args, "rounds"), 3);
+
+                return await MultiPingNative.RunAsync(host, protocol, port, interval, mode, proxy, timeout, rounds);
+            }
+
             throw new Exception($"Unknown native host: {uri.Host}");
+        }
+
+        private static string GetArg(Dictionary<string, string> args, string key, string defaultValue = "")
+        {
+            return args.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v) ? v : defaultValue;
+        }
+
+        private static int ParseInt(string value, int defaultValue)
+        {
+            return int.TryParse(value, out int v) ? v : defaultValue;
         }
 
         private async Task<string> FetchRawAsync(string methodStr, string url, string body, Dictionary<string, string> headers, string encoding, System.Threading.CancellationToken token, string proxy = null)

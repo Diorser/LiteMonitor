@@ -1,4 +1,5 @@
 using LiteMonitor.src.Core;
+using System.Drawing;
 
 namespace LiteMonitor
 {
@@ -12,18 +13,21 @@ namespace LiteMonitor
     /// </summary>
     public static class HorizontalRenderer
     {
-        public static void Render(Graphics g, Theme t, List<Column> cols, int panelWidth)
+        /// <param name="bgAlpha">背景透明度</param>
+        /// <param name="textAlpha">文字透明度，与背景独立</param>
+        public static void Render(Graphics g, Theme t, List<Column> cols, int panelWidth,
+            double bgAlpha = 1.0, double textAlpha = 1.0)
         {
             int panelHeight = (int)g.VisibleClipBounds.Height;
 
-            using (var bg = new SolidBrush(ThemeManager.ParseColor(t.Color.Background)))
+            using (var bg = new SolidBrush(UIUtils.WithAlpha(ThemeManager.ParseColor(t.Color.Background), bgAlpha)))
                 g.FillRectangle(bg, new Rectangle(0, 0, panelWidth, panelHeight));
 
             foreach (var col in cols)
-                DrawColumn(g, col, t);
+                DrawColumn(g, col, t, textAlpha);
         }
 
-        private static void DrawColumn(Graphics g, Column col, Theme t)
+        private static void DrawColumn(Graphics g, Column col, Theme t, double textAlpha)
         {
             if (col.Bounds == Rectangle.Empty) return;
 
@@ -33,17 +37,17 @@ namespace LiteMonitor
             // 1. 绘制 Top
             if (col.BoundsTop != Rectangle.Empty && col.Top != null)
             {
-                DrawItem(g, col.Top, col.BoundsTop, t);
+                DrawItem(g, col.Top, col.BoundsTop, t, textAlpha);
             }
 
             // 2. 绘制 Bottom
             if (col.BoundsBottom != Rectangle.Empty && col.Bottom != null)
             {
-                DrawItem(g, col.Bottom, col.BoundsBottom, t);
+                DrawItem(g, col.Bottom, col.BoundsBottom, t, textAlpha);
             }
         }
 
-        private static void DrawItem(Graphics g, MetricItem it, Rectangle rc, Theme t)
+        private static void DrawItem(Graphics g, MetricItem it, Rectangle rc, Theme t, double textAlpha)
         {
             // 使用 MetricItem 统一格式化 (横屏模式=true)
             string value = it.GetFormattedText(true);
@@ -57,14 +61,8 @@ namespace LiteMonitor
             if (hideLabel)
             {
                 // 可以根据偏好选择 Left 或 Center，这里选用 Left 比较稳妥
-                TextRenderer.DrawText(
-                    g,
-                    value,
-                    t.FontItem,
-                    rc,
-                    valColor,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding
-                );
+                UIUtils.DrawText(g, value, t.FontItem, rc, valColor,
+                    StringAlignment.Near, StringAlignment.Center, textAlpha);
                 return;
             }
 
@@ -74,25 +72,14 @@ namespace LiteMonitor
             string label = !string.IsNullOrEmpty(it.ShortLabel) ? it.ShortLabel : it.Label;
             if (string.IsNullOrEmpty(label)) label = it.Key;
 
-            TextRenderer.DrawText(
-                g,
-                label,
-                t.FontItem,
-                rc,
+            UIUtils.DrawText(g, label, t.FontItem, rc,
                 ThemeManager.ParseColor(t.Color.TextPrimary),
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding
-            );
+                StringAlignment.Near, StringAlignment.Center, textAlpha);
 
             // Value (右对齐)
             // ★★★ 修复：统一使用 Item 字体 (即标签字体)，与任务栏保持一致 ★★★
-            TextRenderer.DrawText(
-                g,
-                value,
-                t.FontValue,
-                rc,
-                valColor,
-                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding
-            );
+            UIUtils.DrawText(g, value, t.FontValue, rc, valColor,
+                StringAlignment.Far, StringAlignment.Center, textAlpha);
         }
     }
 }

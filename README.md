@@ -6,7 +6,8 @@
 A lightweight and customizable desktop hardware monitoring tool — real-time monitoring of system performance such as CPU, GPU, memory, disk, and network.
 
 支持横/竖屏/任务栏/网页显示、主题切换、多语言、透明度显示、三色报警等，界面简洁且高度可配置 。
-> 🟢 **立即下载最新版本：** [📦 GitHub Releases → LiteMonitor 最新版](https://github.com/Diorser/LiteMonitor/releases/latest)    /  [⏬国内镜像网站下载](https://litemonitor.cn/)    
+> 🟢 **本仓库下载** [📦 GitHub Releases → LiteMonitor 最新版本](https://github.com/ChenBit/LiteMonitor/releases/latest)
+> 正式 ZIP 包自带 .NET 运行时和从源码构建的更新器，解压即可运行。
 
 > 🟢 已支持【内存清理】和【自定义插件】功能，详见：[插件开发指南（无需编程）](./resources/plugins/PLUGIN_DEV_GUIDE.md#🔌-plugin-system)
 
@@ -24,7 +25,7 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 | 💻 **处理器（CPU）**  | 实时监测 CPU 使用率、温度、频率、功耗、风扇、水冷等数据。 |
 | 🎮 **显卡（GPU）**  | 展示 GPU 使用率、核心温度、显存、频率、功耗 风扇，兼容 NVIDIA / AMD / Intel 显卡。 |
 | 💾 **主机（HOST）** | 显示系统内存占用、FPS刷新率、磁盘温度、主板温度、机箱风扇等，清晰了解电脑综合情况。 |
-| 🔋 **电池（Battery）** | 监测电池状态（充电状态、电量、功耗、电流、电压等）。 |
+| 🔌 **电源（Power）** | 监测电源与电池状态：电池电量、电池功耗、电池电压/电流，以及电源适配器输入的功率、电压、电流。 |
 | 📀 **磁盘（Disk）**   | 监控磁盘读取与写入速度（KB/s、MB/s），帮助分析存储 I/O 活跃情况。支持自动/手动选择磁盘。 |
 | 🌐 **网络（Network）** | 实时显示上传与下载速度（KB/s、MB/s），提供轻量级网络流量监控。支持自动/手动选择网卡。 |
 | 📈 **流量统计（Traffic）** | 统计每日上传与下载流量，帮助分析网络使用习惯。 |
@@ -33,7 +34,7 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 
 
 
-> 💡 LiteMonitor 持续完善中，如需更多监控项或功能支持，欢迎在 [GitHub Issues](https://github.com/Diorser/LiteMonitor/issues) 中反馈建议！
+> 💡 LiteMonitor 持续完善中，如需更多监控项或功能支持，欢迎在 [GitHub Issues](https://github.com/ChenBit/LiteMonitor/issues) 中反馈建议！
 
 ---
 
@@ -64,13 +65,13 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 | 📏 面板宽度调整 | 即时调整面板宽度，布局自动重排。 |
 | 🔠 **UI 缩放** | 自适应 DPI + 用户自定义缩放，界面与字体完美比例缩放。 |
 | 🎞️ **动画平滑** | 数值更新支持平滑动画，降低突变带来的跳动感，可自行调节速度。 |
-| 🪟 窗口与界面 | 圆角显示、透明度调节、阴影、高质量字体渲染，视觉干净优雅。 |
+| 🪟 窗口与界面 | 圆角显示、背景与文字透明度可分别调节、阴影、高质量字体渲染，视觉干净优雅。 |
 | 🧭 靠边自动隐藏 | 靠屏幕边缘自动收起，靠近边缘自动弹出，支持多屏幕正确判断。 |
 | 🧲 **限制拖出屏幕** | 选项开启后，窗口不可拖出屏幕可视区域。 |
 | 👆 鼠标穿透模式 | 启用后，窗口不拦截鼠标事件，可直接操作背后应用。 |
 | 🎨 UI 与主题即时切换 | 切换主题/语言后界面即时刷新，无需重启。 |
 | 🔍 数值智能格式化 | 自动格式化单位与小数位，横屏模式支持智能“/s”去除、>=100 自动取整等。 |
-| 🔄 自动更新检测 | 启动时静默检查新版本，手动检查时展示弹窗。支持国内与 GitHub 双源。 |
+| 🔄 自动更新检测 | 启动时静默检查新版本，手动检查时展示弹窗。使用本仓库正式 Release 与 SHA256 校验。 |
 | 🚀 开机自启 | 通过计划任务方式实现管理员级别自启动。 |
 | 📂 配置文件存储 | 所有设置实时写入 `settings.json`，支持迁移与备份。 |
 
@@ -78,7 +79,7 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 
 ## 📦 安装与使用
 
-1. 前往 [Releases 页面](https://github.com/Diorser/LiteMonitor/releases) 下载最新版压缩包  
+1. 前往 [Releases 页面](https://github.com/ChenBit/LiteMonitor/releases) 下载最新版压缩包  
 2. 解压后运行 `LiteMonitor.exe`  
 3. 程序会自动根据系统语言加载对应语言文件
 
@@ -116,7 +117,8 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 | `Skin` | 当前主题名称 |
 | `PanelWidth` | 面板宽度（支持横竖屏两种模式） |
 | `UIScale` | 用户界面缩放倍率 |
-| `Opacity` | 透明度（0.1 ~ 1.0） |
+| `Opacity` | 背景透明度（0.1 ~ 1.0） |
+| `TextOpacity` | 文字透明度（0.1 ~ 1.0，与背景独立） |
 | `Language` | 当前语言（自动检测或手动切换） |
 | `TopMost` | 是否置顶窗口 |
 | `AutoStart` | 是否开机启动 |
@@ -146,7 +148,7 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 | `LanguageManager.cs` | 多语言加载、扁平化 Key 访问 |
 | `HardwareMonitor.cs` | 采集 CPU/GPU/MEM/NET/DISK 信息；自动/手动设备选择 |
 | `AutoStart.cs` | 管理计划任务，实现开机自启 |
-| `UpdateChecker.cs` | GitHub + 国内双源版本检测 |
+| `UpdateChecker.cs` | 当前仓库 GitHub Release 版本检测与 SHA256 校验 |
 | `AboutForm.cs` | 关于窗口 |
 
 ---
@@ -159,15 +161,18 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 - Visual Studio 2022 或 Rider
 
 ### 编译命令
+完整打包还需 Node.js 22+ 和 PowerShell 7；触发规则、版本管理和失败恢复见[发布自动化说明](docs/RELEASING.md)。
+
 ```bash
-git clone https://github.com/Diorser/LiteMonitor.git
+git clone https://github.com/ChenBit/LiteMonitor.git
 cd LiteMonitor
-dotnet build -c Release
+node automation/release.mjs plan
+pwsh -File automation/build.ps1
 ```
 
 输出文件：
 ```
-/bin/Release/net8.0-windows/LiteMonitor.exe
+/artifacts/LiteMonitor-v<version>-win-x64.zip
 ```
 
 ---
@@ -175,8 +180,14 @@ dotnet build -c Release
 ## 📄 开源协议
 本项目基于 **MIT License** 开源，可自由使用、修改与分发。
 
+**版权所有**：© 2025 Diorser / LiteMonitor Project  
+**Fork 维护**：© 2026 ChenBit / LiteMonitor
+
 ---
 
 ## 📬 联系方式
-**作者**：Diorser  
-**项目主页**：[https://github.com/Diorser/LiteMonitor](https://github.com/Diorser/LiteMonitor)
+**原作者**：[Diorser](https://github.com/Diorser)  
+**原项目主页**：[https://github.com/Diorser/LiteMonitor](https://github.com/Diorser/LiteMonitor)  
+
+**修改者**：[ChenBit](https://github.com/ChenBit)  
+**修改后的项目主页**：[https://github.com/ChenBit/LiteMonitor](https://github.com/ChenBit/LiteMonitor)  

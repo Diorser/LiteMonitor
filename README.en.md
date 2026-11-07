@@ -5,8 +5,8 @@
 A lightweight and fully customizable **Windows hardware monitor** — track CPU, GPU, memory, disk, and network statistics in real time.
 
 > 🟢 **Download latest version:**  
-> [📦 GitHub Releases → LiteMonitor Latest](https://github.com/Diorser/LiteMonitor/releases/latest)  
-> [⏬ Download Website](https://litemonitor.cn/)
+> [📦 GitHub Releases → LiteMonitor Latest](https://github.com/ChenBit/LiteMonitor/releases/latest)
+> Portable releases include the .NET runtime and the updater built from source.
 
 LiteMonitor is a modern **Windows desktop system monitoring tool**.  
 It supports horizontal/vertical display, multiple languages, theme switching, transparency, adaptive DPI scaling, and three-level color alerts — in a clean and highly configurable interface.
@@ -31,6 +31,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 | 💻 **CPU** | Real-time usage & temperature (multi-core average + peak). |
 | 🎮 **GPU** | GPU usage, temperature, VRAM usage; supports NVIDIA / AMD / Intel. |
 | 💾 **Memory** | RAM usage overview in percentage. |
+| 🔌 **Power** | Battery level, battery power/voltage/current, plus adapter input power, voltage and current. |
 | 📀 **Disk** | Read/Write throughput (KB/s, MB/s). Auto/manual disk selection supported. |
 | 🌐 **Network** | Upload/Download speed with adaptive unit formatting. Auto/manual NIC selection supported. |
 
@@ -48,7 +49,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 | 📏 **Adjustable Panel Width** | Change width from menu; layout refreshes instantly. |
 | 🔠 **UI Scaling (UIScale)** | Full DPI + user-defined scaling support; fonts and layout resize proportionally. |
 | 🎞️ **Smooth Animations** | Numeric values transition smoothly; speed configurable. |
-| 🪟 **Window Features** | Rounded corners, transparency, high-quality text rendering, always-on-top. |
+| 🪟 **Window Features** | Rounded corners, independent background/text opacity, high-quality text rendering, always-on-top. |
 | 🧭 **Auto Hide on Screen Edge** | Automatically collapses when docked to edges; reappears on mouse hover. Multi-monitor aware. |
 | 🧲 **Clamp to Screen** | Prevents window from being dragged outside visible screen area. |
 | 👆 **Click-Through Mode** | Allows mouse interactions to pass through the window. |
@@ -62,7 +63,7 @@ It supports horizontal/vertical display, multiple languages, theme switching, tr
 
 ## 📦 Installation
 
-1. Download from [GitHub Releases](https://github.com/Diorser/LiteMonitor/releases)
+1. Download from [GitHub Releases](https://github.com/ChenBit/LiteMonitor/releases)
 2. Extract and run `LiteMonitor.exe`
 3. The app automatically loads the correct theme & language
 
@@ -146,7 +147,7 @@ Example:
 | `LanguageManager.cs` | Localization loader with flattened key access |
 | `HardwareMonitor.cs` | Collects CPU/GPU/MEM/NET/DISK data; smart device auto-selection |
 | `AutoStart.cs` | Manages Windows Task Scheduler startup task |
-| `UpdateChecker.cs` | GitHub + China mirror version checking |
+| `UpdateChecker.cs` | Current repository GitHub Release checking and SHA256 verification |
 | `AboutForm.cs` | About dialog |
 
 ---
@@ -155,19 +156,22 @@ Example:
 
 ### Requirements
 - Windows 10 / 11  
-- .NET 8 SDK  
+- .NET 8 SDK (only needed for development; release ZIPs are self-contained)
 - Visual Studio 2022 / JetBrains Rider
 
 ### Build
+The packaging script also requires Node.js 22+ and PowerShell 7. See [release automation](docs/RELEASING.md) for triggers, versioning and recovery.
+
 ```bash
-git clone https://github.com/Diorser/LiteMonitor.git
+git clone https://github.com/ChenBit/LiteMonitor.git
 cd LiteMonitor
-dotnet build -c Release
+node automation/release.mjs plan
+pwsh -File automation/build.ps1
 ```
 
 Output:
 ```
-/bin/Release/net8.0-windows/LiteMonitor.exe
+/artifacts/LiteMonitor-v<version>-win-x64.zip
 ```
 
 ---
@@ -175,11 +179,17 @@ Output:
 ## 📄 License
 Released under the **MIT License** (free for personal & commercial use).
 
+**Copyright:** © 2025 Diorser / LiteMonitor Project  
+**Fork Maintainer:** © 2026 ChenBit / LiteMonitor
+
 ---
 
 ## 💬 Contact
-**Author:** Diorser  
-**GitHub:** https://github.com/Diorser/LiteMonitor
+**Original Author:** Diorser  
+**Original Project:** https://github.com/Diorser/LiteMonitor
+
+**Maintainer (Fork):** ChenBit  
+**Fork Project:** https://github.com/ChenBit/LiteMonitor
 
 ---
 

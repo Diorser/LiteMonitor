@@ -14,9 +14,9 @@ using System.IO.Compression;
 namespace LiteMonitor
 {
     /// <summary>
-    /// LiteMonitor 自动更新模块（最终完整版）
-    /// - version.json 支持国内 / GitHub 两源自动 fallback
-    /// - ZIP 下载支持两源测速自动选择最快
+    /// LiteMonitor 自动更新模块
+    /// - 从当前仓库的最新正式 Release 读取更新清单
+    /// - ZIP 通过发布清单的 SHA256 校验后再执行更新
     /// - ZIP 下载完成后，主程序抢先更新 Updater.exe，防止自更新死锁
     /// - CheckAsync() 可被右键菜单直接调用
     /// </summary>
@@ -29,39 +29,7 @@ namespace LiteMonitor
             PooledConnectionLifetime = TimeSpan.FromMinutes(2)
         })
         {
-            Timeout = TimeSpan.FromSeconds(6) // 适当放宽超时时间，避免网络波动导致失败
-        };
-
-        // ========================================================
-        // 【1】两个 version.json 源（自动 fallback）
-        // ========================================================
-        private static readonly string[] VersionJsonUrls =
-        {
-             // 国官网源
-            "https://litemonitor.cn/update/version.json",
-            
-            // Gitee RAW（自动 fallback 使用）
-             "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/version.json",
-
-            // GitHub RAW（自动 fallback 使用）
-             "https://raw.githubusercontent.com/Diorser/LiteMonitor/master/resources/version.json",
-             
-        };
-
-        // ========================================================
-        // 【2】两个 ZIP 下载镜像（测速自动选择最快）
-        // ========================================================
-        private static readonly string[] Mirrors =
-        {
-            
-            // Gitee Releases
-            "https://gitee.com/Diorser/LiteMonitor/releases/download/v{0}/LiteMonitor_v{0}-win-x64.zip",
-            // 国内 CDN
-            "https://litemonitor.cn/update/LiteMonitor_v{0}-win-x64.zip",
-            // Github Releases
-            "https://github.com/Diorser/LiteMonitor/releases/download/v{0}/LiteMonitor_v{0}-win-x64.zip",
-
-            
+            Timeout = TimeSpan.FromSeconds(15)
         };
 
         /// <summary>
@@ -86,7 +54,7 @@ namespace LiteMonitor
         {
             try
             {
-                // ---- 获取版本信息（自动 fallback）----
+                // ---- 获取最新正式发布的版本信息 ----
                 var info = await GetVersionInfo();
                 if (info == null)
                 {
@@ -107,23 +75,23 @@ namespace LiteMonitor
                     return;
                 }
 
-                string latest = info.Value.latest;
-                string changelog = info.Value.changelog;
-                string releaseDate = info.Value.releaseDate;
+                string latest = info.Version;
+                string changelog = info.Changelog;
+                string releaseDate = info.ReleaseDate;
                 string current = GetCurrentVersion();
 
                 if (new Version(latest) > new Version(current))
                 {
                     // 记录发现新版本
-                    LatestVersionInfo = info;
+                    LatestVersionInfo = (latest, changelog, releaseDate);
 
                     // ★★★ [新增逻辑] 预检查设置：是否开启自动更新 ★★★
                     // 如果不是手动触发 (showMessage=false) 且未开启自动检查，则只记录不弹窗
                     var settings = Settings.Load();
                     if (!showMessage && !settings.AutoCheckUpdate) return;
 
-                    // ---- 获取排序后的下载源 (最快优先) ----
-                    var sortedUrls = await GetSortedZipUrls(latest);
+                    // ---- 使用同一次发布的下载地址 ----
+                    var sortedUrls = new[] { info.DownloadUrl };
 
                     // ---- 加载设置并弹出更新窗口 ----
                     bool isZh = settings?.Language?.ToLower() == "zh";
@@ -132,11 +100,12 @@ namespace LiteMonitor
                     {
                         Title = isZh ? "发现新版本！" : "New Version!",
                         VersionLabel = $"⚡️LiteMonitor_v{latest}",
-                        Description = $"更新日志：\n{changelog} \n更新日期：\n{releaseDate}\n\n官网：https://litemonitor.cn \nGitHub：https://github.com/Diorser/LiteMonitor",
+                        Description = $"更新日志：\n{changelog} \n更新日期：\n{releaseDate}\n\nGitHub：https://github.com/{ReleaseManifest.Repository}",
                         Urls = sortedUrls.ToArray(),
                         SavePath = Path.Combine(AppContext.BaseDirectory, "resources", "update.zip"),
                         ActionButtonText = "Update",
-                        AutoExitOnSuccess = true
+                        AutoExitOnSuccess = true,
+                        ExpectedSha256 = info.Sha256
                     };
 
                     new UpdateDialog(context, settings).ShowDialog();
@@ -183,130 +152,26 @@ namespace LiteMonitor
         }
 
 
-        // ========================================================
-        // 【4】version.json 自动 fallback
-        // ========================================================
-       private static async Task<(string latest, string changelog, string releaseDate)?> GetVersionInfo()
+        // 更新清单作为 Release 附件，与 ZIP 一起在草稿验证完成后公开。
+        private static async Task<ReleaseManifest?> GetVersionInfo()
         {
-            foreach (var url in VersionJsonUrls)
-            {
-                try
-                {
-                    using var cts = new CancellationTokenSource();
-                    cts.CancelAfter(3000); // 最大等待 3 秒（连接+读取全部）
-
-                    // 构造真正带连接超时的 HttpRequest
-                    var request = new HttpRequestMessage(HttpMethod.Get, url);
-
-                    var task = http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-
-                    // 这里我们用 WhenAny 避免 HttpClient 自身的内部卡顿
-                    var finished = await Task.WhenAny(task, Task.Delay(3000, cts.Token));
-
-                    if (finished != task)
-                        throw new TimeoutException("Connection timeout");
-
-                    var resp = await task;
-
-                    if (!resp.IsSuccessStatusCode)
-                        throw new Exception("Bad status");
-
-                    string json = await resp.Content.ReadAsStringAsync(cts.Token);
-
-                    var doc = JsonDocument.Parse(json);
-
-                    string latest = doc.RootElement.GetProperty("version").GetString()!;
-                    string log = doc.RootElement.GetProperty("changelog").GetString()!;
-                    string releaseDate = doc.RootElement.GetProperty("releaseDate").GetString()!;
-                    //string downloadUrl = doc.RootElement.GetProperty("downloadUrl").GetString()!;
-
-                    // ---- 成功，立即返回 ----
-                    return (latest, log, releaseDate);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[Update] 源失败：{url} -> {ex.Message}");
-                    continue; // 换下一个源
-                }
-            }
-
-            return null; // 两个源都失败
-        }
-
-
-
-        // ========================================================
-        // 【5】测速获取排序后的 ZIP 下载源
-        // ========================================================
-        private static async Task<List<string>> GetSortedZipUrls(string version)
-        {
-            var tests = new Task<(string url, long speed)>[Mirrors.Length];
-
-            for (int i = 0; i < Mirrors.Length; i++)
-            {
-                string url = string.Format(Mirrors[i], version);
-                tests[i] = TestMirrorSpeed(url);
-            }
-
-            var results = await Task.WhenAll(tests);
-
-            // 速度降序排序 (Speed > 0 的优先)
-            var sorted = results
-                .OrderByDescending(r => r.speed)
-                .Select(r => r.url)
-                .ToList();
-
-            // 如果所有源都失败(speed=0)，至少保留默认顺序的 URL 以供重试
-            if (sorted.Count == 0 || results.All(r => r.speed == 0))
-            {
-                 return Mirrors.Select(m => string.Format(m, version)).ToList();
-            }
-
-            return sorted;
-        }
-
-
-        // ========================================================
-        // 【6】轻量测速（读取 32KB 换算下载速度）
-        // ========================================================
-        private static async Task<(string url, long speed)> TestMirrorSpeed(string url)
-        {
+            string url = $"https://github.com/{ReleaseManifest.Repository}/releases/latest/download/version.json";
             try
             {
-                var sw = Stopwatch.StartNew();
-
-                using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-                if (!resp.IsSuccessStatusCode)
-                    return (url, 0);
-
-                using var stream = await resp.Content.ReadAsStreamAsync();
-
-                byte[] testBuf = new byte[32 * 1024];
-                int read = await stream.ReadAsync(testBuf, 0, testBuf.Length);
-
-                sw.Stop();
-
-                if (read <= 0)
-                    return (url, 0);
-
-                // Bytes per second
-                long speed = (long)(read * 1000.0 / Math.Max(sw.ElapsedMilliseconds, 1));
-
-                return (url, speed);
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.UserAgent.ParseAdd("LiteMonitor/" + GetCurrentVersion());
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                response.EnsureSuccessStatusCode();
+                return ReleaseManifest.Parse(await response.Content.ReadAsStringAsync(cts.Token), ReleaseManifest.Repository);
             }
-            catch
+            catch (Exception ex)
             {
-                return (url, 0);
+                Debug.WriteLine($"[Update] 更新清单读取失败：{ex.Message}");
+                return null;
             }
         }
 
-
-        // ========================================================
-        // 【7】获取当前版本号
-        // ========================================================
-                // ========================================================
-        // 【7】获取当前版本号 (修复版)
-        // ========================================================
         public static string GetCurrentVersion()
         {
             // 优先读取 AssemblyInformationalVersion (对应 csproj 中的 <Version>)

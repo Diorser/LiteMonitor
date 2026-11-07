@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <!-- 本地构建及最低发布版本；正式版本由发布计划传入，不回写源码。 -->
+    <Version Condition="'$(ReleaseVersion)' == ''">1.4.0</Version>
+    <Version Condition="'$(ReleaseVersion)' != ''">$(ReleaseVersion)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <ReleaseRepository Condition="'$(ReleaseRepository)' == ''">ChenBit/LiteMonitor</ReleaseRepository>
+    <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- 普通还原与 CI 保持相同目标，避免重新生成锁文件时丢失 Windows x64 依赖。 -->
+    <RuntimeIdentifiers Condition="'$(RuntimeIdentifiers)' == ''">win-x64</RuntimeIdentifiers>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="ReleaseRepository" Value="$(ReleaseRepository)" />
+  </ItemGroup>
+</Project>
