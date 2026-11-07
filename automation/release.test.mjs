@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { version, compare, releasePath, validationPath, selectVersion, notes, hash, publish, verifyArtifacts, GitHub, fingerprint as sourceFingerprint, validateRuntimeLock } from './release.mjs';
+import { version, compare, releasePath, validationPath, selectVersion, notes, hash, publish, verifyArtifacts, GitHub, fingerprint as sourceFingerprint, validateRuntimeLock, releaseIntent } from './release.mjs';
 
 const commit = 'a'.repeat(40);
 const fingerprint = 'b'.repeat(64);
@@ -27,7 +27,46 @@ test('仅接受 Windows 可表达的三段正式版本', () => {
     for (const invalid of ['v1.3.9-rc.1', '1.2', '1.02.3', '1.2.3.4', '1.2.65535']) assert.equal(version(invalid), null);
     assert.ok(compare(version('1.10.0'), version('1.9.99')) > 0);
 });
-test('无 Tag 首次发布从程序基线递增补丁', () => assert.deepEqual(selectVersion(defaults), { needed: true, version: '1.3.9' }));
+test('首次发布使用明确的程序版本，不额外加一', () => assert.deepEqual(selectVersion(defaults), { needed: true, version: '1.3.8' }));
+test('1.3.10 之后声明 1.4.0 时准确使用 1.4.0', () => {
+    assert.deepEqual(selectVersion({ ...defaults, baseline: '1.4.0', tags: ['v1.3.9', 'v1.3.10'] }), { needed: true, version: '1.4.0' });
+});
+test('功能版与主版本声明优先于默认补丁递增', () => {
+    for (const baseline of ['1.4.0', '2.0.0']) assert.equal(selectVersion({ ...defaults, baseline, tags: ['v1.3.10'] }).version, baseline);
+});
+test('声明版本已发布后继续自动递增且不重复占用已有 Tag', () => {
+    assert.equal(selectVersion({ ...defaults, baseline: '1.4.0', tags: ['v1.4.0'] }).version, '1.4.1');
+    assert.equal(selectVersion({ ...defaults, baseline: '1.4.0', tags: ['v1.4.0', 'v1.4.1'] }).version, '1.4.2');
+});
+test('同一源码已成功发布时不再生成下一补丁版本', () => {
+    assert.equal(selectVersion({ ...defaults, baseline: '1.4.0', releases: [managed({ tag_name: 'v1.4.0', draft: false })], previousFingerprint: fingerprint }).needed, false);
+});
+test('新的明确版本声明即使源码指纹相同也不会被旧版跳过', () => {
+    assert.equal(selectVersion({ ...defaults, baseline: '1.4.0', releases: [managed({ tag_name: 'v1.3.10', draft: false })], previousFingerprint: fingerprint }).version, '1.4.0');
+});
+test('重试草稿不得低于声明的版本，非法基线不会被跳过逻辑掩盖', () => {
+    assert.throws(() => selectVersion({ ...defaults, baseline: '1.4.0', releases: [managed()] }), /低于声明版本/);
+    assert.throws(() => selectVersion({ ...defaults, baseline: 'v1.4.0', releases: [managed({ draft: false })], previousFingerprint: fingerprint }), /基线/);
+});
+test('从维护者现有更新说明识别版本，按数值选择且不依赖路径顺序', () => {
+    const doc = v => ({ path: `resources/更新说明-${v}.txt`, text: `LiteMonitor ${v} 更新说明\n\n真实更新内容` });
+    const intent = releaseIntent('1.3.8', [doc('1.9.0'), doc('1.10.0'), doc('1.4.0')]);
+    assert.equal(intent.version, '1.10.0');
+    assert.equal(releaseIntent('1.3.8', [doc('1.4.0')]).version, '1.4.0');
+    assert.equal(releaseIntent('2.0.0', [doc('1.4.0')]).version, '2.0.0');
+    assert.equal(releaseIntent('1.4.0', []).version, '1.4.0');
+});
+test('更新说明文件名与标题不一致时阻止错误版本发布', () => {
+    assert.throws(() => releaseIntent('1.3.8', [{ path: 'resources/更新说明-1.4.0.txt', text: 'LiteMonitor 1.3.10 更新说明' }]), /标题与文件名版本不一致/);
+    assert.throws(() => releaseIntent('1.3.8', [{ path: 'resources/更新说明-1.04.0.txt', text: '' }]), /文件名版本无效/);
+});
+test('明确版本的功能说明加入发布日志，不虚构功能或丢弃已有声明', () => {
+    const declared = 'LiteMonitor 1.4.0 更新说明\n\n电源监控、分层透明度、多内存温度';
+    const text = notes([], 'ChenBit/LiteMonitor', 'v1.3.10', commit, declared);
+    assert.ok(text.includes(declared));
+    assert.match(text, /### 本版本更新说明/);
+    assert.doesNotMatch(notes([], 'ChenBit/LiteMonitor', 'v1.4.0', commit), /LiteMonitor 1.4.0 更新说明/);
+});
 test('Tag、正式 Release、草稿共同保留版本，按数值递增', () => {
     assert.equal(selectVersion({ ...defaults, tags: ['v1.9.9', 'v1.10.8', 'preview'], releases: [{ tag_name: 'v1.10.9', draft: true }] }).version, '1.10.10');
 });
@@ -40,7 +79,7 @@ test('草稿与源码、版本不符时失败', () => {
 });
 test('普通文档不构建，运行资源和包构建脚本需要发布', () => {
     for (const path of ['README.md', 'README.en.md', 'docs/RELEASING.md', 'resources/screenshots/overview.png', 'resources/version.json']) assert.equal(releasePath(path), false, path);
-    for (const path of ['src/System/UpdateChecker.cs', 'resources/plugins/Holiday.json', 'resources/assets/driver.zip', 'automation/build.ps1', 'Directory.Build.props', '.github/workflows/delivery.yml']) assert.equal(releasePath(path), true, path);
+    for (const path of ['src/System/UpdateChecker.cs', 'resources/plugins/Holiday.json', 'resources/assets/driver.zip', 'automation/build.ps1', 'Directory.Build.props', '.github/workflows/delivery.yml', 'resources/更新说明-1.4.0.txt']) assert.equal(releasePath(path), true, path);
     assert.equal(validationPath('test/节假日回退/回归程序.cs'), true);
     assert.equal(releasePath('test/节假日回退/回归程序.cs'), false);
 });

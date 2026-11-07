@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <!-- 本地构建的版本基线；正式版本由发布计划传入，不回写源码。 -->
-    <Version Condition="'$(ReleaseVersion)' == ''">1.3.8</Version>
+    <!-- 本地构建及最低发布版本；正式版本由发布计划传入，不回写源码。 -->
+    <Version Condition="'$(ReleaseVersion)' == ''">1.4.0</Version>
     <Version Condition="'$(ReleaseVersion)' != ''">$(ReleaseVersion)</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>

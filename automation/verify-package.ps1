@@ -10,6 +10,11 @@ foreach ($path in @('LiteMonitor.exe', 'LiteMonitor.dll', 'resources/LiteMonitor
     if ($info.FileVersion -ne "$Version.0" -or $info.ProductVersion -ne $Version) { throw "版本不一致：$path ($($info.FileVersion), $($info.ProductVersion))" }
 }
 $manifest = Get-Content (Join-Path $Directory 'release-files.json') -Raw | ConvertFrom-Json -AsHashtable
+if (Test-Path -LiteralPath (Join-Path (Split-Path $PSScriptRoot) "resources/更新说明-$Version.txt")) {
+    $releaseNotes = "resources/更新说明-$Version.txt"
+    if (!(Test-Path -LiteralPath (Join-Path $Directory $releaseNotes)) -or
+        (Get-FileHash (Join-Path $Directory $releaseNotes)).Hash -ne (Get-FileHash (Join-Path (Split-Path $PSScriptRoot) $releaseNotes)).Hash) { throw '发布包缺少本版本的更新说明或内容不一致' }
+}
 if ($manifest.version -ne $Version) { throw '文件清单版本不一致' }
 foreach ($entry in $manifest.files.GetEnumerator()) {
     $path = Join-Path $Directory $entry.Key
