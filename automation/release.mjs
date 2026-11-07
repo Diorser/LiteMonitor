@@ -32,7 +32,21 @@ export const compare = (a, b) => {
     for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
     return 0;
 };
+export function releaseIntent(baseline, documents) {
+    if (!version(baseline) || baseline.startsWith('v')) throw new Error('版本基线必须为三段数字');
+    const candidates = documents.map(document => {
+        const match = /^resources\/更新说明-(.+)\.txt$/.exec(document.path);
+        if (!match || !version(match[1]) || match[1].startsWith('v')) throw new Error(`更新说明文件名版本无效：${document.path}`);
+        return { version: match[1], path: document.path, text: document.text.trim() };
+    }).sort((a, b) => compare(version(a.version), version(b.version)));
+    const latest = candidates.at(-1);
+    if (!latest || compare(version(latest.version), version(baseline)) < 0) return { version: baseline, path: '', text: '' };
+    const heading = /^LiteMonitor\s+v?(\d+\.\d+\.\d+)\s+更新说明\s*$/.exec(latest.text.split(/\r?\n/)[0]);
+    if (!heading || heading[1] !== latest.version) throw new Error(`更新说明标题与文件名版本不一致：${latest.path}`);
+    return latest;
+}
 export function releasePath(path) {
+    if (/^resources\/更新说明-[^/]+\.txt$/.test(path)) return true;
     if (/\.test\.mjs$/.test(path)) return false;
     if (/\.(md|txt)$/i.test(path) || path.startsWith('resources/screenshots/'))
         return path === '使用说明(必读).txt';
@@ -50,10 +64,13 @@ export function provenance(release) {
     try { return JSON.parse(match[1]); } catch { throw new Error(`Release ${release.tag_name} 的发布标记损坏`); }
 }
 export function selectVersion({ baseline, tags, releases, commit, fingerprint: currentFingerprint, previousFingerprint }) {
+    const desired = version(baseline);
+    if (!desired || baseline.startsWith('v')) throw new Error('版本基线必须为三段数字');
     const stable = releases.filter(r => !r.draft && !r.prerelease && version(r.tag_name))
         .sort((a, b) => compare(version(b.tag_name), version(a.tag_name)));
     const latest = stable[0];
-    if (latest && previousFingerprint === currentFingerprint) return { needed: false, version: latest.tag_name.replace(/^v/, '') };
+    if (latest && previousFingerprint === currentFingerprint && compare(desired, version(latest.tag_name)) <= 0)
+        return { needed: false, version: latest.tag_name.replace(/^v/, '') };
     const draft = releases.find(r => r.draft && !r.prerelease && provenance(r)?.commit === commit);
     if (draft) {
         const data = provenance(draft);
@@ -61,11 +78,13 @@ export function selectVersion({ baseline, tags, releases, commit, fingerprint: c
             throw new Error('已有草稿与当前源码不一致，拒绝复用');
         if (latest && compare(version(draft.tag_name), version(latest.tag_name)) <= 0)
             throw new Error('已有草稿版本落后于正式版本，拒绝倒退发布');
+        if (compare(version(draft.tag_name), desired) < 0) throw new Error('已有草稿版本低于声明版本，拒绝错误版本发布');
         return { needed: true, version: data.version };
     }
-    const candidates = [baseline, ...tags, ...releases.map(r => r.tag_name)].map(version).filter(Boolean);
-    if (!version(baseline)) throw new Error('版本基线必须为三段数字');
+    const candidates = [...tags, ...releases.map(r => r.tag_name)].map(version).filter(Boolean);
     const highest = candidates.sort(compare).at(-1);
+    // 尚未占用的明确版本直接发布；只有该版本已使用时才自动递增补丁。
+    if (!highest || compare(desired, highest) > 0) return { needed: true, version: baseline };
     const next = [...highest];
     if (next[2] < 65534) next[2]++;
     else if (next[1] < 65534) { next[1]++; next[2] = 0; }
@@ -74,7 +93,7 @@ export function selectVersion({ baseline, tags, releases, commit, fingerprint: c
     return { needed: true, version: next.join('.') };
 }
 
-export function notes(commits, repository, previous, commit) {
+export function notes(commits, repository, previous, commit, declaredNotes = '') {
     const groups = { '新增': [], '修复': [], '其他变更': [] };
     const seen = new Set();
     for (const { sha, subject, paths } of commits) {
@@ -89,10 +108,11 @@ export function notes(commits, repository, previous, commit) {
         groups[group].push(`- ${safe}（[${sha.slice(0, 7)}](https://github.com/${repository}/commit/${sha})）`);
     }
     let body = previous ? '本次更新基于上一个正式版本之后的实际代码变更。\n' : '本仓库首次自动发布，包含当前源码和完整运行资源。\n';
+    if (declaredNotes) body += `\n### 本版本更新说明\n\n${declaredNotes}\n`;
     for (const [group, items] of Object.entries(groups)) {
         if (items.length) body += `\n### ${group}\n\n${items.slice(0, 40).join('\n')}\n${items.length > 40 ? '\n更多变更见完整对比。\n' : ''}`;
     }
-    if (!seen.size) body += '\n本次更新涉及构建或运行资源，详细内容请查看源码对比。\n';
+    if (!seen.size && !declaredNotes) body += '\n本次更新涉及构建或运行资源，详细内容请查看源码对比。\n';
     body += '\n### 下载与更新\n\nWindows x64 便携版，包含 .NET 运行时、从源码构建的更新器及主题、语言、插件和硬件组件。解压后运行 `LiteMonitor.exe`；硬件监测仍需管理员权限及 PawnIO 驱动。校验 ZIP 时使用同名 `.sha256` 文件。\n';
     body += previous ? `\n[完整变更](https://github.com/${repository}/compare/${previous}...${commit})\n` : `\n[对应源码](https://github.com/${repository}/tree/${commit})\n`;
     return body;
@@ -206,7 +226,10 @@ async function planRelease() {
     const repository = process.env.GITHUB_REPOSITORY ?? 'ChenBit/LiteMonitor';
     const commit = git('rev-parse', 'HEAD');
     const currentFingerprint = fingerprint(commit);
-    const baseline = /<Version Condition="'\$\(ReleaseVersion\)' == ''">([^<]+)<\/Version>/.exec(readFileSync('Directory.Build.props', 'utf8'))?.[1];
+    const projectVersion = /<Version Condition="'\$\(ReleaseVersion\)' == ''">([^<]+)<\/Version>/.exec(readFileSync('Directory.Build.props', 'utf8'))?.[1];
+    const pathsWithNotes = git('ls-files', '-z', '--', 'resources/更新说明-*.txt').split('\0').filter(Boolean);
+    const intent = releaseIntent(projectVersion, pathsWithNotes.map(path => ({ path, text: readFileSync(path, 'utf8') })));
+    const baseline = intent.version;
     const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
     const official = ['push', 'workflow_dispatch', 'schedule'].includes(process.env.GITHUB_EVENT_NAME) && process.env.GITHUB_REF === 'refs/heads/master';
     let selection = { needed: false, version: baseline };
@@ -248,7 +271,7 @@ async function planRelease() {
         const [sha, ...subject] = line.split('\t');
         return { sha, subject: subject.join('\t'), paths: git('diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '-z', sha).split('\0') };
     });
-    writeFileSync('artifacts/notes.md', notes(commits, repository, previous, commit));
+    writeFileSync('artifacts/notes.md', notes(commits, repository, previous, commit, selection.version === intent.version ? intent.text : ''));
     if (process.env.GITHUB_OUTPUT) for (const key of ['build', 'release', 'version', 'commit']) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${plan[key]}\n`);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `构建：${build ? '需要' : '跳过（没有待构建变更）'}；正式发布：${plan.release ? plan.tag : '跳过'}。\n`);
     console.log(JSON.stringify(plan, null, 2));

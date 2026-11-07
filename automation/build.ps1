@@ -47,6 +47,10 @@ Invoke-DotNet (@('publish', 'LiteMonitor.csproj', '-c', 'Release', '-r', 'win-x6
 Restore-Project 'LiteMonitor.Updater/LiteMonitor.Updater.csproj' $true
 Invoke-DotNet (@('publish', 'LiteMonitor.Updater/LiteMonitor.Updater.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '--no-restore', '-o', $updater) + $common)
 Copy-Item -LiteralPath (Join-Path $updater 'LiteMonitor.Updater.exe') -Destination (Join-Path $package 'resources/LiteMonitor.Updater.exe') -Force
+$releaseNotes = "resources/更新说明-$($plan.version).txt"
+if (Test-Path -LiteralPath $releaseNotes) {
+    Copy-Item -LiteralPath $releaseNotes -Destination (Join-Path $package $releaseNotes) -Force
+}
 Get-ChildItem $package -Filter '*.pdb' -Recurse | Remove-Item -Force
 
 # 使用无驱动、无网络、无用户配置的专用入口验证运行时与 WinForms 消息循环。
