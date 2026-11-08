@@ -36,6 +36,10 @@ namespace LiteMonitor.src.SystemServices
             {
                 // 通用名 "AMD Radeon(TM) Graphics" 通常是核显 -> 优先级 2
                 if (name.Equals("AMD Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase)) return 2;
+                // ★ [修复] 移动端核显 (Radeon 610M/660M/680M/780M/880M/890M 等) -> 优先级 1
+                // 此前 "AMD Radeon 780M Graphics" 这类具体型号名被当作独显(优先级0),
+                // 导致双显卡笔记本自动选择时核显可能排在独显前面,占用恒为 0
+                if (System.Text.RegularExpressions.Regex.IsMatch(name, @"Radeon\s+\d{3}M\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return 1;
                 // 其他具体型号 (如 RX 7900 XTX) 视为独显 -> 优先级 0
                 return 0;
             }
