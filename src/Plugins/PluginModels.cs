@@ -205,6 +205,8 @@ namespace LiteMonitor.src.Plugins
 
         [JsonPropertyName("unit")]
         public string Unit { get; set; } = ""; // 单位
+        [JsonPropertyName("link")]
+        public string Link { get; set; } = ""; // 点击该条目时用浏览器打开的 URL（支持 {{key}} 模板）
     }
 
     public class PluginInputOption
@@ -222,6 +224,7 @@ namespace LiteMonitor.src.Plugins
         public string InjectKey;
         public string InjectColorKey;
         public string InjectUnitKey;
+        public string InjectLinkKey;
         public string PropLabelKey;
         public string PropShortKey;
     }

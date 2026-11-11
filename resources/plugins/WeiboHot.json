@@ -55,6 +55,7 @@
       "label": "微博热搜",
       "short_label": "WB",
       "format_val": "{{final_icon}} {{top_word}}",
+      "link": "https://s.weibo.com/weibo?q={{top_word}}",
       "color": "1"
     }
   ]

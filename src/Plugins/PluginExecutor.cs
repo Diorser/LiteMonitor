@@ -616,6 +616,7 @@ namespace LiteMonitor.src.Plugins
                     // 2. Attribute Keys
                     k.InjectColorKey = UIUtils.Intern(rawInjectKey + ".Color");
                     k.InjectUnitKey = UIUtils.Intern(rawInjectKey + ".Unit");
+                    k.InjectLinkKey = UIUtils.Intern(rawInjectKey + ".Link");
 
                     // 3. Prop Keys (DASH prefix)
                     string itemKey = PluginConstants.DASH_PREFIX + rawInjectKey;
@@ -657,6 +658,18 @@ namespace LiteMonitor.src.Plugins
                     if (resolvedUnit != currentUnit)
                     {
                         InfoService.Instance.InjectValue(keys.InjectUnitKey, resolvedUnit);
+                    }
+                }
+
+                // 3.5 Link Injection (点击条目时要打开的 URL)
+                if (!string.IsNullOrEmpty(output.Link))
+                {
+                    string resolvedLink = PluginProcessor.ResolveTemplate(output.Link, inputs).Trim();
+                    string currentLink = InfoService.Instance.GetValue(keys.InjectLinkKey);
+
+                    if (resolvedLink != currentLink)
+                    {
+                        InfoService.Instance.InjectValue(keys.InjectLinkKey, resolvedLink);
                     }
                 }
 

@@ -23,6 +23,7 @@ namespace LiteMonitor
         public double Opacity { get; set; } = 0.85;
         public string Language { get; set; } = "";
         public bool ClickThrough { get; set; } = false;
+        public bool LinkClickEnabled { get; set; } = true; // 点击插件条目时是否打开其 link 链接
         public bool AutoHide { get; set; } = true;
         public bool ClampToScreen { get; set; } = true;
         public int PanelWidth { get; set; } = 240;

@@ -34,6 +34,7 @@ namespace LiteMonitor
         public bool IsLayoutHorizontal => _hxLayout != null;
 
         public List<Column> GetTaskbarColumns() => _hxColsTaskbar;
+        public List<Column> GetHorizontalColumns() => _hxColsHorizontal;
         public List<GroupLayoutInfo> GetMainGroups() => _groups;
 
         public UIController(Settings cfg, Form form)
