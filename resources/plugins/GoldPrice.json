@@ -1,0 +1,101 @@
+{
+  "id": "GoldPrice",
+  "meta": {
+    "name": "今日金价",
+    "version": "1.0",
+    "author": "LiteMonitor",
+    "description": "查询今日国内黄金价格（Au99.99 / 黄金T+D / 沪金主连），显示价格与涨跌幅，数据来自东方财富行情接口"
+  },
+  "inputs": [
+    {
+      "key": "secid",
+      "label": "黄金品种",
+      "type": "select",
+      "default": "118.AU9999",
+      "scope": "target",
+      "options": [
+        { "label": "黄金9999 (Au99.99)", "value": "118.AU9999" },
+        { "label": "黄金T+D", "value": "118.AUTD" },
+        { "label": "沪金主连 (期货)", "value": "113.aum" }
+      ]
+    },
+    {
+      "key": "display_mode",
+      "label": "显示内容",
+      "type": "select",
+      "default": "price_percent",
+      "scope": "target",
+      "options": [
+        { "label": "价格 + 涨跌幅 (846.8 元/克 0.81%)", "value": "price_percent" },
+        { "label": "涨跌幅 + 价格 (0.81% 846.8 元/克)", "value": "percent_price" },
+        { "label": "仅价格 (846.8 元/克)", "value": "price" },
+        { "label": "仅涨跌幅 (0.81%)", "value": "percent" },
+        { "label": "详情 (846.8 元/克 6.79 0.81%)", "value": "detail" }
+      ]
+    }
+  ],
+  "execution": {
+    "type": "chain",
+    "interval": 60,
+    "min_interval": 30,
+    "steps": [
+      {
+        "id": "fetch_gold",
+        "url": "https://push2.eastmoney.com/api/qt/stock/get?fltt=2&secid={{secid}}&fields=f43,f44,f45,f57,f58,f169,f170",
+        "method": "GET",
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://quote.eastmoney.com/"
+        },
+        "response_format": "json",
+        "cache_minutes": 0,
+        "extract": {
+          "name": "data.f58",
+          "price": "data.f43",
+          "high": "data.f44",
+          "low": "data.f45",
+          "change": "data.f169",
+          "change_percent": "data.f170"
+        },
+        "process": [
+          {
+            "var": "display_template",
+            "source": "display_mode",
+            "function": "map",
+            "map": {
+              "price_percent": "{{price}} 元/克  {{change_percent}}%",
+              "percent_price": "{{change_percent}}%  {{price}} 元/克",
+              "price": "{{price}} 元/克",
+              "percent": "{{change_percent}}%",
+              "detail": "{{price}} 元/克  {{change}}  {{change_percent}}%"
+            }
+          },
+          {
+            "var": "final_display",
+            "source": "display_template",
+            "function": "resolve_template"
+          },
+          {
+            "var": "color_state",
+            "source": "change_percent",
+            "function": "threshold_switch",
+            "value_map": {
+              "-1000": "0",
+              "0": "2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "price",
+      "label": "{{name ?? '今日金价'}}",
+      "short_label": "金价",
+      "format_val": "{{final_display}}",
+      "color": "{{color_state}}",
+      "unit": ""
+    }
+  ]
+}
