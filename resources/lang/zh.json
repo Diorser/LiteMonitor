@@ -118,6 +118,7 @@
     "ClampToScreen": "靠边自动吸附",
     "AutoHide": "靠边自动隐藏",
     "ClickThrough": "鼠标穿透",
+    "LinkClick": "点击插件条目打开链接",
     "DoubleClickAction": "双击动作触发",
     "ActionSwitchLayout": "切换横竖屏模式",
     "ActionToggleVisible": "显示/隐藏主界面",

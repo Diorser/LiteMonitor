@@ -115,6 +115,7 @@
     "ClampToScreen": "靠邊自動吸附",
     "AutoHide": "靠邊自動隱藏",
     "ClickThrough": "滑鼠穿透",
+    "LinkClick": "點擊外掛項目開啟連結",
     "DoubleClickAction": "雙擊動作觸發",
     "ActionSwitchLayout": "切換橫豎屏模式",
     "ActionToggleVisible": "顯示/隱藏主介面",

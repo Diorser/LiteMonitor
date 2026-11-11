@@ -56,6 +56,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             group.AddToggle(this, "Menu.ClampToScreen", () => Config.ClampToScreen, v => Config.ClampToScreen = v);
             group.AddToggle(this, "Menu.AutoHide", () => Config.AutoHide, v => Config.AutoHide = v);
             group.AddToggle(this, "Menu.ClickThrough", () => Config.ClickThrough, v => Config.ClickThrough = v);
+            group.AddToggle(this, "Menu.LinkClick", () => Config.LinkClickEnabled, v => Config.LinkClickEnabled = v);
 
             // 3. Double Click Action
             string[] actions = { 

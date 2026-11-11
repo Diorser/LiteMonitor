@@ -1,4 +1,5 @@
 using LiteMonitor.src.Core;
+using LiteMonitor.src.Core.Actions;
 using LiteMonitor.src.SystemServices;
 using LiteMonitor.src.UI;
 using LiteMonitor.src.UI.Helpers;
@@ -24,6 +25,7 @@ namespace LiteMonitor
         private CancellationTokenSource _displayChangeCts;
 
         private Point _dragOffset;
+        private Point _mouseDownPoint;
         private bool _uiDragging = false;
 
         // 防止 Win11 自动隐藏无边框 + 无任务栏窗口
@@ -180,6 +182,7 @@ namespace LiteMonitor
             {
                 if (e.Button == MouseButtons.Left)
                 {
+                    _mouseDownPoint = e.Location;
                     _ui?.SetDragging(true);
                     _uiDragging = true;
                     _bizHelper.IsDragging = true;
@@ -193,26 +196,76 @@ namespace LiteMonitor
                     if (Math.Abs(e.X - _dragOffset.X) + Math.Abs(e.Y - _dragOffset.Y) < 1) return;
                     Location = new Point(Left + e.X - _dragOffset.X, Top + e.Y - _dragOffset.Y);
                 }
+                else
+                {
+                    // 悬停在带链接的条目上时显示手型光标
+                    Cursor = FindLinkItemKeyAt(e.Location) != null ? Cursors.Hand : Cursors.Default;
+                }
             };
+            MouseLeave += (_, __) => Cursor = Cursors.Default;
             MouseUp += (_, e) =>
             {
                 if (e.Button == MouseButtons.Left)
                 {
+                    bool isClick = Math.Abs(e.X - _mouseDownPoint.X) + Math.Abs(e.Y - _mouseDownPoint.Y) <= 3;
+
                     _ui?.SetDragging(false);
                     _uiDragging = false;
                     _bizHelper.IsDragging = false;
                     _bizHelper.ClampToScreen(); 
                     _bizHelper.SavePos();
+
+                    // 单击（非拖动、非双击的第二次抬起）命中带 link 的条目时，用浏览器打开
+                    if (isClick && e.Clicks == 1)
+                    {
+                        string? linkKey = FindLinkItemKeyAt(e.Location);
+                        if (linkKey != null) WebActions.TryOpenMonitorLink(linkKey);
+                    }
                 }
             };
 
-            // 双击
-            this.DoubleClick += (_, __) => _bizHelper.HandleDoubleClick();
+            // 双击：命中有链接的条目时不触发全局双击动作，避免误切换布局
+            this.MouseDoubleClick += (_, e) =>
+            {
+                if (FindLinkItemKeyAt(e.Location) == null) _bizHelper.HandleDoubleClick();
+            };
             
             // DPI / Resize
             this.Resize += (_, __) => _winHelper.ApplyRoundedCorners();
             this.VisibleChanged += (_, __) => { if (Visible) _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true); };
             this.HandleCreated += (_, __) => _winHelper.RefreshTopMost(_cfg.TopMost, forceReinsert: true);
+        }
+
+        /// <summary>
+        /// 命中测试：返回该坐标下配置了 link 的监控项 Key（DASH.xxx），没有则返回 null
+        /// </summary>
+        private string? FindLinkItemKeyAt(Point p)
+        {
+            if (_ui == null || !_cfg.LinkClickEnabled) return null;
+
+            if (_cfg.HorizontalMode)
+            {
+                foreach (var col in _ui.GetHorizontalColumns())
+                {
+                    if (col.Top != null && col.BoundsTop.Contains(p) && WebActions.HasMonitorLink(col.Top.Key))
+                        return col.Top.Key;
+                    if (col.Bottom != null && col.BoundsBottom.Contains(p) && WebActions.HasMonitorLink(col.Bottom.Key))
+                        return col.Bottom.Key;
+                }
+            }
+            else
+            {
+                foreach (var g in _ui.GetMainGroups())
+                {
+                    foreach (var it in g.Items)
+                    {
+                        if (it.Bounds.Contains(p) && WebActions.HasMonitorLink(it.Key))
+                            return it.Key;
+                    }
+                }
+            }
+
+            return null;
         }
 
         public void ShowMainWindow()

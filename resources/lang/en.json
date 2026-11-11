@@ -118,6 +118,7 @@
     "ClampToScreen": "Clamp to Screen",
     "AutoHide": "Auto Hide",
     "ClickThrough": "Click Through",
+    "LinkClick": "Click plugin item to open link",
     "DoubleClickAction": "Double Click",
     "ActionSwitchLayout": "Switch Layout",
     "ActionToggleVisible": "Show/Hide",
