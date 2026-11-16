@@ -14,6 +14,7 @@ namespace LiteMonitor
         private readonly UIController _ui;
         private readonly MainForm _mainForm;
         private readonly System.Windows.Forms.Timer _timer = new();
+        private readonly System.Windows.Forms.Timer _placeTimer = new() { Interval = 250 }; // 托盘宽度变化时及时跟随，不依赖 RefreshMs
 
         // ★★★ 双助手架构 ★★★
         private readonly TaskbarWinHelper _winHelper;
@@ -69,6 +70,13 @@ namespace LiteMonitor
             _timer.Tick += (_, __) => Tick();
             _timer.Start();
 
+            _placeTimer.Tick += (_, __) =>
+            {
+                if (_cols == null || _cols.Count == 0 || _cols[0].Bounds.IsEmpty || _bizHelper.IsVertical()) return;
+                _bizHelper.UpdatePlacement(Width);
+            };
+            _placeTimer.Start();
+
             // 鼠标悬浮提示初始化
             _tooltipHelper = new TaskbarTooltipHelper(this, _cfg, _ui);
 
@@ -103,6 +111,8 @@ namespace LiteMonitor
                 _winHelper?.RestoreTaskbar();
                 _timer.Stop();
                 _timer.Dispose();
+                _placeTimer.Stop();
+                _placeTimer.Dispose();
                 _currentMenu?.Dispose();
                 _tooltipHelper?.Dispose();
             }
