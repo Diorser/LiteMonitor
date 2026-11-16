@@ -91,6 +91,7 @@ namespace LiteMonitor
         public bool TaskbarClickThrough { get; set; } = false;     // 鼠标穿透
         public bool TaskbarSingleLine { get; set; } = false;// 单行显示
         public bool TaskbarHoverShowAll { get; set; } = true; // [新增] 悬浮显示所有监控项
+        public bool TaskbarIntegerValues { get; set; } = false; // 任务栏数值取整 (负载/温度/功耗等)
         public int TaskbarManualOffset { get; set; } = 0;// 手动偏移量 (像素)
 
         // ====== 任务栏：高级自定义外观 ======

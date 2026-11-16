@@ -147,6 +147,7 @@
     "TaskbarShow": "Show Taskbar",
     "TaskbarSingleLine": "Single Line",
     "TaskbarHoverShowAll": "Hover Details",
+    "TaskbarIntegerValues": "Integer Values",
     "TaskbarStyle": "Style",
     "TaskbarMonitor": "Monitor",
     "TaskbarStyleBold": "Big",
