@@ -144,6 +144,7 @@
     "TaskbarShow": "工作列顯示",
     "TaskbarSingleLine": "單行顯示",
     "TaskbarHoverShowAll": "滑鼠懸停顯示詳情",
+    "TaskbarIntegerValues": "工作列數值取整",
     "TaskbarStyle": "工作列樣式",
     "TaskbarMonitor": "顯示器螢幕",
     "TaskbarStyleBold": "大字模式",

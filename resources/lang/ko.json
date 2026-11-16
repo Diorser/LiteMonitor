@@ -147,6 +147,7 @@
     "TaskbarShow": "표시 켜기",
     "TaskbarSingleLine": "한 줄 표시",
     "TaskbarHoverShowAll": "마우스 오버 상세",
+    "TaskbarIntegerValues": "정수로 표시",
     "TaskbarStyle": "스타일",
     "TaskbarMonitor": "모니터",
     "TaskbarStyleBold": "큰 글자",

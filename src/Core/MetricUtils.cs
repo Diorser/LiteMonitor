@@ -102,7 +102,7 @@ namespace LiteMonitor.src.Core
         /// <summary>
         /// 获取纯数值字符串 (已处理缩放、舍入、紧凑模式)
         /// </summary>
-        public static string GetValueStr(string key, float? value, bool compact = false, string? userFormat = null)
+        public static string GetValueStr(string key, float? value, bool compact = false, string? userFormat = null, bool integer = false)
         {
             float v = value ?? 0.0f;
             var type = GetType(key);
@@ -138,6 +138,7 @@ namespace LiteMonitor.src.Core
             if (type == MetricType.Frequency) return $"{v/1000f:F1}"; // 频率保持 F1，通常 GHz 需要一位小数
             
             // 内存百分比、负载、温度、功耗等
+            if (integer) return FormatValueAdaptive(v, 0); // 任务栏取整选项
 
             return FormatValueAdaptive(v, -1);
         }

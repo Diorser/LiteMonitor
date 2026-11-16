@@ -185,7 +185,8 @@ namespace LiteMonitor
                 // 自定义模式：不做数值压缩 (false)，但单位仍需基于 Taskbar 上下文计算基础值
                 bool compact = !hasCustomTaskbar;
                 
-                string valTaskbar = MetricUtils.GetValueStr(Key, DisplayValue, compact, userFmtTaskbar);
+                bool integerTaskbar = Settings.Load().TaskbarIntegerValues;
+                string valTaskbar = MetricUtils.GetValueStr(Key, DisplayValue, compact, userFmtTaskbar, integerTaskbar);
                 string unitTaskbar = MetricUtils.GetUnitStr(Key, DisplayValue, MetricUtils.UnitContext.Taskbar);
                 
                 string finalUnitTaskbar = MetricUtils.GetDisplayUnit(Key, unitTaskbar, userFmtTaskbar);
