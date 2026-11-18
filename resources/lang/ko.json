@@ -92,6 +92,7 @@
     "HardwareInfo": "하드웨어 정보",
     "SpeedTest": "속도 측정",
     "Traffic": "트래픽 기록",
+    "AppTraffic": "앱별 트래픽",
     "MonitorHistory": "모니터링 기록",
     "ThemeEditor": "테마 편집",
     "CleanMemory": "메모리 정리",

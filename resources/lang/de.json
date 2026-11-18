@@ -92,6 +92,7 @@
     "HardwareInfo": "Hardwareinfo",
     "SpeedTest": "Speedtest",
     "Traffic": "Verlauf",
+    "AppTraffic": "App-Datenverkehr",
     "MonitorHistory": "Monitorverlauf",
     "ThemeEditor": "Editor",
     "CleanMemory": "RAM bereinigen",

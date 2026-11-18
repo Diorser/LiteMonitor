@@ -435,6 +435,24 @@ namespace LiteMonitor
                 formHistory.Show();
             };
             menu.Items.Add(trafficItem);
+
+            // 应用流量统计 (按应用，单实例窗口)
+            var appTrafficItem = new ToolStripMenuItem(LanguageManager.T("Menu.AppTraffic"));
+            appTrafficItem.Image = Properties.Resources.AppTrafficIcon;
+            appTrafficItem.Click += (_, __) =>
+            {
+                foreach (Form openForm in Application.OpenForms)
+                {
+                    if (openForm is AppTrafficForm)
+                    {
+                        if (openForm.WindowState == FormWindowState.Minimized) openForm.WindowState = FormWindowState.Normal;
+                        openForm.Activate();
+                        return;
+                    }
+                }
+                new AppTrafficForm().Show();
+            };
+            menu.Items.Add(appTrafficItem);
             menu.Items.Add(new ToolStripSeparator());
              // =================================================================
             // [新增] 设置中心入口
