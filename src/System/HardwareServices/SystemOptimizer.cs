@@ -84,6 +84,13 @@ namespace LiteMonitor.src.SystemServices
                 TrafficLogger.Save();
             }
 
+            // 1b. 应用流量: 每秒计算实时速度，每 60 秒保存 (Offset 15s)
+            AppTrafficLogger.Tick();
+            if (secondsCounter % 60 == 15)
+            {
+                AppTrafficLogger.Save();
+            }
+
             // 2. 内存软清理: 每 180 秒 (Offset 30s)
             if (secondsCounter % 180 == 30)
             {

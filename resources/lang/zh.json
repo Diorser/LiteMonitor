@@ -92,6 +92,7 @@
     "HardwareInfo": "系统硬件详情",
     "SpeedTest": "网速测试",
     "Traffic": "历史流量统计",
+    "AppTraffic": "应用流量统计",
     "MonitorHistory": "监控历史",
     "ThemeEditor": "主题编辑器",
     "CleanMemory": "清理内存",

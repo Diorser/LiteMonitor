@@ -93,6 +93,7 @@
     "HardwareInfo": "ハードウェア情報",
     "SpeedTest": "速度テスト",
     "Traffic": "通信量履歴",
+    "AppTraffic": "アプリ別通信量",
     "MonitorHistory": "監視履歴",
     "ThemeEditor": "テーマ編集",
     "CleanMemory": "メモリ解放",

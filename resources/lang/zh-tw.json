@@ -89,6 +89,7 @@
         "HardwareInfo": "檢視硬體詳情",
         "SpeedTest": "網速測試",
         "Traffic": "歷史流量統計",
+        "AppTraffic": "應用流量統計",
         "MonitorHistory": "監控歷史",
         "ThemeEditor": "主題編輯器",
         "CleanMemory": "清理記憶體",

@@ -134,6 +134,8 @@ namespace LiteMonitor
             UIUtils.ScaleFactor = this.DeviceDpi / 96f;
 
             TrafficLogger.Load();
+            AppTrafficLogger.Load();
+            AppTrafficTracer.Start(); // 后台线程，按应用统计流量 (ETW)
             HardwareHistoryLogger.Load();
             src.Plugins.PluginManager.Instance.LoadPlugins(Path.Combine(AppContext.BaseDirectory, "resources", "plugins"));
             src.Plugins.PluginManager.Instance.Start();
@@ -348,6 +350,8 @@ namespace LiteMonitor
         {
             _cfg.Save(); 
             TrafficLogger.Save(); 
+            AppTrafficTracer.Stop();
+            AppTrafficLogger.Save();
             HardwareHistoryLogger.Save();
             src.WebServer.LiteWebServer.Instance?.Stop();
             
