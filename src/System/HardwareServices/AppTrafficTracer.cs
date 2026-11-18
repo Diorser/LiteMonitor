@@ -44,6 +44,7 @@ namespace LiteMonitor.src.SystemServices
 
         public static void Stop()
         {
+            var thread = _thread;
             _running = false;
             try
             {
@@ -51,6 +52,8 @@ namespace LiteMonitor.src.SystemServices
                 ControlTraceW(0, SessionName, props.Ptr, EVENT_TRACE_CONTROL_STOP); // ProcessTrace 随之返回
             }
             catch { }
+            // 等消费线程处理完缓冲区剩余事件（通常立即返回，最多 1 秒），确保随后的 Save() 不漏数据
+            thread?.Join(1000);
         }
 
         private static void Run()
