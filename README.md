@@ -155,19 +155,24 @@ A lightweight and customizable desktop hardware monitoring tool — real-time mo
 
 ### 环境要求
 - Windows 10 / 11  
-- .NET 8 SDK  
+- .NET 8 SDK（或更高版本，已在 .NET 11.0.100 SDK 上验证通过）
 - Visual Studio 2022 或 Rider
 
 ### 编译命令
 ```bash
 git clone https://github.com/Diorser/LiteMonitor.git
 cd LiteMonitor
+# 默认编译 .NET 8 版本（兼容性最好）
 dotnet build -c Release
+
+# 可选：改用 .NET 11 运行时编译（本机需装有 .NET 11 SDK）
+dotnet build -c Release -p:BuildNet11=true
 ```
 
 输出文件：
 ```
-/bin/Release/net8.0-windows/LiteMonitor.exe
+/bin/Release/net8.0-windows/LiteMonitor.exe        # 默认
+/bin/Release/net11.0-windows/LiteMonitor.exe       # -p:BuildNet11=true
 ```
 
 ---

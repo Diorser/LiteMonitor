@@ -155,19 +155,24 @@ Example:
 
 ### Requirements
 - Windows 10 / 11  
-- .NET 8 SDK  
+- .NET 8 SDK (or newer; verified with .NET 11.0.100 SDK)  
 - Visual Studio 2022 / JetBrains Rider
 
 ### Build
 ```bash
 git clone https://github.com/Diorser/LiteMonitor.git
 cd LiteMonitor
+# default: .NET 8 build (broadest compatibility)
 dotnet build -c Release
+
+# optional: build against the .NET 11 runtime (requires .NET 11 SDK)
+dotnet build -c Release -p:BuildNet11=true
 ```
 
 Output:
 ```
-/bin/Release/net8.0-windows/LiteMonitor.exe
+/bin/Release/net8.0-windows/LiteMonitor.exe        # default
+/bin/Release/net11.0-windows/LiteMonitor.exe       # -p:BuildNet11=true
 ```
 
 ---
