@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using LiteMonitor.src.Core;
 using LiteMonitor.src.SystemServices.InfoService; // [New]
+using System.Linq;
 
 namespace LiteMonitor.src.UI.Controls
 {
@@ -148,6 +149,23 @@ namespace LiteMonitor.src.UI.Controls
                 _chkPanel, _chkTaskbar, 
                 _btnUp, _btnDown 
             });
+
+            // ★★★ [新增] 高级设置按钮 (用于绑定特定传感器ID) ★★★
+            var btnSettings = new Label 
+            { 
+                Text = "⚙", 
+                AutoSize = true, 
+                Cursor = Cursors.Hand,
+                ForeColor = UIColors.TextSub,
+                Font = new Font("Segoe UI Emoji", 9F), // 使用 Emoji 字体确保显示
+                Location = new Point(MonitorLayout.X_COL3 - UIUtils.S(25), UIUtils.S(12)) // 放在 Checkbox 左侧
+            };
+            btnSettings.Click += (s, e) => ShowSensorOverrideDialog();
+            
+            // 只有当有 OverrideSensorId 时显示不同颜色提示
+            if (!string.IsNullOrEmpty(item.OverrideSensorId)) btnSettings.ForeColor = UIColors.Primary;
+
+            this.Controls.Add(btnSettings);
 
             // ★★★ 立即应用模式可见性 ★★★
             ApplyModeVisibility();
@@ -332,6 +350,55 @@ namespace LiteMonitor.src.UI.Controls
 
             Config.VisibleInPanel = _chkPanel.Checked;
             Config.VisibleInTaskbar = _chkTaskbar.Checked;
+        }
+
+        private void ShowSensorOverrideDialog()
+        {
+            using (var form = new Form())
+            {
+                form.Text = LanguageManager.T("Menu.SensorOverride") ?? "Sensor Override";
+                form.Width = UIUtils.S(400);
+                form.Height = UIUtils.S(220);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
+                form.Font = new Font("Microsoft YaHei UI", 9F);
+
+                var lbl = new Label { 
+                    Text = "指定传感器 ID / Specific Sensor ID:\n(e.g. /gpu-nvidia/0/power/0)", 
+                    AutoSize = true, 
+                    Location = new Point(20, 20) 
+                };
+                
+                // 查找当前应用的值 (如果有 override 显示 override，否则显示 actual)
+                string currentVal = Config.OverrideSensorId;
+                
+                var txt = new TextBox { 
+                    Text = currentVal, 
+                    Width = 340, 
+                    Location = new Point(20, 60) 
+                };
+
+                var btnSave = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(200, 100), Height = 30 };
+                var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(285, 100), Height = 30 };
+                
+                // 简单的"清除"按钮
+                var btnClear = new Button { Text = "Clear", Location = new Point(20, 100), Height = 30 };
+                btnClear.Click += (s, e) => txt.Text = "";
+
+                form.Controls.AddRange(new Control[] { lbl, txt, btnSave, btnCancel, btnClear });
+                form.AcceptButton = btnSave;
+                form.CancelButton = btnCancel;
+
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    Config.OverrideSensorId = txt.Text.Trim();
+                    // 更新按钮颜色
+                    var btn = this.Controls.OfType<Label>().FirstOrDefault(c => c.Text == "⚙");
+                    if (btn != null) btn.ForeColor = string.IsNullOrEmpty(Config.OverrideSensorId) ? UIColors.TextSub : UIColors.Primary;
+                }
+            }
         }
     }
 
